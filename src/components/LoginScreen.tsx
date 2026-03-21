@@ -41,8 +41,9 @@ export function LoginScreen({
       {/* Form */}
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col items-center justify-center gap-5 px-4">
         <div className="w-72">
-          <label className="label-sm block mb-1.5">{t("login.email")}</label>
+          <label htmlFor="login-email" className="label-sm block mb-1.5">{t("login.email")}</label>
           <input
+            id="login-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -52,8 +53,9 @@ export function LoginScreen({
         </div>
 
         <div className="w-72">
-          <label className="label-sm block mb-1.5">{t("login.password")}</label>
+          <label htmlFor="login-password" className="label-sm block mb-1.5">{t("login.password")}</label>
           <input
+            id="login-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

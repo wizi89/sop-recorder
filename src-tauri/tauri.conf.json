@@ -50,9 +50,9 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://api.wizimate.com/releases/update/{{target}}/{{arch}}/{{current_version}}"
+        "https://github.com/wizi89/sop-recorder/releases/latest/download/latest.json"
       ],
-      "pubkey": ""
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDNjU0QzcyREQ2MTc1MzcKUldRM2RXSGRja3hsbkxHT0VjV1ZPNUplcTRBOVh0MVVqSUVhRG5wWmNVdE9FdThJU2JvekE5M2sK"
     }
   }
 }

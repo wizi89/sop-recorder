@@ -215,7 +215,7 @@ impl ResampleState {
     }
 
     /// Process a chunk of mono input samples, return resampled output samples.
-    fn process(&mut self, input: &[f32]) -> Vec<f32> {
+    pub fn process(&mut self, input: &[f32]) -> Vec<f32> {
         if input.is_empty() {
             return Vec::new();
         }
@@ -242,5 +242,86 @@ impl ResampleState {
         self.last_sample = *input.last().unwrap_or(&0.0);
 
         output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resample_48k_to_16k_reduces_sample_count() {
+        let mut rs = ResampleState::new(48000, 16000);
+        // 480 input samples at 48kHz = 10ms -> should produce ~160 at 16kHz
+        let input: Vec<f32> = (0..480).map(|i| (i as f32 / 480.0).sin()).collect();
+        let output = rs.process(&input);
+
+        // Should produce roughly 160 samples (ratio 3:1)
+        assert!(output.len() >= 158 && output.len() <= 162,
+            "Expected ~160 samples, got {}", output.len());
+    }
+
+    #[test]
+    fn resample_preserves_silence() {
+        let mut rs = ResampleState::new(48000, 16000);
+        let input = vec![0.0_f32; 480];
+        let output = rs.process(&input);
+
+        for s in &output {
+            assert!(*s == 0.0, "Expected silence, got {}", s);
+        }
+    }
+
+    #[test]
+    fn resample_empty_input() {
+        let mut rs = ResampleState::new(48000, 16000);
+        let output = rs.process(&[]);
+        assert!(output.is_empty());
+    }
+
+    #[test]
+    fn resample_same_rate_preserves_count() {
+        let mut rs = ResampleState::new(16000, 16000);
+        let input: Vec<f32> = (0..100).map(|i| i as f32 / 100.0).collect();
+        let output = rs.process(&input);
+
+        // Same rate should produce same number of samples
+        assert_eq!(output.len(), input.len());
+        // After first sample (which interpolates from 0), values should track closely
+        for (a, b) in input[1..].iter().zip(output[1..].iter()) {
+            assert!((a - b).abs() < 0.02, "Mismatch: {} vs {}", a, b);
+        }
+    }
+
+    #[test]
+    fn resample_across_multiple_chunks_is_seamless() {
+        let mut rs = ResampleState::new(48000, 16000);
+        // Process two chunks separately
+        let chunk1: Vec<f32> = (0..480).map(|i| (i as f32 * 0.01).sin()).collect();
+        let chunk2: Vec<f32> = (480..960).map(|i| (i as f32 * 0.01).sin()).collect();
+        let out1 = rs.process(&chunk1);
+        let out2 = rs.process(&chunk2);
+
+        // Process both at once
+        let mut rs2 = ResampleState::new(48000, 16000);
+        let combined: Vec<f32> = (0..960).map(|i| (i as f32 * 0.01).sin()).collect();
+        let out_combined = rs2.process(&combined);
+
+        // Total sample count should match
+        let total_separate = out1.len() + out2.len();
+        assert!((total_separate as i32 - out_combined.len() as i32).abs() <= 1,
+            "Chunk processing produced {} vs combined {}", total_separate, out_combined.len());
+    }
+
+    #[test]
+    fn resample_output_stays_in_range() {
+        let mut rs = ResampleState::new(48000, 16000);
+        // Feed max/min values
+        let input: Vec<f32> = (0..480).map(|i| if i % 2 == 0 { 1.0 } else { -1.0 }).collect();
+        let output = rs.process(&input);
+
+        for s in &output {
+            assert!(*s >= -1.0 && *s <= 1.0, "Out of range: {}", s);
+        }
     }
 }
