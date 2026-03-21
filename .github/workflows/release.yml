@@ -36,12 +36,18 @@ jobs:
       - name: Install trusted-signing-cli
         run: cargo install trusted-signing-cli
 
-      - name: Setup signing environment
+      - name: Verify signing setup
         shell: pwsh
         run: |
-          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          Write-Host "=== trusted-signing-cli ==="
+          Get-Command trusted-signing-cli -ErrorAction SilentlyContinue | Select-Object Source
+          trusted-signing-cli --version
+          Write-Host "=== signtool.exe ==="
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+          Write-Host "Found: $($signtool.FullName)"
           echo "SIGNTOOL_PATH=$($signtool.FullName)" >> $env:GITHUB_ENV
-          echo "$env:USERPROFILE\.cargo\bin" >> $env:GITHUB_PATH
+          Write-Host "=== PATH ==="
+          $env:PATH -split ';' | Where-Object { $_ -match 'cargo' }
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
@@ -52,6 +58,7 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          SIGNTOOL_PATH: ${{ env.SIGNTOOL_PATH }}
         with:
           tagName: v__VERSION__
           releaseName: "v__VERSION__"
