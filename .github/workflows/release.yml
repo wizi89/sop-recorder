@@ -83,4 +83,4 @@ jobs:
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
-          args: --config "{\"bundle\":{\"windows\":{\"signCommand\":\"trusted-signing-cli -e https://weu.codesigning.azure.net -a signing-sop-sorcery -c sop-recorder-profile -d \\\"SOP Sorcery\\\" %1\"}}}"
+          args: --config src-tauri/tauri.signing.conf.json
