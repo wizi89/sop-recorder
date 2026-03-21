@@ -28,8 +28,8 @@ export function LoginScreen({
 
   return (
     <div className="flex flex-col h-full bg-surface">
-      {/* Toolbar */}
-      <div className="toolbar mx-3 mt-3">
+      {/* Settings gear */}
+      <div className="flex justify-end px-3 pt-3">
         <button onClick={onOpenSettings} className="icon-btn" title={t("settings.title")}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
@@ -68,8 +68,11 @@ export function LoginScreen({
             type="button"
             className="bg-transparent border-none cursor-pointer text-on-surface-variant hover:text-on-surface"
             style={{ fontSize: "0.6875rem", transition: "color 0.15s" }}
-            onClick={() => {
-              // TODO: open forgot password URL
+            onClick={async () => {
+              const { openUrl } = await import("@tauri-apps/plugin-opener");
+              const { getWebappUrl } = await import("../lib/tauri");
+              const baseUrl = await getWebappUrl();
+              await openUrl(`${baseUrl}/login?forgot=1`);
             }}
           >
             {t("login.forgot_password")}

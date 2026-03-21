@@ -88,5 +88,9 @@ export function useRecorder() {
     setState((s) => ({ ...s, statusMessage: msg }));
   }, []);
 
-  return { ...state, start, stop, reset, setStatusMessage };
+  const setProcessing = useCallback(() => {
+    setState((s) => ({ ...s, status: "processing" as const, error: null, statusMessage: "" }));
+  }, []);
+
+  return { ...state, start, stop, reset, setStatusMessage, setProcessing };
 }

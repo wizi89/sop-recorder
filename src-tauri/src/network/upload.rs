@@ -2,8 +2,9 @@ use reqwest::multipart;
 use std::path::Path;
 use std::time::Duration;
 
+use crate::config;
+
 const UPLOAD_TIMEOUT_SECS: u64 = 300;
-const API_URL_PROD: &str = "https://api.wizimate.com";
 
 /// Upload audio + screenshots to the generation endpoint.
 /// Returns the SSE stream URL or response.
@@ -15,7 +16,7 @@ pub async fn upload_multipart(
     guide_title: &str,
     api_url: Option<&str>,
 ) -> Result<reqwest::Response, String> {
-    let base_url = api_url.unwrap_or(API_URL_PROD);
+    let base_url = api_url.unwrap_or(config::API_URL_PROD);
     let url = format!("{}/generate", base_url);
 
     let client = reqwest::Client::builder()

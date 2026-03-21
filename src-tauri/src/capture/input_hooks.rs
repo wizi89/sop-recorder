@@ -1,5 +1,4 @@
 use rdev::{listen, Event, EventType};
-use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -23,17 +22,21 @@ impl InputHookHandle {
 }
 
 /// Start listening for global mouse clicks and Enter key in a background thread.
-/// Returns a handle (to stop) and a receiver for capture events.
-pub fn start_listener(
-    exclude_rect: Option<(i32, i32, i32, i32)>,
-) -> (InputHookHandle, mpsc::Receiver<CaptureEvent>) {
-    let (tx, rx) = mpsc::channel();
+/// Calls `on_event` directly in the listener thread for each captured event.
+/// Screenshots are taken immediately -- no queuing.
+pub fn start_listener_with_callback<F>(
+    _exclude_rect: Option<(i32, i32, i32, i32)>,
+    on_event: F,
+) -> InputHookHandle
+where
+    F: Fn(CaptureEvent) + Send + 'static,
+{
     let stop_flag = Arc::new(Mutex::new(false));
     let stop_clone = stop_flag.clone();
 
     thread::spawn(move || {
-        let last_event = Arc::new(Mutex::new(Instant::now() - Duration::from_secs(1)));
-        let tx = tx;
+        let started_at = Instant::now();
+        let last_event = Arc::new(Mutex::new(Instant::now()));
         let stop = stop_clone;
 
         let callback = move |event: Event| {
@@ -42,6 +45,12 @@ pub fn start_listener(
             }
 
             let now = Instant::now();
+
+            // Ignore clicks during the first 500ms (the "Start" button click)
+            if now.duration_since(started_at) < Duration::from_millis(500) {
+                return;
+            }
+
             let mut last = last_event.lock().unwrap();
             if now.duration_since(*last) < Duration::from_millis(DEBOUNCE_MS) {
                 return;
@@ -49,17 +58,12 @@ pub fn start_listener(
 
             match event.event_type {
                 EventType::ButtonPress(rdev::Button::Left) => {
-                    // Check if click is within the excluded window rect
-                    let _ = exclude_rect; // TODO: self-click exclusion via window position
-
                     *last = now;
-                    // rdev ButtonPress doesn't carry coordinates reliably on Windows
-                    // We get position from the OS in the screenshot module
-                    let _ = tx.send(CaptureEvent::MouseClick { x: 0.0, y: 0.0 });
+                    on_event(CaptureEvent::MouseClick { x: 0.0, y: 0.0 });
                 }
                 EventType::KeyPress(rdev::Key::Return) => {
                     *last = now;
-                    let _ = tx.send(CaptureEvent::EnterKey);
+                    on_event(CaptureEvent::EnterKey);
                 }
                 _ => {}
             }
@@ -70,7 +74,7 @@ pub fn start_listener(
         }
     });
 
-    (InputHookHandle { stop_flag }, rx)
+    InputHookHandle { stop_flag }
 }
 
 /// Get the current mouse cursor position (Windows).

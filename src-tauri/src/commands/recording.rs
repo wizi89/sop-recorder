@@ -1,8 +1,8 @@
 use chrono::Local;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use std::thread;
 use tauri::{Emitter, State};
 use tauri_plugin_store::StoreExt;
 
@@ -10,7 +10,7 @@ use crate::capture::audio::AudioHandle;
 use crate::capture::input_hooks;
 use crate::capture::screenshot;
 use crate::output::pending;
-use crate::state::{AppState, CapturedStep, RecordingSession, RecordingStatus};
+use crate::state::{AppState, RecordingSession, RecordingStatus};
 
 fn get_output_dir(app: &tauri::AppHandle) -> PathBuf {
     let default_dir = dirs_next::document_dir()
@@ -50,64 +50,64 @@ pub async fn start_recording(
     fs::create_dir_all(&screenshots_dir)
         .map_err(|e| format!("Failed to create output dir: {}", e))?;
 
+    // Apply hide-from-screenshots setting
+    let hide = if let Ok(store) = app.store("settings.json") {
+        store
+            .get("hide_from_screenshots")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+    } else {
+        true
+    };
+    if let Err(e) = crate::commands::window::set_display_affinity(app.clone(), hide) {
+        log::warn!("Failed to set display affinity: {}", e);
+    }
+
     // Start audio recording
     let audio_path = output_dir.join("recording.wav");
     let audio_handle =
         AudioHandle::start(&audio_path).map_err(|e| format!("Audio start failed: {}", e))?;
 
-    // Start input hooks (mouse + keyboard)
-    let (hook_handle, event_rx) = input_hooks::start_listener(None);
+    // Shared step counter and in-flight tracker
+    let step_counter = Arc::new(AtomicU32::new(0));
+    let in_flight = Arc::new(AtomicU32::new(0));
+    let stop_flag = Arc::new(AtomicBool::new(false));
 
-    // Share recording status and steps for the capture thread
-    let recording_status = Arc::new(std::sync::Mutex::new(RecordingStatus::Recording));
-    let steps = Arc::new(std::sync::Mutex::new(Vec::<CapturedStep>::new()));
-
-    let status_clone = recording_status.clone();
-    let steps_clone = steps.clone();
+    // Start input hooks -- screenshots are captured immediately in the callback
+    let counter_clone = step_counter.clone();
+    let in_flight_clone = in_flight.clone();
+    let stop_clone = stop_flag.clone();
     let screenshots_dir_clone = screenshots_dir.clone();
     let app_clone = app.clone();
 
-    thread::spawn(move || {
-        let mut step_count: u32 = 0;
+    let hook_handle = input_hooks::start_listener_with_callback(None, move |event| {
+        if stop_clone.load(Ordering::SeqCst) {
+            return;
+        }
 
-        while let Ok(event) = event_rx.recv() {
-            {
-                let st = status_clone.lock().unwrap();
-                if *st != RecordingStatus::Recording {
-                    break;
-                }
-            }
+        let click_pos = match &event {
+            input_hooks::CaptureEvent::MouseClick { .. } => input_hooks::get_cursor_position(),
+            input_hooks::CaptureEvent::EnterKey => None,
+        };
 
-            step_count += 1;
+        let step_num = counter_clone.fetch_add(1, Ordering::SeqCst) + 1;
 
-            let click_pos = match &event {
-                input_hooks::CaptureEvent::MouseClick { .. } => {
-                    input_hooks::get_cursor_position()
-                }
-                input_hooks::CaptureEvent::EnterKey => None,
-            };
-
-            match screenshot::capture_and_save(
-                &screenshots_dir_clone,
-                step_count,
-                click_pos,
-            ) {
-                Ok(filename) => {
-                    let step = CapturedStep {
-                        order_id: step_count,
-                        filename,
-                        click_x: click_pos.map(|(x, _)| x),
-                        click_y: click_pos.map(|(_, y)| y),
-                    };
-
-                    steps_clone.lock().unwrap().push(step);
-                    let _ = app_clone.emit("recording:step_captured", step_count);
+        // Spawn capture work so the rdev thread isn't blocked
+        let dir = screenshots_dir_clone.clone();
+        let app = app_clone.clone();
+        let flight = in_flight_clone.clone();
+        flight.fetch_add(1, Ordering::SeqCst);
+        std::thread::spawn(move || {
+            match screenshot::capture_and_save(&dir, step_num, click_pos) {
+                Ok(_filename) => {
+                    let _ = app.emit("recording:step_captured", step_num);
                 }
                 Err(e) => {
                     log::error!("Screenshot capture failed: {}", e);
                 }
             }
-        }
+            flight.fetch_sub(1, Ordering::SeqCst);
+        });
     });
 
     // Create session
@@ -118,6 +118,8 @@ pub async fn start_recording(
         steps: Vec::new(),
         audio_handle: Some(audio_handle),
         input_hook: Some(hook_handle),
+        stop_flag: Some(stop_flag),
+        in_flight: Some(in_flight),
     };
 
     *state.current_session.lock().unwrap() = Some(session);
@@ -128,35 +130,54 @@ pub async fn start_recording(
 }
 
 #[tauri::command]
-pub async fn stop_recording(state: State<'_, AppState>) -> Result<String, String> {
-    let mut status = state.recording_status.lock().unwrap();
-    if *status != RecordingStatus::Recording {
-        return Err("Not recording".into());
+pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+    {
+        let mut status = state.recording_status.lock().unwrap();
+        if *status != RecordingStatus::Recording {
+            return Err("Not recording".into());
+        }
+        *status = RecordingStatus::Processing;
     }
 
-    *status = RecordingStatus::Processing;
-    drop(status); // Release lock before potentially blocking operations
+    // Extract everything from the session in one scoped block
+    let (in_flight_counter, audio, output_dir_path, guide_title) = {
+        let mut session_guard = state.current_session.lock().unwrap();
+        let session = session_guard.as_mut().ok_or("No active session")?;
 
-    let mut session_guard = state.current_session.lock().unwrap();
-    let session = session_guard
-        .as_mut()
-        .ok_or("No active session")?;
+        // Set stop flag first -- prevents any new screenshots from being captured
+        if let Some(flag) = session.stop_flag.take() {
+            flag.store(true, Ordering::SeqCst);
+        }
 
-    // Stop input hooks first
-    if let Some(hook) = session.input_hook.take() {
-        hook.stop();
-    }
+        // Stop input hooks
+        if let Some(hook) = session.input_hook.take() {
+            hook.stop();
+        }
 
-    // Stop audio recording
-    if let Some(audio) = session.audio_handle.take() {
+        (
+            session.in_flight.take(),
+            session.audio_handle.take(),
+            session.output_dir.clone(),
+            session.guide_title.clone(),
+        )
+    }; // MutexGuard dropped here
+
+    // Restore window visibility
+    let _ = crate::commands::window::set_display_affinity(app, false);
+
+    // Stop audio immediately
+    if let Some(audio) = audio {
         audio.stop().map_err(|e| format!("Audio stop failed: {}", e))?;
     }
 
+    // Store in-flight counter in app state so generate can wait for it
+    *state.in_flight_captures.lock().unwrap() = in_flight_counter;
+
     // Write pending.json
-    pending::write_pending(&session.output_dir, &session.guide_title)
+    pending::write_pending(&output_dir_path, &guide_title)
         .map_err(|e| format!("Failed to write pending marker: {}", e))?;
 
-    let output_dir = session.output_dir.to_string_lossy().to_string();
+    let output_dir = output_dir_path.to_string_lossy().to_string();
     log::info!("Recording stopped. Output: {}", output_dir);
 
     Ok(output_dir)

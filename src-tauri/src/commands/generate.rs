@@ -1,10 +1,15 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, State};
+
+use tauri_plugin_store::StoreExt;
 
 use crate::commands::auth::SessionCache;
 use crate::network::{auth as net_auth, sse, upload};
 use crate::output::{markdown, pdf, pending};
 use crate::state::{AppState, RecordingStatus};
+
+static GENERATING: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
 pub async fn run_generation(
@@ -13,7 +18,36 @@ pub async fn run_generation(
     session: State<'_, SessionCache>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    // Prevent concurrent/duplicate generation calls
+    if GENERATING.swap(true, Ordering::SeqCst) {
+        return Err("Generation already in progress".into());
+    }
+
+    let result = run_generation_inner(output_dir, app, session, state).await;
+    GENERATING.store(false, Ordering::SeqCst);
+    result
+}
+
+async fn run_generation_inner(
+    output_dir: String,
+    app: tauri::AppHandle,
+    session: State<'_, SessionCache>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let output_path = PathBuf::from(&output_dir);
+
+    // Wait for any in-flight screenshot captures to finish
+    let in_flight = state.in_flight_captures.lock().unwrap().take();
+    if let Some(counter) = in_flight {
+        if counter.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+            let _ = app.emit("sse:status", sse::SSEStatusPayload {
+                message: "Screenshots werden verarbeitet...".into(),
+            });
+            while counter.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+    }
 
     // Get access token
     let access_token = session
@@ -69,6 +103,17 @@ pub async fn run_generation(
         .map(|(n, p)| (*n, p.as_path()))
         .collect();
 
+    // Read upload target from settings
+    let api_url = if let Ok(store) = app.store("settings.json") {
+        store
+            .get("upload_target")
+            .and_then(|v| v.as_str().map(String::from))
+            .filter(|s| s == "Local")
+            .map(|_| "http://localhost:8000".to_string())
+    } else {
+        None
+    };
+
     // Upload with retry
     let response = upload::upload_with_retry(
         &access_token,
@@ -76,7 +121,7 @@ pub async fn run_generation(
         &audio_path,
         &path_refs,
         &guide_title,
-        None, // use production URL
+        api_url.as_deref(),
         3,
     )
     .await?;

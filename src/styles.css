@@ -52,6 +52,12 @@
     height: 100vh;
   }
 
+  /* Hide browser password reveal button */
+  input::-ms-reveal,
+  input::-webkit-credentials-auto-fill-button {
+    display: none;
+  }
+
   /* Minimal scrollbar */
   ::-webkit-scrollbar {
     width: 4px;
@@ -139,14 +145,13 @@
   .input-field {
     background-color: var(--color-surface-container-highest);
     color: var(--color-on-background);
-    border: 1px solid transparent;
+    border: none;
     outline: none;
-    transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out;
+    transition: box-shadow 0.2s ease-out;
   }
 
   .input-field:focus {
-    border-color: rgba(128, 174, 255, 0.3);
-    box-shadow: 0 0 12px rgba(128, 174, 255, 0.08);
+    box-shadow: 0 0 0 1px rgba(128, 174, 255, 0.3), 0 0 12px rgba(128, 174, 255, 0.08);
   }
 
   /* ── Labels ── */

@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::sync::Mutex;
 use tauri::State;
+use tauri_plugin_store::StoreExt;
 
 use crate::network::auth as net_auth;
 
@@ -25,13 +26,27 @@ impl Default for SessionCache {
     }
 }
 
+fn get_api_base(app: &tauri::AppHandle) -> &'static str {
+    let target = app
+        .store("settings.json")
+        .ok()
+        .and_then(|store| {
+            store
+                .get("upload_target")
+                .and_then(|v| v.as_str().map(String::from))
+        });
+    net_auth::api_url_for_target(target.as_deref())
+}
+
 #[tauri::command]
 pub async fn login(
     email: String,
     password: String,
+    app: tauri::AppHandle,
     session: State<'_, SessionCache>,
 ) -> Result<SessionState, String> {
-    let auth = net_auth::sign_in(&email, &password).await?;
+    let api_base = get_api_base(&app);
+    let auth = net_auth::sign_in(&email, &password, api_base).await?;
 
     *session.access_token.lock().unwrap() = Some(auth.access_token);
     *session.email.lock().unwrap() = auth.email.clone();
@@ -52,9 +67,11 @@ pub async fn logout(session: State<'_, SessionCache>) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn refresh_session(
+    app: tauri::AppHandle,
     session: State<'_, SessionCache>,
 ) -> Result<SessionState, String> {
-    match net_auth::refresh_session().await? {
+    let api_base = get_api_base(&app);
+    match net_auth::refresh_session(api_base).await? {
         Some(auth) => {
             *session.access_token.lock().unwrap() = Some(auth.access_token);
             *session.email.lock().unwrap() = auth.email.clone();

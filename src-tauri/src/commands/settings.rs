@@ -9,6 +9,8 @@ pub struct AppSettings {
     pub logs_dir: String,
     pub hide_from_screenshots: bool,
     pub api_key: Option<String>,
+    #[serde(default)]
+    pub upload_target: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -26,6 +28,7 @@ impl Default for AppSettings {
             logs_dir: app_data.to_string_lossy().to_string(),
             hide_from_screenshots: true,
             api_key: None,
+            upload_target: None,
         }
     }
 }
@@ -48,6 +51,10 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         .and_then(|v| v.as_bool())
         .unwrap_or(defaults.hide_from_screenshots);
 
+    let upload_target = store
+        .get("upload_target")
+        .and_then(|v| v.as_str().map(String::from));
+
     // API key is stored in keyring, not in the store
     let api_key = crate::network::auth::keyring_load("openai-key").ok().flatten();
 
@@ -56,6 +63,7 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         logs_dir,
         hide_from_screenshots,
         api_key,
+        upload_target,
     })
 }
 
@@ -70,6 +78,18 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
         serde_json::json!(settings.hide_from_screenshots),
     );
 
+    if let Some(target) = &settings.upload_target {
+        store.set("upload_target", serde_json::json!(target));
+    } else {
+        store.delete("upload_target");
+    }
+
+    if let Some(target) = &settings.upload_target {
+        store.set("upload_target", serde_json::json!(target));
+    } else {
+        store.delete("upload_target");
+    }
+
     // API key goes to keyring
     if let Some(key) = &settings.api_key {
         if !key.is_empty() {
@@ -82,4 +102,17 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_webapp_url(app: tauri::AppHandle) -> Result<String, String> {
+    let target = app
+        .store(STORE_FILENAME)
+        .ok()
+        .and_then(|store| {
+            store
+                .get("upload_target")
+                .and_then(|v| v.as_str().map(String::from))
+        });
+    Ok(crate::config::webapp_url_for_target(target.as_deref()).to_string())
 }

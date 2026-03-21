@@ -15,10 +15,8 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     logs_dir: "",
     hide_from_screenshots: true,
     api_key: null,
+    upload_target: null,
   });
-  const [uploadTarget, setUploadTarget] = useState<"Local" | "Production">(
-    "Production",
-  );
 
   useEffect(() => {
     getSettings()
@@ -124,9 +122,12 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           <div className="flex items-center justify-between">
             <label className="label-sm">{t("settings.upload_to")}</label>
             <select
-              value={uploadTarget}
+              value={settings.upload_target === "Local" ? "Local" : "Production"}
               onChange={(e) =>
-                setUploadTarget(e.target.value as "Local" | "Production")
+                setSettings((s) => ({
+                  ...s,
+                  upload_target: e.target.value === "Local" ? "Local" : null,
+                }))
               }
               className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
             >

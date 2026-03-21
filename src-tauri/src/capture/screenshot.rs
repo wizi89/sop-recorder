@@ -102,8 +102,21 @@ pub fn capture_and_save(
     let filename = format!("step_{:02}.png", step_number);
     let path = output_dir.join(&filename);
 
-    // Convert RGBA to RGB before saving -- Azure OpenAI vision rejects RGBA PNGs
-    let rgb_img = DynamicImage::ImageRgba8(img).to_rgb8();
+    // Convert RGBA to RGB and resize if needed to stay under Azure OpenAI's 4MB limit
+    let dynamic = DynamicImage::ImageRgba8(img);
+    let (w, h) = (dynamic.width(), dynamic.height());
+    let max_w = 1920u32;
+    let max_h = 1080u32;
+    let resized = if w > max_w || h > max_h {
+        let scale = f64::min(max_w as f64 / w as f64, max_h as f64 / h as f64);
+        let new_w = (w as f64 * scale) as u32;
+        let new_h = (h as f64 * scale) as u32;
+        log::info!("Resizing screenshot from {}x{} to {}x{}", w, h, new_w, new_h);
+        dynamic.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3)
+    } else {
+        dynamic
+    };
+    let rgb_img = resized.to_rgb8();
     rgb_img.save(&path)
         .map_err(|e| format!("Failed to save screenshot: {}", e))?;
 

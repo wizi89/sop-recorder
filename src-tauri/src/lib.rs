@@ -1,10 +1,9 @@
 pub mod capture;
 pub mod commands;
+pub mod config;
 pub mod network;
 pub mod output;
 pub mod state;
-mod tray;
-
 use commands::{auth, generate, recording, settings, window};
 use tauri::Emitter;
 
@@ -20,8 +19,6 @@ pub fn run() {
         .manage(state::AppState::default())
         .manage(auth::SessionCache::default())
         .setup(|app| {
-            tray::create_tray(app)?;
-
             // Check for updates on startup (non-blocking)
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -55,6 +52,7 @@ pub fn run() {
             auth::get_session_state,
             settings::get_settings,
             settings::save_settings,
+            settings::get_webapp_url,
             recording::start_recording,
             recording::stop_recording,
             generate::run_generation,

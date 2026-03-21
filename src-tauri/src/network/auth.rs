@@ -1,15 +1,14 @@
 use keyring::Entry;
 use serde::Deserialize;
 
-const SERVICE_NAME: &str = "sop-sorcery";
-const API_URL_PROD: &str = "https://api.wizimate.com";
-const API_URL_DEV: &str = "http://localhost:8000";
+use crate::config;
 
-fn api_url() -> &'static str {
-    if cfg!(debug_assertions) {
-        API_URL_DEV
-    } else {
-        API_URL_PROD
+const SERVICE_NAME: &str = "sop-sorcery";
+
+pub fn api_url_for_target(upload_target: Option<&str>) -> &'static str {
+    match upload_target {
+        Some("Local") => config::API_URL_DEV,
+        _ => config::API_URL_PROD,
     }
 }
 
@@ -28,9 +27,9 @@ pub struct AuthSession {
 }
 
 /// Sign in with email/password via the FastAPI server's /auth/signin endpoint.
-pub async fn sign_in(email: &str, password: &str) -> Result<AuthSession, String> {
+pub async fn sign_in(email: &str, password: &str, api_base: &str) -> Result<AuthSession, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/auth/signin", api_url());
+    let url = format!("{}/auth/signin", api_base);
 
     let res = client
         .post(&url)
@@ -68,14 +67,14 @@ pub async fn sign_in(email: &str, password: &str) -> Result<AuthSession, String>
 }
 
 /// Refresh session using stored refresh token via /auth/refresh.
-pub async fn refresh_session() -> Result<Option<AuthSession>, String> {
+pub async fn refresh_session(api_base: &str) -> Result<Option<AuthSession>, String> {
     let refresh_token = match keyring_load("refresh-token").map_err(|e| e.to_string())? {
         Some(t) => t,
         None => return Ok(None),
     };
 
     let client = reqwest::Client::new();
-    let url = format!("{}/auth/refresh", api_url());
+    let url = format!("{}/auth/refresh", api_base);
 
     let res = client
         .post(&url)

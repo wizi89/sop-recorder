@@ -7,11 +7,13 @@ import { SettingsPage } from "./components/SettingsPage";
 import { useAuth } from "./hooks/useAuth";
 import { useRecorder } from "./hooks/useRecorder";
 import { useSSE } from "./hooks/useSSE";
+import { runGeneration } from "./lib/tauri";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 const VERSION = "0.7.0";
 const IS_DEV = import.meta.env.DEV;
 
-const IDLE_SIZE = new LogicalSize(460, 300);
+const IDLE_SIZE = new LogicalSize(460, 380);
 const COMPACT_SIZE = new LogicalSize(160, 44);
 
 function App() {
@@ -81,7 +83,6 @@ function MainApp() {
   const handleOpenFolder = useCallback(async () => {
     if (recorder.outputDir) {
       try {
-        const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
         await revealItemInDir(recorder.outputDir);
       } catch (e) {
         console.error("Failed to open folder:", e);
@@ -91,10 +92,10 @@ function MainApp() {
 
   const handleRetry = useCallback(async () => {
     if (recorder.outputDir) {
-      recorder.setStatusMessage("");
-      const { runGeneration } = await import("./lib/tauri");
+      recorder.setProcessing();
       try {
         await runGeneration(recorder.outputDir);
+        recorder.setStatusMessage("");
       } catch {
         // error handled via SSE
       }

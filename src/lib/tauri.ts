@@ -10,6 +10,7 @@ export interface AppSettings {
   logs_dir: string;
   hide_from_screenshots: boolean;
   api_key: string | null;
+  upload_target: string | null;
 }
 
 export async function login(
@@ -49,4 +50,8 @@ export async function stopRecording(): Promise<string> {
 
 export async function runGeneration(outputDir: string): Promise<void> {
   return invoke("run_generation", { outputDir });
+}
+
+export async function getWebappUrl(): Promise<string> {
+  return invoke("get_webapp_url");
 }
