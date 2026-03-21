@@ -29,6 +29,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": "v1Compatible",
     "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
@@ -48,7 +49,7 @@
       "endpoints": [
         "https://github.com/wizi89/sop-recorder/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlDNjU0QzcyREQ2MTc1MzcKUldRM2RXSGRja3hsbkxHT0VjV1ZPNUplcTRBOVh0MVVqSUVhRG5wWmNVdE9FdThJU2JvekE5M2sK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI3MjUxRDZENzU0MzdCOTEKUldTUmUwTjFiUjBsSitkbC9tOXhOKzVCeWRiTVQySFdsMXd3Uk5CMDhpTEFOQzFvbEZrYjZqQWQK"
     }
   }
 }
