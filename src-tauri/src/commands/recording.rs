@@ -1,9 +1,9 @@
 use chrono::Local;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 
 use crate::capture::audio::AudioHandle;
@@ -71,7 +71,17 @@ pub async fn start_recording(
     // Shared step counter and in-flight tracker
     let step_counter = Arc::new(AtomicU32::new(0));
     let in_flight = Arc::new(AtomicU32::new(0));
-    let stop_flag = Arc::new(AtomicBool::new(false));
+
+    // Reset and reuse the shared stop flag from AppState -- lives outside the
+    // session mutex so stop_recording can set it instantly (no race window).
+    let stop_flag = state.capture_stop_flag.clone();
+    stop_flag.store(false, Ordering::SeqCst);
+
+    // Get recorder window HWND so clicks on it are ignored (works even if moved)
+    let exclude_hwnd = app
+        .get_webview_window("main")
+        .and_then(|w| w.hwnd().ok())
+        .map(|h| h.0 as isize);
 
     // Start input hooks -- screenshots are captured immediately in the callback
     let counter_clone = step_counter.clone();
@@ -80,7 +90,7 @@ pub async fn start_recording(
     let screenshots_dir_clone = screenshots_dir.clone();
     let app_clone = app.clone();
 
-    let hook_handle = input_hooks::start_listener_with_callback(None, move |event| {
+    let hook_handle = input_hooks::start_listener_with_callback(exclude_hwnd, move |event| {
         if stop_clone.load(Ordering::SeqCst) {
             return;
         }
@@ -131,6 +141,11 @@ pub async fn start_recording(
 
 #[tauri::command]
 pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+    // Set stop flag IMMEDIATELY -- before locking the session mutex.
+    // This prevents the race where rdev fires the stop-button click
+    // before the session lock is acquired.
+    state.capture_stop_flag.store(true, Ordering::SeqCst);
+
     {
         let mut status = state.recording_status.lock().unwrap();
         if *status != RecordingStatus::Recording {
@@ -144,10 +159,8 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
         let mut session_guard = state.current_session.lock().unwrap();
         let session = session_guard.as_mut().ok_or("No active session")?;
 
-        // Set stop flag first -- prevents any new screenshots from being captured
-        if let Some(flag) = session.stop_flag.take() {
-            flag.store(true, Ordering::SeqCst);
-        }
+        // Clear session's copy of the flag (already set above)
+        session.stop_flag.take();
 
         // Stop input hooks
         if let Some(hook) = session.input_hook.take() {

@@ -3,6 +3,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(windows)]
+use windows::Win32::Foundation::HWND;
+
 const DEBOUNCE_MS: u64 = 300;
 
 #[derive(Debug, Clone)]
@@ -25,7 +28,7 @@ impl InputHookHandle {
 /// Calls `on_event` directly in the listener thread for each captured event.
 /// Screenshots are taken immediately -- no queuing.
 pub fn start_listener_with_callback<F>(
-    _exclude_rect: Option<(i32, i32, i32, i32)>,
+    exclude_hwnd: Option<isize>,
     on_event: F,
 ) -> InputHookHandle
 where
@@ -58,6 +61,10 @@ where
 
             match event.event_type {
                 EventType::ButtonPress(rdev::Button::Left) => {
+                    // Ignore clicks on the recorder window (works even if window is moved)
+                    if is_click_on_excluded_window(exclude_hwnd) {
+                        return;
+                    }
                     *last = now;
                     on_event(CaptureEvent::MouseClick { x: 0.0, y: 0.0 });
                 }
@@ -75,6 +82,39 @@ where
     });
 
     InputHookHandle { stop_flag }
+}
+
+/// Check if the click landed on the excluded window (by HWND).
+/// Uses WindowFromPoint to get the window under the cursor at click time,
+/// then walks up the parent chain to see if it belongs to the excluded window.
+#[cfg(windows)]
+fn is_click_on_excluded_window(exclude_hwnd: Option<isize>) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, WindowFromPoint, GetAncestor, GA_ROOT};
+    use windows::Win32::Foundation::POINT;
+
+    let hwnd = match exclude_hwnd {
+        Some(h) => HWND(h as *mut _),
+        None => return false,
+    };
+
+    unsafe {
+        let mut point = POINT::default();
+        if GetCursorPos(&mut point).is_err() {
+            return false;
+        }
+        let hit = WindowFromPoint(point);
+        if hit == hwnd {
+            return true;
+        }
+        // The click might be on a child window (webview), so check the root ancestor
+        let root = GetAncestor(hit, GA_ROOT);
+        root == hwnd
+    }
+}
+
+#[cfg(not(windows))]
+fn is_click_on_excluded_window(_exclude_hwnd: Option<isize>) -> bool {
+    false
 }
 
 /// Get the current mouse cursor position (Windows).

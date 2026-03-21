@@ -44,6 +44,9 @@ pub struct AppState {
     pub recording_status: Mutex<RecordingStatus>,
     pub current_session: Mutex<Option<RecordingSession>>,
     pub in_flight_captures: Mutex<Option<Arc<AtomicU32>>>,
+    /// Shared stop flag -- lives outside the session mutex so it can be set
+    /// immediately in stop_recording without waiting for the session lock.
+    pub capture_stop_flag: Arc<AtomicBool>,
 }
 
 impl Default for AppState {
@@ -52,6 +55,7 @@ impl Default for AppState {
             recording_status: Mutex::new(RecordingStatus::default()),
             current_session: Mutex::new(None),
             in_flight_captures: Mutex::new(None),
+            capture_stop_flag: Arc::new(AtomicBool::new(false)),
         }
     }
 }
