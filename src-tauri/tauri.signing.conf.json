@@ -1,7 +1,7 @@
 {
   "bundle": {
     "windows": {
-      "signCommand": "trusted-signing-cli -e https://weu.codesigning.azure.net -a signing-sop-sorcery -c sop-recorder-profile -d \"SOP Sorcery\" %1"
+      "signCommand": "cmd /c scripts\\sign.cmd %1"
     }
   }
 }

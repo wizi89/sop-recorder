@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SOP Sorcery",
+  "productName": "sop-sorcery",
   "version": "0.7.0",
   "identifier": "com.wizimate.recorder",
   "build": {
