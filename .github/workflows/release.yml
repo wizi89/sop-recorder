@@ -65,4 +65,4 @@ jobs:
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
-          args: --config src-tauri/tauri.signing.conf.json
+          args: --verbose --config src-tauri/tauri.signing.conf.json
