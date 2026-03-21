@@ -1,0 +1,245 @@
+@import "tailwindcss";
+
+@theme {
+  /* Surface hierarchy -- pure dark, subtle depth */
+  --color-surface: #0e0e0e;
+  --color-surface-container-low: #131313;
+  --color-surface-container: #1a1a1a;
+  --color-surface-container-high: #1f1f1f;
+  --color-surface-container-highest: #262626;
+  --color-surface-bright: #333333;
+
+  /* Primary accent */
+  --color-primary: #80aeff;
+  --color-primary-container: #5a8ee0;
+  --color-primary-glow: rgba(128, 174, 255, 0.2);
+
+  /* Tertiary / recording */
+  --color-tertiary: #ff7c6a;
+  --color-tertiary-hover: #ff6652;
+  --color-tertiary-glow: rgba(255, 124, 106, 0.25);
+
+  /* Error */
+  --color-error: #ff716c;
+
+  /* Text */
+  --color-on-background: #f2f2f2;
+  --color-on-surface: #e0e0e0;
+  --color-on-surface-variant: #a0a0a0;
+}
+
+@layer base {
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background-color: var(--color-surface);
+    color: var(--color-on-background);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* Noise texture overlay for depth */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    z-index: 9999;
+  }
+
+  #root {
+    height: 100vh;
+  }
+
+  /* Minimal scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+  }
+}
+
+@layer components {
+  /* ── Toolbar strip ── */
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 6px 4px;
+    background-color: var(--color-surface-container-low);
+    border-radius: 8px;
+  }
+
+  /* ── Buttons ── */
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-container));
+    color: #ffffff;
+    font-weight: 600;
+    border: none;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: box-shadow 0.25s ease-out, transform 0.1s ease-out;
+    letter-spacing: 0.01em;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 28px var(--color-primary-glow), 0 0 8px var(--color-primary-glow);
+  }
+
+  .btn-primary:active {
+    transform: scale(0.97);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: default;
+    box-shadow: none;
+  }
+
+  .btn-secondary {
+    background-color: var(--color-surface-container-highest);
+    color: var(--color-on-surface);
+    font-weight: 500;
+    border: none;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-out;
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--color-surface-bright);
+  }
+
+  .btn-stop {
+    background-color: var(--color-tertiary);
+    color: #ffffff;
+    font-weight: 700;
+    border: none;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: box-shadow 0.2s ease-out;
+    animation: stop-pulse 2s ease-in-out infinite;
+  }
+
+  .btn-stop:hover {
+    box-shadow: 0 0 24px var(--color-tertiary-glow);
+  }
+
+  /* ── Inputs ── */
+
+  .input-field {
+    background-color: var(--color-surface-container-highest);
+    color: var(--color-on-background);
+    border: 1px solid transparent;
+    outline: none;
+    transition: border-color 0.2s ease-out, box-shadow 0.2s ease-out;
+  }
+
+  .input-field:focus {
+    border-color: rgba(128, 174, 255, 0.3);
+    box-shadow: 0 0 12px rgba(128, 174, 255, 0.08);
+  }
+
+  /* ── Labels ── */
+
+  .label-sm {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-on-surface-variant);
+  }
+
+  /* ── Switch ── */
+
+  .switch-track {
+    width: 40px;
+    height: 22px;
+    border-radius: 11px;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.2s ease-out;
+    flex-shrink: 0;
+  }
+
+  .switch-track[data-checked="true"] {
+    background-color: var(--color-primary);
+  }
+
+  .switch-track[data-checked="false"] {
+    background-color: var(--color-surface-container-highest);
+  }
+
+  .switch-thumb {
+    display: block;
+    width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    background: #ffffff;
+    position: absolute;
+    top: 3px;
+    transition: left 0.2s ease-out;
+  }
+
+  /* ── Icon buttons ── */
+
+  .icon-btn {
+    padding: 6px;
+    border-radius: 6px;
+    background: transparent;
+    border: none;
+    color: var(--color-on-surface-variant);
+    cursor: pointer;
+    transition: color 0.15s ease-out, background-color 0.15s ease-out;
+  }
+
+  .icon-btn:hover {
+    color: var(--color-on-surface);
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+/* ── Animations ── */
+
+@keyframes indeterminate {
+  0% {
+    width: 30%;
+    transform: translateX(-100%);
+  }
+  50% {
+    width: 30%;
+    transform: translateX(233%);
+  }
+  100% {
+    width: 30%;
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes cta-breathe {
+  0%, 100% {
+    box-shadow: 0 0 16px rgba(128, 174, 255, 0.12);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(128, 174, 255, 0.22);
+  }
+}
+
+@keyframes stop-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 124, 106, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 124, 106, 0.3);
+  }
+}
