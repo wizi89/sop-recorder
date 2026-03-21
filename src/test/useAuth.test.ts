@@ -14,7 +14,7 @@ describe("useAuth", () => {
 
   it("attempts session restore on mount", async () => {
     mockInvoke.mockResolvedValue({ logged_in: false, email: null });
-    const { result } = renderHook(() => useAuth());
+    renderHook(() => useAuth());
 
     // Wait for initial effect
     await act(async () => {

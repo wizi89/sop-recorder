@@ -63,14 +63,6 @@ describe("i18n", () => {
   });
 
   it("uses proper German umlauts (not ASCII substitutes)", () => {
-    const values = Object.values(de);
-    const needsUmlaut = values.filter(
-      (v) =>
-        v.includes("oe") &&
-        !v.includes("does") &&
-        !v.includes("goes") &&
-        !v.includes("toe"),
-    );
     // Spot check specific strings that must have umlauts
     expect(t("status.open_folder")).toContain("ö"); // Ordner offnen -> Ordner öffnen
     expect(t("settings.workflows_dir")).not.toContain("ue"); // no ASCII substitutes
