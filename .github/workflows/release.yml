@@ -65,3 +65,14 @@ jobs:
           prerelease: false
           updaterJsonPreferNsis: true
           args: --config src-tauri/tauri.signing.conf.json
+
+      - name: Deploy installer to server
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          EXE_FILE=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe)
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+            "$EXE_FILE" \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
