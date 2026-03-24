@@ -71,10 +71,9 @@ jobs:
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
+          eval "$(ssh-agent -s)"
+          printf '%s\n' "$DEPLOY_SSH_KEY" | ssh-add -
           EXE_FILE=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe)
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+          scp -o StrictHostKeyChecking=no \
             "$EXE_FILE" \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
