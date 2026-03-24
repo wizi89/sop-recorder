@@ -1,5 +1,6 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LoginScreen } from "./components/LoginScreen";
 import { RecorderScreen } from "./components/RecorderScreen";
@@ -9,8 +10,6 @@ import { useRecorder } from "./hooks/useRecorder";
 import { useSSE } from "./hooks/useSSE";
 import { runGeneration } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-
-const VERSION = "0.7.0";
 const IS_DEV = import.meta.env.DEV;
 
 const IDLE_SIZE = new LogicalSize(460, 380);
@@ -27,8 +26,13 @@ function App() {
 }
 
 function MainApp() {
+  const [version, setVersion] = useState("");
   const auth = useAuth();
   const recorder = useRecorder();
+
+  useEffect(() => {
+    getVersion().then(setVersion);
+  }, []);
 
   // SSE event handling
   useSSE({
@@ -119,7 +123,7 @@ function MainApp() {
         loading={auth.loading}
         error={auth.error}
         onOpenSettings={handleOpenSettings}
-        version={VERSION}
+        version={version}
       />
     );
   }
@@ -138,7 +142,7 @@ function MainApp() {
       onOpenSettings={handleOpenSettings}
       onOpenFolder={handleOpenFolder}
       onRetry={handleRetry}
-      version={VERSION}
+      version={version}
     />
   );
 }

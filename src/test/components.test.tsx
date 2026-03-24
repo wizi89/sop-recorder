@@ -4,6 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { LoginScreen } from "../components/LoginScreen";
 import { RecorderScreen } from "../components/RecorderScreen";
 import { StatusBar } from "../components/StatusBar";
+import tauriConf from "../../src-tauri/tauri.conf.json";
+
+const APP_VERSION = tauriConf.version;
 
 describe("LoginScreen", () => {
   const defaults = {
@@ -11,7 +14,7 @@ describe("LoginScreen", () => {
     loading: false,
     error: null,
     onOpenSettings: vi.fn(),
-    version: "0.7.0",
+    version: APP_VERSION,
   };
 
   it("renders email and password fields", () => {
@@ -49,7 +52,7 @@ describe("LoginScreen", () => {
 
   it("shows version number", () => {
     render(<LoginScreen {...defaults} />);
-    expect(screen.getByText("v0.7.0")).toBeInTheDocument();
+    expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument();
   });
 });
 
@@ -66,7 +69,7 @@ describe("RecorderScreen", () => {
     onOpenSettings: vi.fn(),
     onOpenFolder: vi.fn(),
     onRetry: vi.fn(),
-    version: "0.7.0",
+    version: APP_VERSION,
   };
 
   it("shows ready state with start button", () => {
