@@ -143,3 +143,29 @@ pub fn keyring_clear(key: &str) -> Result<(), String> {
         Err(e) => Err(e.to_string()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config;
+
+    #[test]
+    fn api_url_defaults_to_prod() {
+        assert_eq!(api_url_for_target(None), config::API_URL_PROD);
+    }
+
+    #[test]
+    fn api_url_local_target_returns_dev() {
+        assert_eq!(api_url_for_target(Some("Local")), config::API_URL_DEV);
+    }
+
+    #[test]
+    fn api_url_production_target_returns_prod() {
+        assert_eq!(api_url_for_target(Some("Production")), config::API_URL_PROD);
+    }
+
+    #[test]
+    fn api_url_unknown_target_returns_prod() {
+        assert_eq!(api_url_for_target(Some("anything")), config::API_URL_PROD);
+    }
+}

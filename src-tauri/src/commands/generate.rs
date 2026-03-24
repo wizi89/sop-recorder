@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{Emitter, State};
-
 use tauri_plugin_store::StoreExt;
 
 use crate::commands::auth::SessionCache;
@@ -103,13 +102,17 @@ async fn run_generation_inner(
         .map(|(n, p)| (*n, p.as_path()))
         .collect();
 
-    // Read upload target from settings
-    let api_url = if let Ok(store) = app.store("settings.json") {
-        store
-            .get("upload_target")
-            .and_then(|v| v.as_str().map(String::from))
+    // In dev mode, allow choosing local server via settings; in release always use production
+    let api_url = if cfg!(debug_assertions) {
+        app.store("settings.json")
+            .ok()
+            .and_then(|store| {
+                store
+                    .get("upload_target")
+                    .and_then(|v| v.as_str().map(String::from))
+            })
             .filter(|s| s == "Local")
-            .map(|_| "http://localhost:8000".to_string())
+            .map(|_| crate::config::API_URL_DEV.to_string())
     } else {
         None
     };

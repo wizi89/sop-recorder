@@ -84,12 +84,6 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
         store.delete("upload_target");
     }
 
-    if let Some(target) = &settings.upload_target {
-        store.set("upload_target", serde_json::json!(target));
-    } else {
-        store.delete("upload_target");
-    }
-
     // API key goes to keyring
     if let Some(key) = &settings.api_key {
         if !key.is_empty() {
@@ -106,13 +100,17 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
 
 #[tauri::command]
 pub async fn get_webapp_url(app: tauri::AppHandle) -> Result<String, String> {
-    let target = app
-        .store(STORE_FILENAME)
-        .ok()
-        .and_then(|store| {
-            store
-                .get("upload_target")
-                .and_then(|v| v.as_str().map(String::from))
-        });
-    Ok(crate::config::webapp_url_for_target(target.as_deref()).to_string())
+    if cfg!(debug_assertions) {
+        let target = app
+            .store(STORE_FILENAME)
+            .ok()
+            .and_then(|store| {
+                store
+                    .get("upload_target")
+                    .and_then(|v| v.as_str().map(String::from))
+            });
+        Ok(crate::config::webapp_url_for_target(target.as_deref()).to_string())
+    } else {
+        Ok(crate::config::WEBAPP_URL_PROD.to_string())
+    }
 }

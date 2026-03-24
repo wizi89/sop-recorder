@@ -9,3 +9,28 @@ pub fn webapp_url_for_target(upload_target: Option<&str>) -> &'static str {
         _ => WEBAPP_URL_PROD,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn webapp_url_defaults_to_prod() {
+        assert_eq!(webapp_url_for_target(None), WEBAPP_URL_PROD);
+    }
+
+    #[test]
+    fn webapp_url_local_target_returns_dev() {
+        assert_eq!(webapp_url_for_target(Some("Local")), WEBAPP_URL_DEV);
+    }
+
+    #[test]
+    fn webapp_url_production_target_returns_prod() {
+        assert_eq!(webapp_url_for_target(Some("Production")), WEBAPP_URL_PROD);
+    }
+
+    #[test]
+    fn webapp_url_unknown_target_returns_prod() {
+        assert_eq!(webapp_url_for_target(Some("unknown")), WEBAPP_URL_PROD);
+    }
+}
