@@ -60,6 +60,11 @@ const de = {
   "pdf.step": "Schritt {order}",
   "pdf.no_title": "(ohne Titel)",
 
+  // Update
+  "update.available": "Version {version} verfügbar",
+  "update.install": "Jetzt aktualisieren",
+  "update.downloading": "Wird heruntergeladen...",
+
   // Errors
   "error.prefix": "Fehler: {message}",
 

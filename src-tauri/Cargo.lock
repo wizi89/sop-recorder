@@ -5677,7 +5677,7 @@ dependencies = [
 
 [[package]]
 name = "sop-recorder"
-version = "0.7.2"
+version = "0.7.4"
 dependencies = [
  "chrono",
  "cpal",

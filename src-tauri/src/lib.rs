@@ -5,7 +5,6 @@ pub mod network;
 pub mod output;
 pub mod state;
 use commands::{auth, generate, recording, settings, window};
-use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,33 +17,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(state::AppState::default())
         .manage(auth::SessionCache::default())
-        .setup(|app| {
-            // Check for updates on startup (non-blocking)
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                match tauri_plugin_updater::UpdaterExt::updater(&handle) {
-                    Ok(updater) => {
-                        match updater.check().await {
-                            Ok(Some(update)) => {
-                                log::info!("Update available: {}", update.version);
-                                let _ = handle.emit("update:available", update.version.clone());
-                            }
-                            Ok(None) => {
-                                log::info!("App is up to date");
-                            }
-                            Err(e) => {
-                                log::warn!("Update check failed: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        log::warn!("Updater not available: {}", e);
-                    }
-                }
-            });
-
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             auth::login,
             auth::logout,
