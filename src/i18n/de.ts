@@ -35,6 +35,7 @@ const de = {
   "settings.model": "Modell",
   "settings.api_key": "API-Schlüssel",
   "settings.hide_screenshots": "In Screenshots ausblenden",
+  "settings.skip_pii_check": "PII-Prüfung überspringen",
   "settings.workflows_dir": "Anleitungsverzeichnis",
   "settings.logs_dir": "Protokollverzeichnis",
   "settings.choose": "Wählen",

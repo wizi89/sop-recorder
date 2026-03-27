@@ -11,6 +11,7 @@ export interface AppSettings {
   hide_from_screenshots: boolean;
   api_key: string | null;
   upload_target: string | null;
+  skip_pii_check: boolean;
 }
 
 export async function login(

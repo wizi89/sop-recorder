@@ -16,6 +16,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     hide_from_screenshots: true,
     api_key: null,
     upload_target: null,
+    skip_pii_check: false,
   });
 
   useEffect(() => {
@@ -69,6 +70,26 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             <span
               className="switch-thumb"
               style={{ left: settings.hide_from_screenshots ? 21 : 3 }}
+            />
+          </button>
+        </div>
+
+        {/* Skip PII check */}
+        <div className="flex items-center justify-between">
+          <label className="label-sm">{t("settings.skip_pii_check")}</label>
+          <button
+            className="switch-track"
+            data-checked={settings.skip_pii_check}
+            onClick={() =>
+              setSettings((s) => ({
+                ...s,
+                skip_pii_check: !s.skip_pii_check,
+              }))
+            }
+          >
+            <span
+              className="switch-thumb"
+              style={{ left: settings.skip_pii_check ? 21 : 3 }}
             />
           </button>
         </div>

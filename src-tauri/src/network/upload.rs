@@ -15,6 +15,7 @@ pub async fn upload_multipart(
     screenshot_paths: &[(u32, &Path)],
     guide_title: &str,
     api_url: Option<&str>,
+    skip_pii_check: bool,
 ) -> Result<reqwest::Response, String> {
     let base_url = api_url.unwrap_or(config::API_URL_PROD);
     let url = format!("{}/generate", base_url);
@@ -57,6 +58,10 @@ pub async fn upload_multipart(
         "step_count": screenshot_paths.len(),
     });
     form = form.text("metadata", metadata.to_string());
+
+    if skip_pii_check {
+        form = form.text("skip_pii_check", "true");
+    }
 
     let mut req = client
         .post(&url)
@@ -101,6 +106,7 @@ pub async fn upload_with_retry(
     guide_title: &str,
     api_url: Option<&str>,
     max_retries: u32,
+    skip_pii_check: bool,
 ) -> Result<reqwest::Response, String> {
     let mut last_err = String::new();
     let delays = [1, 2, 4]; // seconds
@@ -113,6 +119,7 @@ pub async fn upload_with_retry(
             screenshot_paths,
             guide_title,
             api_url,
+            skip_pii_check,
         )
         .await
         {

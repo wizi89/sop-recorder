@@ -11,6 +11,8 @@ pub struct AppSettings {
     pub api_key: Option<String>,
     #[serde(default)]
     pub upload_target: Option<String>,
+    #[serde(default)]
+    pub skip_pii_check: bool,
 }
 
 impl Default for AppSettings {
@@ -29,6 +31,7 @@ impl Default for AppSettings {
             hide_from_screenshots: true,
             api_key: None,
             upload_target: None,
+            skip_pii_check: false,
         }
     }
 }
@@ -55,6 +58,11 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         .get("upload_target")
         .and_then(|v| v.as_str().map(String::from));
 
+    let skip_pii_check = store
+        .get("skip_pii_check")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     // API key is stored in keyring, not in the store
     let api_key = crate::network::auth::keyring_load("openai-key").ok().flatten();
 
@@ -64,6 +72,7 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         hide_from_screenshots,
         api_key,
         upload_target,
+        skip_pii_check,
     })
 }
 
@@ -83,6 +92,8 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     } else {
         store.delete("upload_target");
     }
+
+    store.set("skip_pii_check", serde_json::json!(settings.skip_pii_check));
 
     // API key goes to keyring
     if let Some(key) = &settings.api_key {

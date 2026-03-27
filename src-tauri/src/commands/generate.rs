@@ -102,6 +102,13 @@ async fn run_generation_inner(
         .map(|(n, p)| (*n, p.as_path()))
         .collect();
 
+    // Read skip_pii_check setting
+    let skip_pii_check = app
+        .store("settings.json")
+        .ok()
+        .and_then(|store| store.get("skip_pii_check").and_then(|v| v.as_bool()))
+        .unwrap_or(false);
+
     // In dev mode, allow choosing local server via settings; in release always use production
     let api_url = if cfg!(debug_assertions) {
         app.store("settings.json")
@@ -126,6 +133,7 @@ async fn run_generation_inner(
         &guide_title,
         api_url.as_deref(),
         3,
+        skip_pii_check,
     )
     .await?;
 
