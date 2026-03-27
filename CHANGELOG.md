@@ -14,6 +14,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skip PII check toggle in settings to bypass the server-side PII guardrail per-request
 - SSE stream debug logging and CRLF normalization for cross-platform reliability
 
+## [0.7.4] - 2026-03-25
+
+### Added
+
+- Dismissible update banner when a new version is available
+
+## [0.7.3] - 2026-03-24
+
+### Fixed
+
+- Force production URLs in release builds, allow local server only in dev mode
+
+## [0.7.2] - 2026-03-24
+
+### Added
+
+- Deploy step in CI to upload signed installer to server
+- Read app version from tauri.conf.json instead of hardcoding
+
+### Fixed
+
+- SSH key handling in release deploy step
+
+## [0.7.1] - 2026-03-21
+
+### Fixed
+
+- CI permissions for release workflow
+- Updated dependencies
+
 ## [0.7.0] - 2026-03-21
 
 Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + React + TypeScript).
@@ -47,5 +77,9 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
 [Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.7.5...HEAD
-[0.7.5]: https://github.com/wizi89/sop-recorder/compare/v0.7.0...v0.7.5
+[0.7.5]: https://github.com/wizi89/sop-recorder/compare/v0.7.4...v0.7.5
+[0.7.4]: https://github.com/wizi89/sop-recorder/compare/v0.7.3...v0.7.4
+[0.7.3]: https://github.com/wizi89/sop-recorder/compare/v0.7.2...v0.7.3
+[0.7.2]: https://github.com/wizi89/sop-recorder/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/wizi89/sop-recorder/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wizi89/sop-recorder/releases/tag/v0.7.0
