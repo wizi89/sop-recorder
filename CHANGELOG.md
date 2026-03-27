@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-03-27
+
+### Added
+
+- Skip PII check toggle in settings to bypass the server-side PII guardrail per-request
+- SSE stream debug logging and CRLF normalization for cross-platform reliability
+
 ## [0.7.0] - 2026-03-21
 
 Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + React + TypeScript).
@@ -39,5 +46,6 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.7.5...HEAD
+[0.7.5]: https://github.com/wizi89/sop-recorder/compare/v0.7.0...v0.7.5
 [0.7.0]: https://github.com/wizi89/sop-recorder/releases/tag/v0.7.0
