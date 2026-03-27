@@ -1,6 +1,6 @@
 [package]
 name = "sop-recorder"
-version = "0.7.4"
+version = "0.7.5"
 description = "Wizimate SOP Recorder"
 authors = ["Wizimate"]
 license = "BSL-1.1"

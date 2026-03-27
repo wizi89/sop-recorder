@@ -40,7 +40,13 @@ pub async fn consume_sse_stream(
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
         let text = String::from_utf8_lossy(&chunk);
+        log::debug!("SSE chunk ({} bytes): {:?}", chunk.len(), &text[..text.len().min(200)]);
         buffer.push_str(&text);
+
+        // Normalise \r\n to \n so the delimiter search works with any server
+        if buffer.contains("\r\n") {
+            buffer = buffer.replace("\r\n", "\n");
+        }
 
         // Parse SSE events from buffer
         while let Some(event_end) = buffer.find("\n\n") {
@@ -57,6 +63,8 @@ pub async fn consume_sse_stream(
                     data = d.trim().to_string();
                 }
             }
+
+            log::debug!("SSE event: type={:?}, data_len={}", event_type, data.len());
 
             match event_type.as_str() {
                 "status" => {
@@ -111,6 +119,11 @@ pub async fn consume_sse_stream(
                 }
             }
         }
+    }
+
+    log::info!("SSE stream ended. buffer_remaining={} has_result={}", buffer.len(), result.is_some());
+    if !buffer.trim().is_empty() {
+        log::debug!("SSE leftover buffer: {:?}", &buffer[..buffer.len().min(500)]);
     }
 
     let _ = url; // suppress unused warning
