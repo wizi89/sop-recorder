@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-03-28
+
+### Fixed
+
+- Fix heartbeat events showing as raw JSON in the UI instead of being silently consumed
+- Add job_id tracking to SSE result and error events for generation durability
+
 ## [0.7.5] - 2026-03-27
 
 ### Added
