@@ -8,21 +8,29 @@ interface SSEStatusEvent {
 interface SSEResultEvent {
   enriched: unknown[];
   markdown: string;
+  job_id?: string;
 }
 
 interface SSEErrorEvent {
   message: string;
+  job_id?: string;
 }
 
 interface SSEPiiBlockedEvent {
   findings: unknown;
 }
 
+interface SSEResumeResubmitEvent {
+  job_id: string;
+  message: string;
+}
+
 export function useSSE(handlers: {
   onStatus?: (msg: string) => void;
   onResult?: (data: SSEResultEvent) => void;
-  onError?: (msg: string) => void;
+  onError?: (msg: string, jobId?: string) => void;
   onPiiBlocked?: (findings: unknown) => void;
+  onResumeResubmit?: (data: SSEResumeResubmitEvent) => void;
 }) {
   useEffect(() => {
     const unlisteners: Promise<UnlistenFn>[] = [];
@@ -49,7 +57,16 @@ export function useSSE(handlers: {
       const h = handlers.onError;
       unlisteners.push(
         listen<SSEErrorEvent>("sse:error", (event) => {
-          h(event.payload.message);
+          h(event.payload.message, event.payload.job_id);
+        }),
+      );
+    }
+
+    if (handlers.onResumeResubmit) {
+      const h = handlers.onResumeResubmit;
+      unlisteners.push(
+        listen<SSEResumeResubmitEvent>("sse:resume_resubmit", (event) => {
+          h(event.payload);
         }),
       );
     }

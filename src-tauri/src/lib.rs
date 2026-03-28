@@ -8,9 +8,34 @@ use commands::{auth, generate, recording, settings, window};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // In dev mode, also write logs to the sop-sorcery .tmp/logs/ folder
+    // so server + recorder + web logs live side-by-side for debugging.
+    let mut log_builder = tauri_plugin_log::Builder::default();
+    if cfg!(debug_assertions) {
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        // CARGO_MANIFEST_DIR = sop-recorder/src-tauri, go up to sibling project
+        let log_dir = manifest_dir
+            .parent() // sop-recorder
+            .and_then(|p| p.parent()) // parent of both repos
+            .map(|p| p.join("9_sop-sorcery").join(".tmp").join("logs"));
+        if let Some(dir) = log_dir {
+            if dir.parent().map_or(false, |p| p.exists()) {
+                let _ = std::fs::create_dir_all(&dir);
+                log_builder = log_builder
+                    .targets([
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                        tauri_plugin_log::Target::new(
+                            tauri_plugin_log::TargetKind::Folder { path: dir, file_name: Some("recorder".into()) },
+                        ),
+                    ])
+                    ;
+            }
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(log_builder.build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_shell::init())

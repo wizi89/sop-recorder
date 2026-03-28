@@ -11,16 +11,26 @@ pub struct SSEStatusPayload {
 pub struct SSEResultPayload {
     pub enriched: Vec<serde_json::Value>,
     pub markdown: String,
+    #[serde(default)]
+    pub job_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SSEErrorPayload {
     pub message: String,
+    #[serde(default)]
+    pub job_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SSEPiiBlockedPayload {
     pub findings: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SSEResumeResubmitPayload {
+    pub job_id: String,
+    pub message: String,
 }
 
 /// Consume SSE events from a reqwest Response, emitting Tauri events to the frontend.
@@ -68,6 +78,12 @@ pub async fn consume_sse_stream(
 
             match event_type.as_str() {
                 "status" => {
+                    // Heartbeat events keep the connection alive but
+                    // should not be shown to the user.
+                    if data.contains("\"type\":") && data.contains("\"heartbeat\"") {
+                        log::debug!("SSE heartbeat received, skipping UI update");
+                        continue;
+                    }
                     if let Ok(payload) =
                         serde_json::from_str::<SSEStatusPayload>(&data)
                     {
@@ -103,16 +119,22 @@ pub async fn consume_sse_stream(
                 }
                 "error" => {
                     log::error!("SSE error event received: {}", data);
-                    let msg = serde_json::from_str::<SSEErrorPayload>(&data)
-                        .map(|p| p.message)
-                        .unwrap_or(data);
-                    let _ = app.emit(
-                        "sse:error",
-                        SSEErrorPayload {
-                            message: msg.clone(),
-                        },
-                    );
+                    let parsed = serde_json::from_str::<SSEErrorPayload>(&data);
+                    let payload = parsed.unwrap_or(SSEErrorPayload {
+                        message: data.clone(),
+                        job_id: None,
+                    });
+                    let msg = payload.message.clone();
+                    let _ = app.emit("sse:error", &payload);
                     return Err(msg);
+                }
+                "resume_resubmit" => {
+                    if let Ok(payload) =
+                        serde_json::from_str::<SSEResumeResubmitPayload>(&data)
+                    {
+                        log::info!("SSE resume_resubmit: job_id={}", payload.job_id);
+                        let _ = app.emit("sse:resume_resubmit", &payload);
+                    }
                 }
                 _ => {
                     // Unknown event type, ignore
