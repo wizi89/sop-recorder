@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LoginScreen } from "./components/LoginScreen";
@@ -10,12 +10,12 @@ import { useRecorder } from "./hooks/useRecorder";
 import { useSSE } from "./hooks/useSSE";
 import { useUpdater } from "./hooks/useUpdater";
 import { useTranslation } from "./hooks/useTranslation";
-import { runGeneration } from "./lib/tauri";
+import { runGeneration, getWorkArea } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 const IS_DEV = import.meta.env.DEV;
 
 const IDLE_SIZE = new LogicalSize(460, 380);
-const COMPACT_SIZE = new LogicalSize(160, 44);
+const COMPACT_SIZE = new LogicalSize(200, 32);
 
 function App() {
   // If this window is the settings window, render settings page
@@ -41,7 +41,8 @@ function MainApp() {
   // SSE event handling
   useSSE({
     onStatus: (msg) => recorder.setStatusMessage(msg),
-    onError: (msg) => recorder.setStatusMessage(msg),
+    onError: (msg) => recorder.setError(msg),
+    onPiiBlocked: (findings) => recorder.setPiiBlocked(findings),
   });
 
   // Window mode switching
@@ -52,11 +53,27 @@ function MainApp() {
       appWindow.setAlwaysOnTop(true);
       appWindow.setDecorations(false);
       appWindow.setResizable(false);
+      // Position to bottom-right of work area (physical pixels).
+      // Small delay lets the resize settle before positioning.
+      const MARGIN = 12;
+      setTimeout(() => {
+        Promise.all([getWorkArea(), appWindow.scaleFactor(), appWindow.outerSize()])
+          .then(([area, scale, outerSize]) => {
+            const margin = Math.round(MARGIN * scale);
+            const x = area.x + area.width - outerSize.width - margin;
+            const y = area.y + area.height - outerSize.height - margin;
+            appWindow.setPosition(new PhysicalPosition(x, y));
+          })
+          .catch(() => {
+            // Fallback: keep current position
+          });
+      }, 50);
     } else {
       appWindow.setSize(IDLE_SIZE);
       appWindow.setAlwaysOnTop(false);
       appWindow.setDecorations(true);
       appWindow.setResizable(false);
+      appWindow.center();
     }
   }, [recorder.status]);
 
@@ -193,13 +210,16 @@ function MainApp() {
           status={recorder.status}
           statusMessage={recorder.statusMessage}
           error={recorder.error}
+          piiFindings={recorder.piiFindings}
           outputDir={recorder.outputDir}
           onStart={handleStart}
           onStop={handleStop}
+          onCancel={recorder.cancel}
           onSignOut={auth.logout}
           onOpenSettings={handleOpenSettings}
           onOpenFolder={handleOpenFolder}
           onRetry={handleRetry}
+          onDismissPii={() => recorder.setError(t("network.pii_blocked"))}
           version={version}
         />
       </div>

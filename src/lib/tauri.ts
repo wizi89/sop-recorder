@@ -56,3 +56,14 @@ export async function runGeneration(outputDir: string): Promise<void> {
 export async function getWebappUrl(): Promise<string> {
   return invoke("get_webapp_url");
 }
+
+export interface WorkArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export async function getWorkArea(): Promise<WorkArea> {
+  return invoke("get_work_area");
+}

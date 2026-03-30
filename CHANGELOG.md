@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-30
+
+### Added
+
+- Cancel button in compact recording bar with native OS confirmation dialog
+- Draggable compact recording bar with custom drag region and move icon
+- Auto-position compact bar to bottom-right corner above taskbar on recording start
+- PII blocked modal overlay showing which steps and entity types were detected
+- Copy button in PII modal to save findings to clipboard before dismissing
+- Legal disclaimer with links to privacy policy, terms, and legal pages in PII modal
+- Rust `get_work_area()` command for accurate taskbar-aware window positioning
+- German translations for PII entity types (IBAN, Steuer-ID, Sozialversicherungsnr., etc.)
+
+### Fixed
+
+- Error events now properly transition recorder to error state with red styling
+- PII blocked events are handled via dedicated `pii_blocked` status instead of being silently dropped
+- Done message now shows "Gespeichert und hochgeladen" instead of generic text
+
+### Changed
+
+- Compact recording bar redesigned: Cancel | drag handle | Stop layout (200x32)
+- Success message uses `done_uploaded` translation (server always has the result on success)
+
+### Removed
+
+- Dead translation keys: `status.done`, `status.pending_found`, and 15 other unused keys from previous versions
+
 ## [0.7.6] - 2026-03-28
 
 ### Fixed
@@ -83,7 +111,9 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.7.5...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/wizi89/sop-recorder/compare/v0.7.6...v0.8.0
+[0.7.6]: https://github.com/wizi89/sop-recorder/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/wizi89/sop-recorder/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/wizi89/sop-recorder/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/wizi89/sop-recorder/compare/v0.7.2...v0.7.3

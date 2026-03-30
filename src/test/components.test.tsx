@@ -65,10 +65,12 @@ describe("RecorderScreen", () => {
     outputDir: null,
     onStart: vi.fn(),
     onStop: vi.fn(),
+    onCancel: vi.fn(),
     onSignOut: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenFolder: vi.fn(),
     onRetry: vi.fn(),
+    onDismissPii: vi.fn(),
     version: APP_VERSION,
   };
 

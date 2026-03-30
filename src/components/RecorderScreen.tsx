@@ -1,5 +1,8 @@
+import { ask } from "@tauri-apps/plugin-dialog";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "../hooks/useTranslation";
 import { StatusBar } from "./StatusBar";
+import { PiiBlockedModal } from "./PiiBlockedModal";
 import type { RecorderStatus } from "../hooks/useRecorder";
 
 interface RecorderScreenProps {
@@ -7,13 +10,16 @@ interface RecorderScreenProps {
   status: RecorderStatus;
   statusMessage: string;
   error: string | null;
+  piiFindings?: unknown | null;
   outputDir: string | null;
   onStart: () => void;
   onStop: () => void;
+  onCancel: () => void;
   onSignOut: () => void;
   onOpenSettings: () => void;
   onOpenFolder: () => void;
   onRetry: () => void;
+  onDismissPii: () => void;
   version: string;
 }
 
@@ -22,21 +28,66 @@ export function RecorderScreen({
   status,
   statusMessage,
   error,
+  piiFindings: _piiFindings,
   onStart,
   onStop,
+  onCancel,
   onSignOut,
   onOpenSettings,
   onOpenFolder,
   onRetry,
+  onDismissPii,
   version,
 }: RecorderScreenProps) {
   const { t } = useTranslation();
 
   // Compact recording mode
   if (status === "recording") {
+    const handleCancel = async () => {
+      const appWindow = getCurrentWindow();
+      await appWindow.setAlwaysOnTop(false);
+      const confirmed = await ask(t("status.cancel_message"), {
+        title: t("status.cancel_title"),
+        kind: "warning",
+        okLabel: t("status.cancel_confirm"),
+        cancelLabel: t("status.cancel"),
+      });
+      if (confirmed) {
+        onCancel();
+      } else {
+        await appWindow.setAlwaysOnTop(true);
+      }
+    };
+
     return (
-      <div className="flex items-center justify-center h-full p-2 bg-surface">
-        <button onClick={onStop} className="btn-stop w-full py-2.5 text-sm">
+      <div data-tauri-drag-region className="flex items-center h-full bg-surface overflow-hidden select-none">
+        <button
+          onClick={handleCancel}
+          className="h-full border-none cursor-pointer font-semibold"
+          style={{
+            fontSize: "0.6rem",
+            width: "38%",
+            backgroundColor: "var(--color-surface-container-highest)",
+            color: "#fff",
+          }}
+        >
+          {t("status.cancel")}
+        </button>
+        <div className="h-full flex items-center justify-center" style={{ width: "24%" }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="opacity-30 pointer-events-none">
+            <path d="M12 2l-4 4h3v4H7V7l-4 4 4 4v-3h4v4H8l4 4 4-4h-3v-4h4v3l4-4-4-4v3h-4V6h3z" />
+          </svg>
+        </div>
+        <button
+          onClick={onStop}
+          className="h-full border-none cursor-pointer font-semibold"
+          style={{
+            fontSize: "0.6rem",
+            width: "38%",
+            backgroundColor: "var(--color-tertiary)",
+            color: "#fff",
+          }}
+        >
           {t("status.stop")}
         </button>
       </div>
@@ -47,8 +98,9 @@ export function RecorderScreen({
   const isBusy = status === "processing";
   const displayMessage = (() => {
     if (error) return error;
+    if (statusMessage === "no_clicks") return t("status.no_clicks");
     if (statusMessage) return statusMessage;
-    if (status === "done") return t("status.done");
+    if (status === "done") return t("status.done_uploaded");
     return t("status.ready");
   })();
   const isReady = status === "idle" && !error && !statusMessage;
@@ -104,7 +156,7 @@ export function RecorderScreen({
               {t("status.retry")}
             </button>
           )}
-          {(status === "idle" || status === "done" || status === "error") && (
+          {(status === "idle" || status === "done" || status === "error" || status === "pii_blocked") && (
             <button
               onClick={onStart}
               className="btn-primary w-56 py-3 text-sm"
@@ -122,6 +174,11 @@ export function RecorderScreen({
           v{version}
         </span>
       </div>
+
+      {/* PII blocked modal */}
+      {status === "pii_blocked" && (
+        <PiiBlockedModal findings={_piiFindings as never} onDismiss={onDismissPii} />
+      )}
     </div>
   );
 }

@@ -54,6 +54,7 @@ pub fn run() {
             recording::stop_recording,
             generate::run_generation,
             window::set_display_affinity,
+            window::get_work_area,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

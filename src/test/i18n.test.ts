@@ -14,8 +14,8 @@ describe("i18n", () => {
   it("substitutes placeholders", () => {
     expect(t("pdf.steps", { count: 5 })).toBe("5 Schritte");
     expect(t("pdf.step", { order: 3 })).toBe("Schritt 3");
-    expect(t("status.pending_found", { folder: "SOP 2026-01-01" })).toBe(
-      "Ausstehend: SOP 2026-01-01",
+    expect(t("update.available", { version: "0.7.7" })).toBe(
+      "Version 0.7.7 verfügbar",
     );
   });
 
@@ -37,7 +37,7 @@ describe("i18n", () => {
       "status.ready",
       "status.start",
       "status.stop",
-      "status.done",
+      "status.done_uploaded",
       "status.open_folder",
       "status.retry",
       // Settings

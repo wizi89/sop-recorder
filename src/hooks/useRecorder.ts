@@ -10,13 +10,15 @@ export type RecorderStatus =
   | "recording"
   | "processing"
   | "done"
-  | "error";
+  | "error"
+  | "pii_blocked";
 
 interface RecorderState {
   status: RecorderStatus;
   statusMessage: string;
   outputDir: string | null;
   error: string | null;
+  piiFindings: unknown | null;
 }
 
 export function useRecorder() {
@@ -25,6 +27,7 @@ export function useRecorder() {
     statusMessage: "",
     outputDir: null,
     error: null,
+    piiFindings: null,
   });
   const generatingRef = useRef(false);
 
@@ -36,6 +39,7 @@ export function useRecorder() {
         statusMessage: "",
         outputDir: null,
         error: null,
+        piiFindings: null,
       });
     } catch (e) {
       setState({
@@ -43,6 +47,7 @@ export function useRecorder() {
         statusMessage: "",
         outputDir: null,
         error: String(e),
+        piiFindings: null,
       });
     }
   }, []);
@@ -56,6 +61,7 @@ export function useRecorder() {
         statusMessage: "",
         outputDir,
         error: null,
+        piiFindings: null,
       });
       generatingRef.current = true;
       await runGeneration(outputDir);
@@ -65,14 +71,34 @@ export function useRecorder() {
         statusMessage: "",
       }));
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        status: "error",
-        error: String(e),
-      }));
+      const msg = String(e);
+      setState((s) => {
+        // Don't override pii_blocked -- the SSE handler already set it
+        if (s.status === "pii_blocked") return s;
+        // No screenshots = nothing to process, go back to idle with a hint
+        if (msg.includes("No screenshots found")) {
+          return { ...s, status: "idle" as const, error: null, statusMessage: "no_clicks" };
+        }
+        return { ...s, status: "error" as const, error: msg };
+      });
     } finally {
       generatingRef.current = false;
     }
+  }, []);
+
+  const cancel = useCallback(async () => {
+    try {
+      await stopRecording();
+    } catch {
+      // ignore -- best effort cleanup
+    }
+    setState({
+      status: "idle",
+      statusMessage: "",
+      outputDir: null,
+      error: null,
+      piiFindings: null,
+    });
   }, []);
 
   const reset = useCallback(() => {
@@ -81,6 +107,7 @@ export function useRecorder() {
       statusMessage: "",
       outputDir: null,
       error: null,
+      piiFindings: null,
     });
   }, []);
 
@@ -92,5 +119,13 @@ export function useRecorder() {
     setState((s) => ({ ...s, status: "processing" as const, error: null, statusMessage: "" }));
   }, []);
 
-  return { ...state, start, stop, reset, setStatusMessage, setProcessing };
+  const setError = useCallback((msg: string) => {
+    setState((s) => ({ ...s, status: "error" as const, error: msg }));
+  }, []);
+
+  const setPiiBlocked = useCallback((findings: unknown) => {
+    setState((s) => ({ ...s, status: "pii_blocked" as const, piiFindings: findings }));
+  }, []);
+
+  return { ...state, start, stop, cancel, reset, setStatusMessage, setProcessing, setError, setPiiBlocked };
 }

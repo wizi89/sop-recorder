@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+*[data-tauri-drag-region] {
+  app-region: drag;
+}
+
+*[data-tauri-drag-region] button {
+  app-region: no-drag;
+}
+
 @theme {
   /* Surface hierarchy -- pure dark, subtle depth */
   --color-surface: #0e0e0e;
