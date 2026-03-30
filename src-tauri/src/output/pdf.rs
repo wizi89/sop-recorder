@@ -1,4 +1,4 @@
-use genpdf::elements::{Break, Image, Paragraph};
+use genpdf::elements::{Break, Image, PageBreak, Paragraph};
 use genpdf::fonts;
 use genpdf::style::Style;
 use genpdf::{Alignment, Document, Element, SimplePageDecorator};
@@ -71,17 +71,17 @@ pub fn generate_pdf(
             .styled(Style::new().with_font_size(14)),
     );
 
-    // Step pages
+    // Step pages (one step per page)
     for (i, step) in enriched.iter().enumerate() {
-        doc.push(Break::new(2.0));
+        doc.push(PageBreak::new());
 
         let order = i + 1;
         let title = step
             .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or("(ohne Titel)");
-        let description = step
-            .get("description")
+        let body = step
+            .get("body_markdown")
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
@@ -91,9 +91,9 @@ pub fn generate_pdf(
         );
         doc.push(Break::new(0.5));
 
-        if !description.is_empty() {
+        if !body.is_empty() {
             doc.push(
-                Paragraph::new(description).styled(Style::new().with_font_size(11)),
+                Paragraph::new(body).styled(Style::new().with_font_size(11)),
             );
             doc.push(Break::new(0.5));
         }
@@ -107,6 +107,28 @@ pub fn generate_pdf(
                 Err(e) => {
                     log::warn!("Failed to embed screenshot {}: {}", order, e);
                 }
+            }
+        }
+
+        // Warnings
+        if let Some(warnings) = step.get("warnings").and_then(|v| v.as_array()) {
+            for w in warnings.iter().filter_map(|v| v.as_str()) {
+                doc.push(Break::new(0.3));
+                doc.push(
+                    Paragraph::new(format!("Warnung: {}", w))
+                        .styled(Style::new().bold().with_font_size(10)),
+                );
+            }
+        }
+
+        // Notes
+        if let Some(notes) = step.get("notes").and_then(|v| v.as_array()) {
+            for n in notes.iter().filter_map(|v| v.as_str()) {
+                doc.push(Break::new(0.3));
+                doc.push(
+                    Paragraph::new(format!("Hinweis: {}", n))
+                        .styled(Style::new().italic().with_font_size(10)),
+                );
             }
         }
     }
