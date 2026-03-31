@@ -131,6 +131,34 @@ describe("RecorderScreen", () => {
     );
     expect(onStop).toHaveBeenCalled();
   });
+
+  it("shows PII disabled chip when skipPiiCheck is true", () => {
+    render(<RecorderScreen {...defaults} skipPiiCheck={true} />);
+    expect(screen.getByText(/sicherheitsprüfung deaktiviert/i)).toBeInTheDocument();
+  });
+
+  it("hides PII disabled chip when skipPiiCheck is false", () => {
+    render(<RecorderScreen {...defaults} skipPiiCheck={false} />);
+    expect(screen.queryByText(/sicherheitsprüfung deaktiviert/i)).not.toBeInTheDocument();
+  });
+
+  it("hides PII disabled chip by default", () => {
+    render(<RecorderScreen {...defaults} />);
+    expect(screen.queryByText(/sicherheitsprüfung deaktiviert/i)).not.toBeInTheDocument();
+  });
+
+  it("PII chip opens settings when clicked", async () => {
+    const onOpenSettings = vi.fn();
+    render(<RecorderScreen {...defaults} skipPiiCheck={true} onOpenSettings={onOpenSettings} />);
+
+    await userEvent.click(screen.getByText(/sicherheitsprüfung deaktiviert/i));
+    expect(onOpenSettings).toHaveBeenCalled();
+  });
+
+  it("hides PII chip during recording mode", () => {
+    render(<RecorderScreen {...defaults} status="recording" skipPiiCheck={true} />);
+    expect(screen.queryByText(/sicherheitsprüfung deaktiviert/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("StatusBar", () => {

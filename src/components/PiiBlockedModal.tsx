@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "../hooks/useTranslation";
 import type { TranslationKey } from "../i18n/de";
 
@@ -90,24 +89,6 @@ export function PiiBlockedModal({ findings, onDismiss }: PiiBlockedModalProps) {
         <button onClick={onDismiss} className="btn-primary w-full py-1.5 text-xs mt-1">
           {t("pii.dismiss")}
         </button>
-
-        {/* Legal disclaimer */}
-        <div className="border-t border-white/10 pt-2">
-          <p className="text-on-surface-variant leading-snug opacity-50 mb-1" style={{ fontSize: "0.6rem" }}>
-            {t("pii.disclaimer")}
-          </p>
-          <div className="flex gap-3" style={{ fontSize: "0.6rem" }}>
-            <button onClick={() => openUrl("https://flow.wizimate.com/legal")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
-              {t("pii.link_legal")}
-            </button>
-            <button onClick={() => openUrl("https://flow.wizimate.com/privacy")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
-              {t("pii.link_privacy")}
-            </button>
-            <button onClick={() => openUrl("https://flow.wizimate.com/terms")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
-              {t("pii.link_terms")}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
 const STORE_FILENAME: &str = "settings.json";
@@ -15,14 +16,46 @@ pub struct AppSettings {
     pub skip_pii_check: bool,
 }
 
-impl Default for AppSettings {
-    fn default() -> Self {
-        let docs = dirs_next::document_dir()
+impl AppSettings {
+    /// Write defaults to the store if no settings have been saved yet.
+    /// For upgrades from older versions, preserves the legacy workflows folder
+    /// if it already contains recordings.
+    pub fn initialize(app: &tauri::AppHandle) {
+        let Ok(store) = tauri_plugin_store::StoreExt::store(app, STORE_FILENAME) else {
+            return;
+        };
+        // If output_dir already exists in the store, settings were previously saved
+        if store.get("output_dir").is_some() {
+            return;
+        }
+        let mut defaults = Self::defaults(app);
+
+        // TODO(cleanup): Remove this legacy migration once all users have updated
+        // past v0.8.x. Added 2026-03-31.
+        let legacy_dir = dirs_next::document_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
             .join("Wizimate Workflows");
-        let app_data = dirs_next::data_local_dir()
+        if legacy_dir.is_dir() {
+            defaults.output_dir = legacy_dir.to_string_lossy().to_string();
+        }
+
+        store.set("output_dir", serde_json::json!(defaults.output_dir));
+        store.set("logs_dir", serde_json::json!(defaults.logs_dir));
+        store.set("hide_from_screenshots", serde_json::json!(defaults.hide_from_screenshots));
+        store.set("skip_pii_check", serde_json::json!(defaults.skip_pii_check));
+    }
+
+    pub fn defaults(app: &tauri::AppHandle) -> Self {
+        let product_name = &app.config().product_name;
+        let name = product_name.as_deref().unwrap_or("sop-sorcery");
+
+        let docs = dirs_next::document_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("com.wizimate.recorder")
+            .join(format!("{} Workflows", name));
+        let app_data = app.path().app_local_data_dir()
+            .unwrap_or_else(|_| dirs_next::data_local_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+                .join(name))
             .join("logs");
 
         Self {
@@ -39,7 +72,7 @@ impl Default for AppSettings {
 #[tauri::command]
 pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
     let store = app.store(STORE_FILENAME).map_err(|e| e.to_string())?;
-    let defaults = AppSettings::default();
+    let defaults = AppSettings::defaults(&app);
 
     let output_dir = store
         .get("output_dir")

@@ -10,7 +10,7 @@ import { useRecorder } from "./hooks/useRecorder";
 import { useSSE } from "./hooks/useSSE";
 import { useUpdater } from "./hooks/useUpdater";
 import { useTranslation } from "./hooks/useTranslation";
-import { runGeneration, getWorkArea } from "./lib/tauri";
+import { runGeneration, getWorkArea, getSettings } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 const IS_DEV = import.meta.env.DEV;
 
@@ -29,14 +29,31 @@ function App() {
 
 function MainApp() {
   const [version, setVersion] = useState("");
+  const [skipPiiCheck, setSkipPiiCheck] = useState(false);
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
   const updater = useUpdater();
 
+  const loadSettings = useCallback(() => {
+    getSettings()
+      .then((s) => setSkipPiiCheck(s.skip_pii_check))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     getVersion().then(setVersion);
-  }, []);
+    loadSettings();
+  }, [loadSettings]);
+
+  // Reload settings when main window gains focus (e.g. after settings window closes)
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    const unlisten = appWindow.onFocusChanged(({ payload: focused }) => {
+      if (focused) loadSettings();
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, [loadSettings]);
 
   // SSE event handling
   useSSE({
@@ -212,6 +229,7 @@ function MainApp() {
           error={recorder.error}
           piiFindings={recorder.piiFindings}
           outputDir={recorder.outputDir}
+          skipPiiCheck={skipPiiCheck}
           onStart={handleStart}
           onStop={handleStop}
           onCancel={recorder.cancel}

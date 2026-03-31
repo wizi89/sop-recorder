@@ -13,9 +13,10 @@ use crate::output::pending;
 use crate::state::{AppState, RecordingSession, RecordingStatus};
 
 fn get_output_dir(app: &tauri::AppHandle) -> PathBuf {
+    let name = app.config().product_name.as_deref().unwrap_or("sop-sorcery");
     let default_dir = dirs_next::document_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("Wizimate Workflows");
+        .join(format!("{} Workflows", name));
 
     if let Ok(store) = app.store("settings.json") {
         if let Some(val) = store.get("output_dir") {

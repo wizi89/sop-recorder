@@ -8,12 +8,12 @@ use commands::{auth, generate, recording, settings, window};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // In dev mode, also write logs to the sop-sorcery .tmp/logs/ folder
-    // so server + recorder + web logs live side-by-side for debugging.
+    // Configure log targets:
+    // - Dev mode: stdout + sop-sorcery .tmp/logs/ (side-by-side with server logs)
+    // - Release mode: AppData/Roaming/{identifier}/logs/ (next to settings)
     let mut log_builder = tauri_plugin_log::Builder::default();
     if cfg!(debug_assertions) {
         let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        // CARGO_MANIFEST_DIR = sop-recorder/src-tauri, go up to sibling project
         let log_dir = manifest_dir
             .parent() // sop-recorder
             .and_then(|p| p.parent()) // parent of both repos
@@ -27,8 +27,7 @@ pub fn run() {
                         tauri_plugin_log::Target::new(
                             tauri_plugin_log::TargetKind::Folder { path: dir, file_name: Some("recorder".into()) },
                         ),
-                    ])
-                    ;
+                    ]);
             }
         }
     }
@@ -40,6 +39,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            settings::AppSettings::initialize(app.handle());
+            Ok(())
+        })
         .manage(state::AppState::default())
         .manage(auth::SessionCache::default())
         .invoke_handler(tauri::generate_handler![

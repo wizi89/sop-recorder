@@ -12,6 +12,7 @@ interface RecorderScreenProps {
   error: string | null;
   piiFindings?: unknown | null;
   outputDir: string | null;
+  skipPiiCheck?: boolean;
   onStart: () => void;
   onStop: () => void;
   onCancel: () => void;
@@ -29,6 +30,7 @@ export function RecorderScreen({
   statusMessage,
   error,
   piiFindings: _piiFindings,
+  skipPiiCheck,
   onStart,
   onStop,
   onCancel,
@@ -131,6 +133,27 @@ export function RecorderScreen({
           </svg>
         </button>
       </div>
+
+      {/* PII disabled chip */}
+      {skipPiiCheck && (
+        <div className="flex justify-center pt-2 px-4">
+          <button
+            onClick={onOpenSettings}
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 border cursor-pointer"
+            style={{
+              fontSize: "0.625rem",
+              background: "rgba(255, 180, 50, 0.08)",
+              borderColor: "rgba(255, 180, 50, 0.25)",
+              color: "rgba(255, 190, 80, 0.85)",
+            }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            {t("pii.disabled_chip")}
+          </button>
+        </div>
+      )}
 
       {/* Center content */}
       <div className="flex-1 flex flex-col items-center justify-center gap-8 px-4">

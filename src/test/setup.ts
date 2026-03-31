@@ -27,6 +27,16 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({
   WebviewWindow: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  ask: vi.fn(() => Promise.resolve(false)),
+  open: vi.fn(() => Promise.resolve(null)),
+}));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: vi.fn(),
+  revealItemInDir: vi.fn(),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();

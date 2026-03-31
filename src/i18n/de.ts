@@ -35,11 +35,9 @@ const de = {
   // PII blocked modal
   "pii.title": "Personenbezogene Daten erkannt",
   "pii.message":
-    "In Ihrer Aufnahme wurden personenbezogene Daten erkannt. Die Erzeugung wurde abgebrochen.",
+    "aprodo hat sensible Daten in deiner Aufnahme gefunden und die Verarbeitung gestoppt.",
   "pii.settings_hint":
-    "Sie können die PII-Prüfung in den Einstellungen deaktivieren und es erneut versuchen.",
-  "pii.disclaimer":
-    "Mit dem Deaktivieren der PII-Prüfung bestätigen Sie, dass Ihre Daten ohne automatische Filterung personenbezogener Daten verarbeitet werden.",
+    "Du kannst diese Prüfung in den Einstellungen deaktivieren.",
   "pii.source_step": "Schritt {step}",
   "pii.source_transcript": "Audiotranskript",
   "pii.entity_EMAIL_ADDRESS": "E-Mail-Adresse",
@@ -52,10 +50,32 @@ const de = {
   "pii.entity_DE_PERSONALAUSWEIS": "Personalausweisnr.",
   "pii.copy": "Kopieren",
   "pii.copied": "Kopiert!",
+  "pii.dismiss": "Schließen",
   "pii.link_legal": "Rechtliches",
   "pii.link_privacy": "Datenschutz",
   "pii.link_terms": "AGB",
-  "pii.dismiss": "Zurück",
+
+  // PII disable confirmation (settings)
+  "pii.confirm_title": "Sicherheitsprüfung deaktivieren?",
+  "pii.confirm_intro":
+    "Du bist dabei, die automatische Sicherheitsprüfung zu deaktivieren.",
+  "pii.confirm_explain":
+    "Standardmäßig prüft aprodo deine Aufnahmen automatisch auf personenbezogene Daten, Passwörter und sensible Inhalte, bevor sie an die KI weitergegeben werden. Wenn du diesen Filter deaktivierst, werden Aufnahmen direkt und ungefiltert zur KI-Verarbeitung übermittelt.",
+  "pii.confirm_bullet_1":
+    "Keine automatische Erkennung von Namen, E-Mail-Adressen, Telefonnummern oder Zugangsdaten",
+  "pii.confirm_bullet_2":
+    "Keine automatische Erkennung von Passwörtern oder API-Schlüsseln",
+  "pii.confirm_bullet_3":
+    "Keine automatische Erkennung vertraulicher Unternehmensinhalte",
+  "pii.confirm_responsibility":
+    "Du übernimmst damit die vollständige Verantwortung dafür, dass deine Aufnahmen keine personenbezogenen Daten Dritter oder sensiblen Informationen enthalten, für die du keine Rechtsgrundlage zur Verarbeitung hast.",
+  "pii.confirm_scope":
+    "Diese Einstellung betrifft alle zukünftigen Aufnahmen in deinem Account, bis du den Filter wieder aktivierst.",
+  "pii.confirm_accept": "Verstanden, deaktivieren",
+  "pii.confirm_cancel": "Abbrechen",
+
+  // PII disabled chip (main screen)
+  "pii.disabled_chip": "Sicherheitsprüfung deaktiviert",
 
   // Network errors
   "network.pii_blocked":

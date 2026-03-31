@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-03-31
+
+### Changed
+
+- PII blocked modal simplified: removed legal disclaimer footer, friendlier tone, points to settings
+- PII toggle in settings now shows confirmation modal with full disclaimer before disabling
+- Legal links (Rechtliches, Datenschutz, AGB) moved to settings confirmation modal
+- Default logs directory derived from productName in tauri.conf.json instead of hardcoded path
+- Default workflows directory derived from productName in tauri.conf.json
+- Settings defaults now persisted to store on first launch (no longer recomputed each time)
+
+### Added
+
+- PII disabled chip on main screen when safety check is off, links to settings
+- Legacy migration: preserves existing "Wizimate Workflows" folder for upgrading users
+- SettingsPage test suite (7 tests for confirmation modal flow)
+- RecorderScreen tests for PII disabled chip (5 tests)
+- i18n required keys coverage for all PII-related strings
+
 ## [0.8.0] - 2026-03-30
 
 ### Added
@@ -111,7 +130,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/wizi89/sop-recorder/compare/v0.8.0...v0.8.3
 [0.8.0]: https://github.com/wizi89/sop-recorder/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/wizi89/sop-recorder/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/wizi89/sop-recorder/compare/v0.7.4...v0.7.5
