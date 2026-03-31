@@ -35,9 +35,12 @@ pub struct SSEResumeResubmitPayload {
 
 /// Consume SSE events from a reqwest Response, emitting Tauri events to the frontend.
 /// Returns the final result payload if successful.
+/// On failure, `captured_job_id` may contain the server-assigned job ID
+/// so the caller can poll for the result if the stream dropped mid-generation.
 pub async fn consume_sse_stream(
     response: reqwest::Response,
     app: &tauri::AppHandle,
+    captured_job_id: &mut Option<String>,
 ) -> Result<SSEResultPayload, String> {
     let url = response.url().clone();
     // reqwest-eventsource needs a RequestBuilder or we manually parse
@@ -127,6 +130,14 @@ pub async fn consume_sse_stream(
                     let msg = payload.message.clone();
                     let _ = app.emit("sse:error", &payload);
                     return Err(msg);
+                }
+                "job_id" => {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) {
+                        if let Some(id) = v.get("job_id").and_then(|v| v.as_str()) {
+                            log::info!("SSE job_id received: {}", id);
+                            *captured_job_id = Some(id.to_string());
+                        }
+                    }
                 }
                 "resume_resubmit" => {
                     if let Ok(payload) =

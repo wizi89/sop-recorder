@@ -4,7 +4,7 @@ use tauri::{Emitter, State};
 use tauri_plugin_store::StoreExt;
 
 use crate::commands::auth::SessionCache;
-use crate::network::{auth as net_auth, sse, upload};
+use crate::network::{auth as net_auth, jobs, sse, upload};
 use crate::output::{markdown, pdf, pending};
 use crate::state::{AppState, RecordingStatus};
 
@@ -203,8 +203,31 @@ async fn run_generation_inner(
         Err(e) => return Err(e),
     };
 
-    // Consume SSE stream
-    let result = sse::consume_sse_stream(response, &app).await?;
+    // Consume SSE stream.
+    // If the stream drops mid-generation (network issue), the server keeps
+    // running the generation task.  We capture the job_id early so we can
+    // poll for the result instead of losing it.
+    let mut captured_job_id: Option<String> = None;
+    let result = match sse::consume_sse_stream(response, &app, &mut captured_job_id).await {
+        Ok(r) => r,
+        Err(e) => {
+            if let Some(ref job_id) = captured_job_id {
+                log::warn!(
+                    "SSE stream failed ({}) but have job_id={}, polling for result",
+                    e, job_id
+                );
+                let _ = app.emit(
+                    "sse:status",
+                    sse::SSEStatusPayload {
+                        message: "Verbindung unterbrochen -- warte auf Ergebnis...".into(),
+                    },
+                );
+                jobs::poll_job_result(&access_token, job_id, api_url.as_deref(), api_base, 40).await?
+            } else {
+                return Err(e);
+            }
+        }
+    };
 
     // Save markdown
     markdown::save_markdown(&output_path, &result.markdown)
