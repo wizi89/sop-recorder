@@ -127,8 +127,14 @@ pub async fn upload_with_retry(
             Err(e) => {
                 last_err = e.clone();
 
-                // Don't retry 4xx errors (except if it looks like a transient issue)
-                if e.contains("(4") && !e.contains("(429)") {
+                // Don't retry 4xx errors (except 429 rate-limit and
+                // 401 auth errors, which the caller can recover from
+                // by refreshing the token).
+                if e.contains("(4") && !e.contains("(429)") && !e.contains("(401)") {
+                    return Err(e);
+                }
+                // 401: return immediately so the caller can refresh and retry
+                if e.contains("(401)") {
                     return Err(e);
                 }
 

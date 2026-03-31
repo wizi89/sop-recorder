@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   login as tauriLogin,
   logout as tauriLogout,
@@ -34,6 +35,22 @@ export function useAuth() {
       .catch(() => {
         setState((s) => ({ ...s, loading: false }));
       });
+  }, []);
+
+  // Backend emits auth:session_expired when token refresh is permanently
+  // exhausted.  Force the user back to the login screen with a clear message.
+  useEffect(() => {
+    const unlisten = listen("auth:session_expired", () => {
+      setState({
+        loggedIn: false,
+        email: null,
+        loading: false,
+        error: "Sitzung abgelaufen. Bitte erneut anmelden.",
+      });
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

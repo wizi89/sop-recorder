@@ -48,13 +48,31 @@ async fn run_generation_inner(
         }
     }
 
-    // Get access token
-    let access_token = session
-        .access_token
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or("Not logged in")?;
+    // Refresh access token before upload to prevent expiration errors.
+    // Supabase JWTs expire after ~1 hour; refreshing here ensures every
+    // generation uses a valid token, even after long recording sessions.
+    let api_base = super::auth::get_api_base(&app);
+    let access_token = match net_auth::refresh_session(api_base).await {
+        Ok(Some(auth)) => {
+            let token = auth.access_token.clone();
+            *session.access_token.lock().unwrap() = Some(auth.access_token);
+            if let Some(email) = auth.email {
+                *session.email.lock().unwrap() = Some(email);
+            }
+            log::info!("Token refreshed before upload");
+            token
+        }
+        Ok(None) | Err(_) => {
+            // Refresh failed -- fall back to cached token
+            log::warn!("Token refresh failed, using cached token");
+            session
+                .access_token
+                .lock()
+                .unwrap()
+                .clone()
+                .ok_or("Not logged in")?
+        }
+    };
 
     // Get OpenAI key from keyring
     let openai_key = net_auth::keyring_load("openai-key")
@@ -124,8 +142,11 @@ async fn run_generation_inner(
         None
     };
 
-    // Upload with retry
-    let response = upload::upload_with_retry(
+    // Upload with retry.
+    // If the first attempt fails with 401 (token invalid despite refresh),
+    // refresh the token once more and retry.  This covers clock-skew,
+    // server-side revocation, and network-blip-during-refresh scenarios.
+    let response = match upload::upload_with_retry(
         &access_token,
         openai_key.as_deref(),
         &audio_path,
@@ -135,7 +156,52 @@ async fn run_generation_inner(
         3,
         skip_pii_check,
     )
-    .await?;
+    .await
+    {
+        Ok(resp) => resp,
+        Err(e) if e.contains("(401)") => {
+            log::warn!("Upload returned 401 -- attempting second token refresh");
+            let fresh_token = match net_auth::refresh_session(api_base).await {
+                Ok(Some(auth)) => {
+                    let token = auth.access_token.clone();
+                    *session.access_token.lock().unwrap() = Some(auth.access_token);
+                    if let Some(email) = auth.email {
+                        *session.email.lock().unwrap() = Some(email);
+                    }
+                    token
+                }
+                _ => {
+                    // Refresh permanently failed -- signal frontend to re-login
+                    *session.access_token.lock().unwrap() = None;
+                    let _ = app.emit("auth:session_expired", ());
+                    return Err("Sitzung abgelaufen. Bitte erneut anmelden.".into());
+                }
+            };
+
+            upload::upload_with_retry(
+                &fresh_token,
+                openai_key.as_deref(),
+                &audio_path,
+                &path_refs,
+                &guide_title,
+                api_url.as_deref(),
+                1, // single retry -- if this also fails, give up
+                skip_pii_check,
+            )
+            .await
+            .map_err(|e| {
+                if e.contains("(401)") {
+                    // Even the fresh token was rejected -- force re-login
+                    *session.access_token.lock().unwrap() = None;
+                    let _ = app.emit("auth:session_expired", ());
+                    "Sitzung abgelaufen. Bitte erneut anmelden.".to_string()
+                } else {
+                    e
+                }
+            })?
+        }
+        Err(e) => return Err(e),
+    };
 
     // Consume SSE stream
     let result = sse::consume_sse_stream(response, &app).await?;

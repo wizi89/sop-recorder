@@ -26,7 +26,7 @@ impl Default for SessionCache {
     }
 }
 
-fn get_api_base(app: &tauri::AppHandle) -> &'static str {
+pub fn get_api_base(app: &tauri::AppHandle) -> &'static str {
     if cfg!(debug_assertions) {
         let target = app
             .store("settings.json")
