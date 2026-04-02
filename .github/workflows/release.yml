@@ -76,3 +76,10 @@ jobs:
           scp -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
             "$EXE_FILE" \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
+
+      - name: Notify Slack
+        if: success()
+        run: |
+          curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"New Recorder release: ${{ github.ref_name }}\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*New Recorder Release: ${{ github.ref_name }}*\nChangelog: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md\"}}]}"

@@ -11,7 +11,18 @@ pub fn run() {
     // Configure log targets:
     // - Dev mode: stdout + sop-sorcery .tmp/logs/ (side-by-side with server logs)
     // - Release mode: AppData/Roaming/{identifier}/logs/ (next to settings)
-    let mut log_builder = tauri_plugin_log::Builder::default();
+    let reqwest_connect_level = if cfg!(debug_assertions) {
+        log::LevelFilter::Info
+    } else {
+        log::LevelFilter::Warn
+    };
+    let mut log_builder = tauri_plugin_log::Builder::default()
+        .level(log::LevelFilter::Info)
+        .level_for("keyring", log::LevelFilter::Warn)
+        .level_for("reqwest::connect", reqwest_connect_level)
+        .level_for("reqwest::retry", log::LevelFilter::Warn)
+        .level_for("tao", log::LevelFilter::Warn)
+        .level_for("tauri_plugin_updater", log::LevelFilter::Warn);
     if cfg!(debug_assertions) {
         let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let log_dir = manifest_dir

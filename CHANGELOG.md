@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-04-02
+
+### Changed
+
+- Suppress noisy third-party log output: keyring, tao, tauri_plugin_updater, and reqwest::retry set to Warn level
+- Global log default set to Info (was unset, allowing DEBUG from all crates)
+- reqwest::connect kept at Info in dev builds for debugging, suppressed to Warn in release builds
+
+### Added
+
+- Slack release notification step in CI via CCBot webhook
+
 ## [0.8.3] - 2026-03-31
 
 ### Changed
@@ -25,6 +37,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SettingsPage test suite (7 tests for confirmation modal flow)
 - RecorderScreen tests for PII disabled chip (5 tests)
 - i18n required keys coverage for all PII-related strings
+
+## [0.8.2] - 2026-03-31
+
+### Added
+
+- Job polling recovery: when SSE stream disconnects mid-generation, the client polls the server for the result instead of failing
+- `jobs.rs` network module for server-side job status polling
+
+### Fixed
+
+- SSE disconnect during generation no longer loses the result
+
+## [0.8.1] - 2026-03-31
+
+### Fixed
+
+- Token expiration on consecutive recordings: access token is now refreshed before each upload
+- 401 errors during upload trigger a second token refresh and retry
+- Permanently expired sessions emit `auth:session_expired` event, forcing re-login with a clear message
+
+### Added
+
+- `useAuth` listener for `auth:session_expired` backend event
+- Tests for session expiry handling in `useAuth`
 
 ## [0.8.0] - 2026-03-30
 
@@ -130,8 +166,11 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.8.3...HEAD
-[0.8.3]: https://github.com/wizi89/sop-recorder/compare/v0.8.0...v0.8.3
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.8.4...HEAD
+[0.8.4]: https://github.com/wizi89/sop-recorder/compare/v0.8.3...v0.8.4
+[0.8.3]: https://github.com/wizi89/sop-recorder/compare/v0.8.2...v0.8.3
+[0.8.2]: https://github.com/wizi89/sop-recorder/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/wizi89/sop-recorder/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/wizi89/sop-recorder/compare/v0.7.6...v0.8.0
 [0.7.6]: https://github.com/wizi89/sop-recorder/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/wizi89/sop-recorder/compare/v0.7.4...v0.7.5
