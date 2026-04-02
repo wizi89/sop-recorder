@@ -79,6 +79,7 @@ jobs:
 
       - name: Notify Slack
         if: success()
+        shell: bash
         run: |
           curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
