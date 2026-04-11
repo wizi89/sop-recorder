@@ -38,6 +38,9 @@ pub struct RecordingSession {
     pub input_hook: Option<InputHookHandle>,
     pub stop_flag: Option<Arc<AtomicBool>>,
     pub in_flight: Option<Arc<AtomicU32>>,
+    /// Shared screenshot counter so `delete_last_screenshot` can atomically
+    /// decrement when the user undoes a captured step.
+    pub step_counter: Option<Arc<AtomicU32>>,
 }
 
 pub struct AppState {

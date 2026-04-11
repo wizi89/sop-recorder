@@ -2,16 +2,22 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::SampleFormat;
 use hound::{WavSpec, WavWriter};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
 const TARGET_SAMPLE_RATE: u32 = 16_000;
 
 /// A Send-safe handle to stop audio recording.
+///
+/// `audio_level` stores the latest peak magnitude [0..1] as `f32::to_bits`
+/// so a polling task can emit a VU meter event without locking the audio
+/// callback. Readers should use `f32::from_bits(atomic.load(Relaxed))`.
 pub struct AudioHandle {
     stop_tx: Option<mpsc::Sender<()>>,
     join_handle: Option<std::thread::JoinHandle<Result<(), String>>>,
     output_path: PathBuf,
+    pub audio_level: Arc<AtomicU32>,
 }
 
 unsafe impl Send for AudioHandle {}
@@ -22,11 +28,14 @@ impl AudioHandle {
         let output_path = output_path.to_path_buf();
         let path_clone = output_path.clone();
 
+        let audio_level = Arc::new(AtomicU32::new(0));
+        let level_clone = audio_level.clone();
+
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
 
         let join_handle = std::thread::spawn(move || {
-            Self::run_recording(&path_clone, stop_rx, ready_tx)
+            Self::run_recording(&path_clone, stop_rx, ready_tx, level_clone)
         });
 
         ready_rx
@@ -38,6 +47,7 @@ impl AudioHandle {
             stop_tx: Some(stop_tx),
             join_handle: Some(join_handle),
             output_path,
+            audio_level,
         })
     }
 
@@ -45,6 +55,7 @@ impl AudioHandle {
         output_path: &Path,
         stop_rx: mpsc::Receiver<()>,
         ready_tx: mpsc::Sender<Result<(), String>>,
+        audio_level: Arc<AtomicU32>,
     ) -> Result<(), String> {
         let host = cpal::default_host();
         let device = host
@@ -90,8 +101,23 @@ impl AudioHandle {
         let resample_state = Arc::new(Mutex::new(ResampleState::new(device_rate, TARGET_SAMPLE_RATE)));
         let resample_clone = resample_state.clone();
 
+        // Per-callback helper: compute peak abs level over a mono slice and
+        // store it into the shared atomic as f32 bits for a polling task to
+        // read at ~10 Hz. Using `store` rather than `fetch_max` means the
+        // atomic always reflects the LATEST chunk's peak -- the poller drains
+        // it and the next chunk overwrites, so silence is visible immediately.
+        let write_peak = |samples: &[f32], level: &Arc<AtomicU32>| {
+            let peak = samples
+                .iter()
+                .copied()
+                .fold(0.0_f32, |acc, s| acc.max(s.abs()))
+                .clamp(0.0, 1.0);
+            level.store(peak.to_bits(), Ordering::Relaxed);
+        };
+
         let stream = match sample_format {
             SampleFormat::F32 => {
+                let level_cb = audio_level.clone();
                 device
                     .build_input_stream(
                         &config.into(),
@@ -104,6 +130,8 @@ impl AudioHandle {
                                     sum / channels as f32
                                 })
                                 .collect();
+
+                            write_peak(&mono, &level_cb);
 
                             // Resample and write
                             if let (Ok(mut rs), Ok(mut guard)) =
@@ -123,6 +151,7 @@ impl AudioHandle {
                     .map_err(|e| format!("Failed to build audio stream: {}", e))?
             }
             SampleFormat::I16 => {
+                let level_cb = audio_level.clone();
                 device
                     .build_input_stream(
                         &config.into(),
@@ -134,6 +163,8 @@ impl AudioHandle {
                                     (sum as f32) / (channels as f32 * 32768.0)
                                 })
                                 .collect();
+
+                            write_peak(&mono, &level_cb);
 
                             if let (Ok(mut rs), Ok(mut guard)) =
                                 (resample_clone.lock(), writer_clone.lock())

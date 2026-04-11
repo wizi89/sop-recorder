@@ -20,6 +20,21 @@ const de = {
   "status.cancel_confirm": "Verwerfen",
   "status.open_folder": "Ordner öffnen",
   "status.retry": "Erneut versuchen",
+  "status.retry_from_disk": "Aus Aufnahme erneut versuchen",
+  "status.undo_last": "Letzten Schritt entfernen",
+  "status.stopping": "Aufnahmen werden verarbeitet...",
+
+  // Review screen (post-stop, pre-generate)
+  "review.title": "Aufnahme prüfen",
+  "review.summary": "{count} Screenshots -- {elapsed} Min aufgenommen",
+  "review.loading": "Screenshots werden geladen...",
+  "review.step_label": "Schritt {n}",
+  "review.confirm": "Generieren",
+  "review.cancel": "Verwerfen",
+
+  // Microphone permission
+  "mic.permission_denied":
+    "Mikrofon-Zugriff verweigert -- in den Systemeinstellungen erlauben",
 
   // Settings
   "settings.title": "Einstellungen",
@@ -87,6 +102,16 @@ const de = {
   "network.server_closed":
     "Server hat die Verbindung geschlossen, ohne ein Ergebnis zu senden.",
   "network.signin_failed": "Anmeldung fehlgeschlagen",
+
+  // Quota / rate limit
+  "quota.used": "{count} / {limit} Anleitungen",
+  "quota.exceeded_title": "Kontingent ausgeschöpft",
+  "quota.exceeded_message":
+    "Du hast dein Kontingent von {limit} Anleitungen vollständig genutzt. Für weitere Aufnahmen benötigst du ein höheres Kontingent.",
+  "quota.exceeded_message_generic":
+    "Dein Kontingent für Anleitungen ist ausgeschöpft. Für weitere Aufnahmen benötigst du ein höheres Kontingent.",
+  "quota.exceeded_upgrade": "Kontingent erweitern",
+  "quota.exceeded_dismiss": "Schließen",
 
   // PDF
   "pdf.steps": "{count} Schritte",

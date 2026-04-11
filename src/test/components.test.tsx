@@ -71,6 +71,10 @@ describe("RecorderScreen", () => {
     onOpenFolder: vi.fn(),
     onRetry: vi.fn(),
     onDismissPii: vi.fn(),
+    onDismissRateLimit: vi.fn(),
+    onUndoLastScreenshot: vi.fn(),
+    onConfirmGeneration: vi.fn(),
+    onCancelFromReview: vi.fn(),
     version: APP_VERSION,
   };
 
@@ -97,14 +101,30 @@ describe("RecorderScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows error and retry button", () => {
+  it("shows error and retry-from-disk button when outputDir is preserved", () => {
+    render(
+      <RecorderScreen
+        {...defaults}
+        status="error"
+        error="Upload failed"
+        outputDir="C:\\Users\\test\\output"
+      />,
+    );
+    expect(screen.getByText("Upload failed")).toBeInTheDocument();
+    // New label is "Aus Aufnahme erneut versuchen" which matches /erneut/i
+    expect(
+      screen.getByRole("button", { name: /erneut versuchen/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show retry-from-disk button when outputDir is null", () => {
     render(
       <RecorderScreen {...defaults} status="error" error="Upload failed" />,
     );
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /erneut/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /erneut versuchen/i }),
+    ).toBeNull();
   });
 
   it("shows user email", () => {

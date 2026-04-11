@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-11
+
+Recorder UX overhaul for the demo build: quota visibility, review-before-generate flow, and a richer compact recording bar.
+
+### Added
+
+- Quota chip on main screen showing "N / limit Anleitungen", with warning colors when the remaining quota is low
+- Pre-emptive quota check: when the user is already at their limit, the rate-limit modal opens instead of touching the microphone
+- Rate limit modal with German quota-exhausted messaging (count/limit, upgrade hint, dismiss)
+- Review screen: after `Stop`, the user inspects the captured screenshots before committing to a generation; confirm runs the pipeline, cancel discards
+- Retry-from-disk button on `idle`/`error` screens: re-runs generation against the preserved session directory without losing captured steps
+- Compact recording bar telemetry: live capture counter, elapsed time, and VU-style audio level meter fed by a new `recording:audio_level` event
+- Undo-last-screenshot button in the compact bar, backed by a new `delete_last_screenshot` Tauri command that also emits `recording:step_deleted`
+- Microphone permission warning chip shown on launch when the OS has denied mic access
+- New React hooks: `useQuota`, `useCaptureCount`, `useElapsedTime`, `useAudioLevel`
+- New Tauri commands: `get_quota`, `get_microphone_permission_state`, `list_session_screenshots`, `read_screenshot_bytes`, `delete_last_screenshot`
+- Server: `GET /quota` endpoint returning `{count, limit, remaining}` (new `server/routes_quota.py`), plus transcript upload (`transcript.md`) alongside the generated guide
+
+### Fixed
+
+- Stop-recording race: `stop_recording` now waits up to 15s for in-flight screenshot captures to finish writing before returning, so the review screen opens onto a stable filesystem state
+- Retry flow getting stuck busy: `handleRetry` now delegates to `confirmGeneration()`, which correctly walks the post-generation state machine into `done`
+- Infinite `/quota` refresh loop caused by `useQuota`'s object identity changing every render; quota refresh is now driven by a stable `refreshQuotaRef` so effects only fire on real state transitions
+- Review-screen thumbnails broken under Tauri v2: now loaded via `read_screenshot_bytes` + Blob URLs instead of the unconfigured asset protocol
+- English "stopping" sentinel leaking to the UI during stop-to-review transitions; localization is now applied at the `useRecorder` source
+
+### Changed
+
+- Compact recording bar widened to 240x34 to fit counter, undo, and VU meter
+- Cancel button in the compact bar recolored to error red; Stop uses the primary color
+- All new status strings localized in German (`status.stopping` as "Aufnahmen werden verarbeitet...", `status.retry_from_disk`, `status.undo_last`, `review.*`, `quota.*`, `mic.permission_denied`)
+- Dev-only asyncio exception filter on Windows to suppress noisy transient `OSError`s (WinError 64/121/1236/10053/10054) from client-abort disconnects; gated on `ENVIRONMENT != "production"` so Linux/prod behavior is unchanged
+
 ## [0.8.4] - 2026-04-02
 
 ### Changed
@@ -166,7 +199,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/wizi89/sop-recorder/compare/v0.8.4...v0.9.0
 [0.8.4]: https://github.com/wizi89/sop-recorder/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/wizi89/sop-recorder/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/wizi89/sop-recorder/compare/v0.8.1...v0.8.2

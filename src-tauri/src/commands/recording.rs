@@ -38,7 +38,7 @@ pub async fn start_recording(
 ) -> Result<(), String> {
     let mut status = state.recording_status.lock().unwrap();
     if *status == RecordingStatus::Recording {
-        return Err("Already recording".into());
+        return Err("Eine Aufnahme läuft bereits.".into());
     }
 
     // Create output directory
@@ -69,14 +69,36 @@ pub async fn start_recording(
     let audio_handle =
         AudioHandle::start(&audio_path).map_err(|e| format!("Audio start failed: {}", e))?;
 
+    // Reset the shared stop flag BEFORE spawning any background tasks that
+    // check it, so a stale value from a previous session cannot terminate
+    // them prematurely.
+    state.capture_stop_flag.store(false, Ordering::SeqCst);
+
+    // Spawn the audio-level poller: at ~10 Hz, read the latest peak level
+    // from the shared atomic and emit a Tauri event so the frontend can
+    // render a live VU meter. Exits when the capture stop flag is set.
+    let audio_level_atomic = audio_handle.audio_level.clone();
+    let vu_stop_flag = state.capture_stop_flag.clone();
+    let vu_app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+        loop {
+            interval.tick().await;
+            if vu_stop_flag.load(Ordering::SeqCst) {
+                break;
+            }
+            let bits = audio_level_atomic.load(Ordering::Relaxed);
+            let level = f32::from_bits(bits);
+            let _ = vu_app.emit("recording:audio_level", level);
+        }
+    });
+
     // Shared step counter and in-flight tracker
     let step_counter = Arc::new(AtomicU32::new(0));
     let in_flight = Arc::new(AtomicU32::new(0));
 
-    // Reset and reuse the shared stop flag from AppState -- lives outside the
-    // session mutex so stop_recording can set it instantly (no race window).
+    // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
-    stop_flag.store(false, Ordering::SeqCst);
 
     // Get recorder window HWND so clicks on it are ignored (works even if moved)
     let exclude_hwnd = app
@@ -131,6 +153,7 @@ pub async fn start_recording(
         input_hook: Some(hook_handle),
         stop_flag: Some(stop_flag),
         in_flight: Some(in_flight),
+        step_counter: Some(step_counter),
     };
 
     *state.current_session.lock().unwrap() = Some(session);
@@ -150,7 +173,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
     {
         let mut status = state.recording_status.lock().unwrap();
         if *status != RecordingStatus::Recording {
-            return Err("Not recording".into());
+            return Err("Keine aktive Aufnahme.".into());
         }
         *status = RecordingStatus::Processing;
     }
@@ -184,7 +207,32 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
         audio.stop().map_err(|e| format!("Audio stop failed: {}", e))?;
     }
 
-    // Store in-flight counter in app state so generate can wait for it
+    // Wait for any in-flight screenshot captures to finish writing to disk
+    // BEFORE returning, so the review screen opens onto a stable filesystem
+    // state. On a fast machine this is near-instant; on a slow one the last
+    // click's capture + resize can take a second or two. Cap at 15s to avoid
+    // a truly stuck stop.
+    if let Some(counter) = in_flight_counter.as_ref() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        let mut waited = false;
+        while counter.load(Ordering::SeqCst) > 0 {
+            if std::time::Instant::now() > deadline {
+                log::warn!("stop_recording: in-flight captures did not finish within 15s");
+                break;
+            }
+            if !waited {
+                log::info!(
+                    "stop_recording: waiting for {} in-flight capture(s) to finish",
+                    counter.load(Ordering::SeqCst)
+                );
+                waited = true;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+
+    // Store in-flight counter in app state (kept as defense in depth for the
+    // generate path; should always be 0 here after the wait above).
     *state.in_flight_captures.lock().unwrap() = in_flight_counter;
 
     // Write pending.json
@@ -195,4 +243,108 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
     log::info!("Recording stopped. Output: {}", output_dir);
 
     Ok(output_dir)
+}
+
+/// Read the raw bytes of a screenshot file. Returns a byte array the
+/// frontend can wrap in a Blob to display as a thumbnail without needing
+/// the Tauri asset protocol to be configured.
+#[tauri::command]
+pub async fn read_screenshot_bytes(path: String) -> Result<Vec<u8>, String> {
+    fs::read(&path).map_err(|e| format!("Failed to read {}: {}", path, e))
+}
+
+/// List the captured screenshot files in a session output directory, in
+/// capture order. Returns absolute file paths as strings so the React side
+/// can render them via `read_screenshot_bytes`.
+///
+/// This works without an active session: it just scans the given
+/// `{output_dir}/screenshots/` folder, so it can be called during the
+/// review screen even after `stop_recording` has finalized the session.
+#[tauri::command]
+pub async fn list_session_screenshots(output_dir: String) -> Result<Vec<String>, String> {
+    let screenshots_dir = PathBuf::from(&output_dir).join("screenshots");
+    if !screenshots_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut entries: Vec<(u32, PathBuf)> = Vec::new();
+    for entry in fs::read_dir(&screenshots_dir)
+        .map_err(|e| format!("Failed to read screenshots dir: {}", e))?
+    {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            // Parse "step_NN.png" -> NN
+            if let Some(stripped) = name
+                .strip_prefix("step_")
+                .and_then(|s| s.strip_suffix(".png"))
+            {
+                if let Ok(n) = stripped.parse::<u32>() {
+                    entries.push((n, path));
+                }
+            }
+        }
+    }
+
+    entries.sort_by_key(|(n, _)| *n);
+    Ok(entries
+        .into_iter()
+        .map(|(_, p)| p.to_string_lossy().to_string())
+        .collect())
+}
+
+/// Delete the most recently captured screenshot from the active session.
+///
+/// Returns the new screenshot count after deletion. Emits a
+/// `recording:step_deleted` Tauri event with the new count so the React
+/// capture counter hook can decrement the UI.
+///
+/// Errors if:
+/// - there is no active recording session
+/// - the step counter is at 0 (nothing to delete)
+/// - a screenshot capture is currently in-flight (racy, reject)
+#[tauri::command]
+pub async fn delete_last_screenshot(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<u32, String> {
+    let session_guard = state.current_session.lock().unwrap();
+    let session = session_guard
+        .as_ref()
+        .ok_or("Keine aktive Aufnahme.")?;
+
+    // Refuse if a capture is currently being written to disk.
+    if let Some(flight) = session.in_flight.as_ref() {
+        if flight.load(Ordering::SeqCst) > 0 {
+            return Err("Aufnahme läuft, bitte einen Moment warten.".into());
+        }
+    }
+
+    let counter = session
+        .step_counter
+        .as_ref()
+        .ok_or("Sitzung hat keinen Schritt-Zähler.")?;
+    let current = counter.load(Ordering::SeqCst);
+    if current == 0 {
+        return Err("Keine Aufnahmen zum Rückgängigmachen.".into());
+    }
+
+    // Decrement first, then delete the file. If the delete fails, roll back
+    // the counter so the next capture lands on the correct step number.
+    let new_count = counter.fetch_sub(1, Ordering::SeqCst) - 1;
+    let filename = format!("step_{:02}.png", current);
+    let path = session.screenshots_dir.join(&filename);
+
+    match fs::remove_file(&path) {
+        Ok(()) => {
+            log::info!("Undo: deleted {}", path.display());
+            let _ = app.emit("recording:step_deleted", new_count);
+            Ok(new_count)
+        }
+        Err(e) => {
+            // Roll back the counter so the next capture still numbers correctly.
+            counter.fetch_add(1, Ordering::SeqCst);
+            Err(format!("Failed to delete {}: {}", path.display(), e))
+        }
+    }
 }

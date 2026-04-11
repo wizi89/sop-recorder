@@ -4,7 +4,7 @@ pub mod config;
 pub mod network;
 pub mod output;
 pub mod state;
-use commands::{auth, generate, recording, settings, window};
+use commands::{auth, generate, permissions, quota, recording, settings, window};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -66,7 +66,12 @@ pub fn run() {
             settings::get_webapp_url,
             recording::start_recording,
             recording::stop_recording,
+            recording::delete_last_screenshot,
+            recording::list_session_screenshots,
+            recording::read_screenshot_bytes,
             generate::run_generation,
+            quota::get_quota,
+            permissions::get_microphone_permission_state,
             window::set_display_affinity,
             window::get_work_area,
         ])

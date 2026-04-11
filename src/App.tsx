@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -10,12 +10,19 @@ import { useRecorder } from "./hooks/useRecorder";
 import { useSSE } from "./hooks/useSSE";
 import { useUpdater } from "./hooks/useUpdater";
 import { useTranslation } from "./hooks/useTranslation";
-import { runGeneration, getWorkArea, getSettings } from "./lib/tauri";
+import { useQuota } from "./hooks/useQuota";
+import {
+  getWorkArea,
+  getSettings,
+  deleteLastScreenshot,
+  getMicrophonePermissionState,
+  type MicPermissionState,
+} from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 const IS_DEV = import.meta.env.DEV;
 
 const IDLE_SIZE = new LogicalSize(460, 380);
-const COMPACT_SIZE = new LogicalSize(200, 32);
+const COMPACT_SIZE = new LogicalSize(240, 34);
 
 function App() {
   // If this window is the settings window, render settings page
@@ -30,10 +37,23 @@ function App() {
 function MainApp() {
   const [version, setVersion] = useState("");
   const [skipPiiCheck, setSkipPiiCheck] = useState(false);
+  const [micPermission, setMicPermission] = useState<MicPermissionState>("unknown");
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
   const updater = useUpdater();
+  // Quota hook is gated on login: only fetches once the user is authenticated.
+  const quotaHook = useQuota(auth.loggedIn);
+
+  // Keep the latest refresh() in a ref so effects that trigger a refresh
+  // do not have to depend on the whole `quotaHook` object -- that object
+  // gets a new identity on every render of useQuota, so including it in
+  // a useEffect dep array causes an infinite re-render loop (refresh ->
+  // setLoading -> re-render -> new object -> effect fires again...).
+  const refreshQuotaRef = useRef(quotaHook.refresh);
+  useEffect(() => {
+    refreshQuotaRef.current = quotaHook.refresh;
+  }, [quotaHook.refresh]);
 
   const loadSettings = useCallback(() => {
     getSettings()
@@ -44,16 +64,26 @@ function MainApp() {
   useEffect(() => {
     getVersion().then(setVersion);
     loadSettings();
+    // Query microphone permission state on launch so we can surface a
+    // warning chip before the user attempts to record.
+    getMicrophonePermissionState().then(setMicPermission);
   }, [loadSettings]);
 
-  // Reload settings when main window gains focus (e.g. after settings window closes)
+  // Reload settings + quota when main window gains focus (e.g. after settings
+  // window closes, or after the admin tops up the user's quota externally).
+  // NOTE: must NOT depend on `quotaHook` -- it changes identity every render.
   useEffect(() => {
     const appWindow = getCurrentWindow();
     const unlisten = appWindow.onFocusChanged(({ payload: focused }) => {
-      if (focused) loadSettings();
+      if (focused) {
+        loadSettings();
+        if (auth.loggedIn) {
+          void refreshQuotaRef.current();
+        }
+      }
     });
     return () => { unlisten.then((f) => f()); };
-  }, [loadSettings]);
+  }, [loadSettings, auth.loggedIn]);
 
   // SSE event handling
   useSSE({
@@ -61,6 +91,23 @@ function MainApp() {
     onError: (msg) => recorder.setError(msg),
     onPiiBlocked: (findings) => recorder.setPiiBlocked(findings),
   });
+
+  // Refresh quota after every generation terminal transition (success, pii,
+  // rate limit, or other error). Must only fire on TRANSITIONS into a
+  // terminal state, not while still in one -- which is why `quotaHook` is
+  // NOT a dep here (its identity changes every render and would cause an
+  // infinite refresh loop once the UI lands in a terminal status).
+  useEffect(() => {
+    if (
+      auth.loggedIn &&
+      (recorder.status === "done" ||
+        recorder.status === "rate_limited" ||
+        recorder.status === "pii_blocked" ||
+        recorder.status === "error")
+    ) {
+      void refreshQuotaRef.current();
+    }
+  }, [recorder.status, auth.loggedIn]);
 
   // Window mode switching
   useEffect(() => {
@@ -115,12 +162,41 @@ function MainApp() {
   }, []);
 
   const handleStart = useCallback(async () => {
+    // Pre-emptive quota check: if we already know the user is at or over
+    // their limit, show the rate-limit modal immediately without ever
+    // touching the microphone. We also re-fetch quota first so a stale
+    // client-side value does not block a legitimate recording.
+    if (auth.loggedIn) {
+      let latest = quotaHook.quota;
+      if (!latest) {
+        // Quota not loaded yet -- attempt a fresh fetch, but do not block
+        // recording forever if the server is unreachable.
+        await quotaHook.refresh();
+        latest = quotaHook.quota;
+      }
+      if (latest && latest.remaining <= 0) {
+        recorder.setRateLimited(latest.count, latest.limit);
+        return;
+      }
+    }
     await recorder.start();
-  }, [recorder]);
+  }, [recorder, auth.loggedIn, quotaHook]);
 
   const handleStop = useCallback(async () => {
     await recorder.stop();
   }, [recorder]);
+
+  const handleUndoLastScreenshot = useCallback(async () => {
+    try {
+      await deleteLastScreenshot();
+      // Rust side decrements the counter; the useCaptureCount hook will
+      // reflect the new value on the next step_captured event. To keep the
+      // UI snappy we also optimistically re-render by reading the returned
+      // count, but the hook-driven path is authoritative.
+    } catch (e) {
+      console.warn("Undo failed:", e);
+    }
+  }, []);
 
   const handleOpenFolder = useCallback(async () => {
     if (recorder.outputDir) {
@@ -132,16 +208,15 @@ function MainApp() {
     }
   }, [recorder.outputDir]);
 
+  // Retry-from-disk delegates to confirmGeneration, which is the single
+  // source of truth for "run the pipeline against a stored outputDir and
+  // walk the post-generation state machine". Previously this handler did
+  // its own setProcessing + runGeneration but never transitioned to `done`
+  // on success, leaving the UI stuck in a processing-busy state forever
+  // even after the server returned the result and the PDF was saved.
   const handleRetry = useCallback(async () => {
-    if (recorder.outputDir) {
-      recorder.setProcessing();
-      try {
-        await runGeneration(recorder.outputDir);
-        recorder.setStatusMessage("");
-      } catch {
-        // error handled via SSE
-      }
-    }
+    if (!recorder.outputDir) return;
+    await recorder.confirmGeneration();
   }, [recorder]);
 
   // Loading state
@@ -228,6 +303,8 @@ function MainApp() {
           statusMessage={recorder.statusMessage}
           error={recorder.error}
           piiFindings={recorder.piiFindings}
+          rateLimit={recorder.rateLimit}
+          quota={quotaHook.quota}
           outputDir={recorder.outputDir}
           skipPiiCheck={skipPiiCheck}
           onStart={handleStart}
@@ -238,6 +315,11 @@ function MainApp() {
           onOpenFolder={handleOpenFolder}
           onRetry={handleRetry}
           onDismissPii={() => recorder.setError(t("network.pii_blocked"))}
+          onDismissRateLimit={recorder.dismissRateLimit}
+          onUndoLastScreenshot={handleUndoLastScreenshot}
+          onConfirmGeneration={recorder.confirmGeneration}
+          onCancelFromReview={recorder.cancelFromReview}
+          micPermission={micPermission}
           version={version}
         />
       </div>
