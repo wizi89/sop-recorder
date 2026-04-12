@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-04-12
+
+Full visual rebrand from SOP Sorcery to CogniClone AI.
+
+### Changed
+
+- Product name, window title, and all user-visible strings renamed from "SOP Sorcery" / "aprodo" to "CogniClone"
+- Color palette replaced: teal primary (#2CB5C0) with warm charcoal surfaces (#1E2328), replacing the old blue (#80aeff) on black (#0e0e0e)
+- Body font switched from Segoe UI to Manrope; Orbitron used for the logo wordmark
+- App icons regenerated from the new CogniClone logo (Logo Rund.svg)
+- Login screen shows CogniClone AI logo and wordmark
+- Update banner gradient uses teal instead of blue
+- CTA glow and stop-pulse animations updated to match new palette
+- Window height increased from 380 to 440 to accommodate the logo
+- App identifier changed to com.cogniclone.recorder
+- Keyring service name changed to "cogniclone"
+- Legacy migration now checks for "CogniClone Workflows" folder
+
+### Added
+
+- Keyring migration: automatically transfers stored credentials from old "sop-sorcery" keyring to "cogniclone" on launch
+- Orbitron and Manrope fonts bundled locally via @fontsource (no external Google Fonts dependency)
+
 ## [0.9.0] - 2026-04-11
 
 Recorder UX overhaul for the demo build: quota visibility, review-before-generate flow, and a richer compact recording bar.
@@ -199,7 +222,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/wizi89/sop-recorder/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/wizi89/sop-recorder/compare/v0.8.4...v0.9.0
 [0.8.4]: https://github.com/wizi89/sop-recorder/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/wizi89/sop-recorder/compare/v0.8.2...v0.8.3

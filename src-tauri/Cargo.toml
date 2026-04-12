@@ -1,8 +1,8 @@
 [package]
-name = "sop-recorder"
-version = "0.9.0"
-description = "Wizimate SOP Recorder"
-authors = ["Wizimate"]
+name = "cogniclone-recorder"
+version = "0.10.0"
+description = "CogniClone Recorder"
+authors = ["CogniClone"]
 license = "BSL-1.1"
 edition = "2021"
 

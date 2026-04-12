@@ -1,7 +1,7 @@
 {
   "bundle": {
     "windows": {
-      "signCommand": "trusted-signing-cli -e https://weu.codesigning.azure.net -a signing-sop-sorcery -c sop-recorder-profile -d sop-sorcery %1"
+      "signCommand": "trusted-signing-cli -e https://weu.codesigning.azure.net -a signing-cogniclone -c cogniclone-recorder-profile -d cogniclone %1"
     }
   }
 }

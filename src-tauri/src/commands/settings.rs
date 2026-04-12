@@ -34,7 +34,7 @@ impl AppSettings {
         // past v0.8.x. Added 2026-03-31.
         let legacy_dir = dirs_next::document_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("Wizimate Workflows");
+            .join("CogniClone Workflows");
         if legacy_dir.is_dir() {
             defaults.output_dir = legacy_dir.to_string_lossy().to_string();
         }
@@ -47,7 +47,7 @@ impl AppSettings {
 
     pub fn defaults(app: &tauri::AppHandle) -> Self {
         let product_name = &app.config().product_name;
-        let name = product_name.as_deref().unwrap_or("sop-sorcery");
+        let name = product_name.as_deref().unwrap_or("cogniclone");
 
         let docs = dirs_next::document_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))

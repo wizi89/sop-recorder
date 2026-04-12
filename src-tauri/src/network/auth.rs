@@ -3,7 +3,28 @@ use serde::Deserialize;
 
 use crate::config;
 
-const SERVICE_NAME: &str = "sop-sorcery";
+const SERVICE_NAME: &str = "cogniclone";
+const LEGACY_SERVICE_NAME: &str = "sop-sorcery";
+
+/// Migrate credentials from the old "sop-sorcery" keyring to "cogniclone".
+/// Safe to call multiple times -- no-ops once old entries are gone.
+pub fn migrate_keyring() {
+    for key in &["refresh-token", "email"] {
+        let old = match Entry::new(LEGACY_SERVICE_NAME, key) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let value = match old.get_password() {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        // Write to new service name, then delete old entry
+        if let Ok(new) = Entry::new(SERVICE_NAME, key) {
+            let _ = new.set_password(&value);
+        }
+        let _ = old.delete_credential();
+    }
+}
 
 pub fn api_url_for_target(upload_target: Option<&str>) -> &'static str {
     match upload_target {

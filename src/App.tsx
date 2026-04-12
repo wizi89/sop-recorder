@@ -21,7 +21,7 @@ import {
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 const IS_DEV = import.meta.env.DEV;
 
-const IDLE_SIZE = new LogicalSize(460, 380);
+const IDLE_SIZE = new LogicalSize(460, 440);
 const COMPACT_SIZE = new LogicalSize(240, 34);
 
 function App() {
@@ -222,8 +222,8 @@ function MainApp() {
   // Loading state
   if (auth.loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#0a0a14" }}>
-        <p style={{ fontSize: 13, color: "#9090b0" }}>...</p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#14181C" }}>
+        <p style={{ fontSize: 13, color: "#6B7780" }}>...</p>
       </div>
     );
   }
@@ -237,7 +237,7 @@ function MainApp() {
       <div
         className="w-full flex items-center"
         style={{
-          background: "linear-gradient(135deg, #5a8ee0, #80aeff)",
+          background: "linear-gradient(135deg, #1E8A93, #2CB5C0)",
           flexShrink: 0,
         }}
       >

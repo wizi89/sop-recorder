@@ -50,7 +50,7 @@ const de = {
   // PII blocked modal
   "pii.title": "Personenbezogene Daten erkannt",
   "pii.message":
-    "aprodo hat sensible Daten in deiner Aufnahme gefunden und die Verarbeitung gestoppt.",
+    "CogniClone hat sensible Daten in deiner Aufnahme gefunden und die Verarbeitung gestoppt.",
   "pii.settings_hint":
     "Du kannst diese Prüfung in den Einstellungen deaktivieren.",
   "pii.source_step": "Schritt {step}",
@@ -75,7 +75,7 @@ const de = {
   "pii.confirm_intro":
     "Du bist dabei, die automatische Sicherheitsprüfung zu deaktivieren.",
   "pii.confirm_explain":
-    "Standardmäßig prüft aprodo deine Aufnahmen automatisch auf personenbezogene Daten, Passwörter und sensible Inhalte, bevor sie an die KI weitergegeben werden. Wenn du diesen Filter deaktivierst, werden Aufnahmen direkt und ungefiltert zur KI-Verarbeitung übermittelt.",
+    "Standardmäßig prüft CogniClone deine Aufnahmen automatisch auf personenbezogene Daten, Passwörter und sensible Inhalte, bevor sie an die KI weitergegeben werden. Wenn du diesen Filter deaktivierst, werden Aufnahmen direkt und ungefiltert zur KI-Verarbeitung übermittelt.",
   "pii.confirm_bullet_1":
     "Keine automatische Erkennung von Namen, E-Mail-Adressen, Telefonnummern oder Zugangsdaten",
   "pii.confirm_bullet_2":

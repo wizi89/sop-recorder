@@ -93,7 +93,7 @@ export function RecorderScreen({
     // VU meter: render a small fixed-width bar whose fill width is the peak
     // level clamped to [0..1]. Green below ~0.8, amber toward clipping.
     const vuFillPct = Math.round(Math.min(1, Math.max(0, audioLevel)) * 100);
-    const vuColor = audioLevel > 0.8 ? "#ffb020" : "#5acf68";
+    const vuColor = audioLevel > 0.8 ? "#FBBF24" : "#34D399";
     const undoDisabled = captureCount === 0;
 
     return (
@@ -228,8 +228,8 @@ export function RecorderScreen({
         {email && (
           <>
             <span
-              className="text-on-surface-variant mr-auto pl-2"
-              style={{ fontSize: "0.6875rem", opacity: 0.8 }}
+              className="mr-auto pl-2"
+              style={{ fontSize: "0.6875rem", color: "#C5CDD2" }}
             >
               {email}
             </span>
@@ -339,7 +339,7 @@ export function RecorderScreen({
 
       {/* Version */}
       <div className="px-4 pb-3 text-right">
-        <span className="text-on-surface-variant" style={{ fontSize: "0.625rem", opacity: 0.5 }}>
+        <span style={{ fontSize: "0.625rem", color: "#6B7780" }}>
           v{version}
         </span>
       </div>

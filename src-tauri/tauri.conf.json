@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "sop-sorcery",
-  "version": "0.9.0",
-  "identifier": "com.wizimate.recorder",
+  "productName": "cogniclone",
+  "version": "0.10.0",
+  "identifier": "com.cogniclone.recorder",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,10 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "SOP Sorcery",
+        "title": "CogniClone",
         "label": "main",
         "width": 460,
-        "height": 380,
+        "height": 440,
         "resizable": false,
         "fullscreen": false,
         "decorations": true,

@@ -91,7 +91,7 @@ export function ReviewScreen({
           <p className="text-on-surface-variant text-xs">{t("review.loading")}</p>
         )}
         {error && (
-          <p className="text-on-surface-variant text-xs" style={{ color: "#ff8080" }}>
+          <p className="text-on-surface-variant text-xs" style={{ color: "#F87171" }}>
             {error}
           </p>
         )}

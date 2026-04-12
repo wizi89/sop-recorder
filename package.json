@@ -1,5 +1,5 @@
 {
-  "name": "sop-recorder",
+  "name": "cogniclone-recorder",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -25,6 +25,8 @@
     "picomatch": ">=4.0.4"
   },
   "devDependencies": {
+    "@fontsource/manrope": "^5.2.8",
+    "@fontsource/orbitron": "^5.2.8",
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",

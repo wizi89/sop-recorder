@@ -832,6 +832,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "cogniclone-recorder"
+version = "0.10.0"
+dependencies = [
+ "chrono",
+ "cpal",
+ "dirs-next",
+ "futures",
+ "genpdf",
+ "hound",
+ "image 0.25.10",
+ "imageproc",
+ "keyring",
+ "log",
+ "rdev",
+ "reqwest 0.12.28",
+ "reqwest-eventsource",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-shell",
+ "tauri-plugin-store",
+ "tauri-plugin-updater",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "windows 0.58.0",
+ "xcap",
+]
+
+[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5673,41 +5708,6 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "sop-recorder"
-version = "0.9.0"
-dependencies = [
- "chrono",
- "cpal",
- "dirs-next",
- "futures",
- "genpdf",
- "hound",
- "image 0.25.10",
- "imageproc",
- "keyring",
- "log",
- "rdev",
- "reqwest 0.12.28",
- "reqwest-eventsource",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-shell",
- "tauri-plugin-store",
- "tauri-plugin-updater",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "uuid",
- "windows 0.58.0",
- "xcap",
 ]
 
 [[package]]

@@ -9,7 +9,7 @@ use commands::{auth, generate, permissions, quota, recording, settings, window};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Configure log targets:
-    // - Dev mode: stdout + sop-sorcery .tmp/logs/ (side-by-side with server logs)
+    // - Dev mode: stdout + cogniclone .tmp/logs/ (side-by-side with server logs)
     // - Release mode: AppData/Roaming/{identifier}/logs/ (next to settings)
     let reqwest_connect_level = if cfg!(debug_assertions) {
         log::LevelFilter::Info
@@ -51,6 +51,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            network::auth::migrate_keyring();
             settings::AppSettings::initialize(app.handle());
             Ok(())
         })

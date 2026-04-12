@@ -40,6 +40,15 @@ export function LoginScreen({
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col items-center justify-center gap-5 px-4">
+        {/* CogniClone Logo */}
+        <div className="flex items-center gap-3 mb-2">
+          <img src="/logo.svg" alt="CogniClone" style={{ width: 40, height: 40 }} />
+          <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "1.1rem", fontWeight: 600, letterSpacing: "0.06em" }}>
+            <span style={{ color: "#A8B2B8" }}>COGNICLONE</span>
+            <span style={{ color: "#2CB5C0", marginLeft: 6 }}>AI</span>
+          </div>
+        </div>
+
         <div className="w-72">
           <label htmlFor="login-email" className="label-sm block mb-1.5">{t("login.email")}</label>
           <input
@@ -94,7 +103,7 @@ export function LoginScreen({
 
       {/* Version */}
       <div className="px-4 pb-3 text-right">
-        <span className="text-on-surface-variant" style={{ fontSize: "0.625rem", opacity: 0.5 }}>
+        <span style={{ fontSize: "0.625rem", color: "#6B7780" }}>
           v{version}
         </span>
       </div>

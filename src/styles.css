@@ -1,4 +1,12 @@
 @import "tailwindcss";
+@import "@fontsource/manrope/300.css";
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/orbitron/500.css";
+@import "@fontsource/orbitron/600.css";
+@import "@fontsource/orbitron/700.css";
 
 *[data-tauri-drag-region] {
   app-region: drag;
@@ -9,36 +17,43 @@
 }
 
 @theme {
-  /* Surface hierarchy -- pure dark, subtle depth */
-  --color-surface: #0e0e0e;
-  --color-surface-container-low: #131313;
-  --color-surface-container: #1a1a1a;
-  --color-surface-container-high: #1f1f1f;
-  --color-surface-container-highest: #262626;
-  --color-surface-bright: #333333;
+  /* Surface hierarchy -- CogniClone dark */
+  --color-surface: #14181C;
+  --color-surface-container-low: #192025;
+  --color-surface-container: #1E2328;
+  --color-surface-container-high: #232A30;
+  --color-surface-container-highest: #272D33;
+  --color-surface-bright: #2E353D;
 
-  /* Primary accent */
-  --color-primary: #80aeff;
-  --color-primary-container: #5a8ee0;
-  --color-primary-glow: rgba(128, 174, 255, 0.2);
+  /* Primary accent -- CogniClone Teal */
+  --color-primary: #2CB5C0;
+  --color-primary-container: #1E8A93;
+  --color-primary-glow: rgba(44, 181, 192, 0.2);
 
   /* Tertiary / recording */
-  --color-tertiary: #ff7c6a;
-  --color-tertiary-hover: #ff6652;
-  --color-tertiary-glow: rgba(255, 124, 106, 0.25);
+  --color-tertiary: #F87171;
+  --color-tertiary-hover: #F87171; /* no distinct hover in palette */
+  --color-tertiary-glow: rgba(248, 113, 113, 0.25);
 
   /* Error */
-  --color-error: #ff716c;
+  --color-error: #F87171;
+
+  /* Semantic */
+  --color-success: #34D399;
+  --color-warning: #FBBF24;
 
   /* Text */
-  --color-on-background: #f2f2f2;
-  --color-on-surface: #e0e0e0;
-  --color-on-surface-variant: #a0a0a0;
+  --color-on-background: #F0F4F7;
+  --color-on-surface: #C5CDD2;
+  --color-on-surface-variant: #6B7780;
+
+  /* Border */
+  --color-border: #272D33;
 }
 
 @layer base {
   body {
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-family: "Manrope", system-ui, -apple-system, sans-serif;
     background-color: var(--color-surface);
     color: var(--color-on-background);
     overflow: hidden;
@@ -159,7 +174,7 @@
   }
 
   .input-field:focus {
-    box-shadow: 0 0 0 1px rgba(128, 174, 255, 0.3), 0 0 12px rgba(128, 174, 255, 0.08);
+    box-shadow: 0 0 0 1px rgba(44, 181, 192, 0.3), 0 0 12px rgba(44, 181, 192, 0.08);
   }
 
   /* ── Labels ── */
@@ -241,18 +256,18 @@
 
 @keyframes cta-breathe {
   0%, 100% {
-    box-shadow: 0 0 16px rgba(128, 174, 255, 0.12);
+    box-shadow: 0 0 16px rgba(44, 181, 192, 0.12);
   }
   50% {
-    box-shadow: 0 0 28px rgba(128, 174, 255, 0.22);
+    box-shadow: 0 0 28px rgba(44, 181, 192, 0.22);
   }
 }
 
 @keyframes stop-pulse {
   0%, 100% {
-    box-shadow: 0 0 8px rgba(255, 124, 106, 0.15);
+    box-shadow: 0 0 8px rgba(248, 113, 113, 0.15);
   }
   50% {
-    box-shadow: 0 0 20px rgba(255, 124, 106, 0.3);
+    box-shadow: 0 0 20px rgba(248, 113, 113, 0.3);
   }
 }
