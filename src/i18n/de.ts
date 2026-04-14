@@ -45,6 +45,7 @@ const de = {
   "settings.choose": "Wählen",
   "settings.upload_to": "Hochladen an",
   "settings.pipeline_label": "Pipeline-Version",
+  "settings.model_label": "KI-Modell",
   "settings.save": "Speichern",
   "settings.cancel": "Abbrechen",
 

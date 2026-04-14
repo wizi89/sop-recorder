@@ -19,6 +19,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     upload_target: null,
     skip_pii_check: false,
     pipeline_version: 1,
+    generation_model: "azure/gpt-4.1",
   });
   const [showPiiConfirm, setShowPiiConfirm] = useState(false);
 
@@ -122,6 +123,24 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           >
             <option value={1}>V1</option>
             <option value={2}>V2</option>
+          </select>
+        </div>
+
+        {/* Generation model */}
+        <div className="flex items-center justify-between">
+          <label className="label-sm">{t("settings.model_label")}</label>
+          <select
+            value={settings.generation_model}
+            onChange={(e) =>
+              setSettings((s) => ({
+                ...s,
+                generation_model: e.target.value,
+              }))
+            }
+            className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
+          >
+            <option value="azure/gpt-4.1">GPT-4.1</option>
+            <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
           </select>
         </div>
 

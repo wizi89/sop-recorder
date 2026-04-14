@@ -13,6 +13,8 @@ pub struct SSEResultPayload {
     pub markdown: String,
     #[serde(default)]
     pub job_id: Option<String>,
+    #[serde(default)]
+    pub pdf_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

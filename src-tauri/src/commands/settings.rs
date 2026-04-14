@@ -16,10 +16,16 @@ pub struct AppSettings {
     pub skip_pii_check: bool,
     #[serde(default = "default_pipeline_version")]
     pub pipeline_version: u8,
+    #[serde(default = "default_generation_model")]
+    pub generation_model: String,
 }
 
 fn default_pipeline_version() -> u8 {
     1
+}
+
+fn default_generation_model() -> String {
+    "azure/gpt-4.1".to_string()
 }
 
 impl AppSettings {
@@ -50,6 +56,7 @@ impl AppSettings {
         store.set("hide_from_screenshots", serde_json::json!(defaults.hide_from_screenshots));
         store.set("skip_pii_check", serde_json::json!(defaults.skip_pii_check));
         store.set("pipeline_version", serde_json::json!(defaults.pipeline_version));
+        store.set("generation_model", serde_json::json!(defaults.generation_model));
     }
 
     pub fn defaults(app: &tauri::AppHandle) -> Self {
@@ -73,6 +80,7 @@ impl AppSettings {
             upload_target: None,
             skip_pii_check: false,
             pipeline_version: 1,
+            generation_model: default_generation_model(),
         }
     }
 }
@@ -110,6 +118,11 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         .map(|v| v as u8)
         .unwrap_or(1);
 
+    let generation_model = store
+        .get("generation_model")
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_else(default_generation_model);
+
     // API key is stored in keyring, not in the store
     let api_key = crate::network::auth::keyring_load("openai-key").ok().flatten();
 
@@ -121,6 +134,7 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         upload_target,
         skip_pii_check,
         pipeline_version,
+        generation_model,
     })
 }
 
@@ -143,6 +157,7 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
 
     store.set("skip_pii_check", serde_json::json!(settings.skip_pii_check));
     store.set("pipeline_version", serde_json::json!(settings.pipeline_version));
+    store.set("generation_model", serde_json::json!(settings.generation_model));
 
     // API key goes to keyring
     if let Some(key) = &settings.api_key {

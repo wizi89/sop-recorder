@@ -13,6 +13,7 @@ export interface AppSettings {
   upload_target: string | null;
   skip_pii_check: boolean;
   pipeline_version: number;
+  generation_model: string;
 }
 
 export async function login(

@@ -85,10 +85,16 @@ pub async fn poll_job_result(
                     .and_then(|v| v.as_str())
                     .map(String::from);
 
+                let pdf_url = body
+                    .get("pdf_url")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+
                 return Ok(SSEResultPayload {
                     enriched,
                     markdown,
                     job_id,
+                    pdf_url,
                 });
             }
             "processing" => {

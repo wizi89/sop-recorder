@@ -17,6 +17,7 @@ pub async fn upload_multipart(
     api_url: Option<&str>,
     skip_pii_check: bool,
     pipeline_version: u8,
+    generation_model: &str,
 ) -> Result<reqwest::Response, String> {
     let base_url = api_url.unwrap_or(config::API_URL_PROD);
     let url = format!("{}/generate", base_url);
@@ -58,6 +59,7 @@ pub async fn upload_multipart(
         "guide_title": guide_title,
         "step_count": screenshot_paths.len(),
         "pipeline_version": pipeline_version,
+        "generation_model": generation_model,
     });
     form = form.text("metadata", metadata.to_string());
 
@@ -110,6 +112,7 @@ pub async fn upload_with_retry(
     max_retries: u32,
     skip_pii_check: bool,
     pipeline_version: u8,
+    generation_model: &str,
 ) -> Result<reqwest::Response, String> {
     let mut last_err = String::new();
     let delays = [1, 2, 4]; // seconds
@@ -124,6 +127,7 @@ pub async fn upload_with_retry(
             api_url,
             skip_pii_check,
             pipeline_version,
+            generation_model,
         )
         .await
         {

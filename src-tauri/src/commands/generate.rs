@@ -135,6 +135,13 @@ async fn run_generation_inner(
         .map(|v| v as u8)
         .unwrap_or(1);
 
+    // Read generation_model setting
+    let generation_model: String = app
+        .store("settings.json")
+        .ok()
+        .and_then(|store| store.get("generation_model").and_then(|v| v.as_str().map(String::from)))
+        .unwrap_or_else(|| "azure/gpt-4.1".to_string());
+
     // In dev mode, allow choosing local server via settings; in release always use production
     let api_url = if cfg!(debug_assertions) {
         app.store("settings.json")
@@ -164,6 +171,7 @@ async fn run_generation_inner(
         3,
         skip_pii_check,
         pipeline_version,
+        &generation_model,
     )
     .await
     {
@@ -197,6 +205,7 @@ async fn run_generation_inner(
                 1, // single retry -- if this also fails, give up
                 skip_pii_check,
                 pipeline_version,
+                &generation_model,
             )
             .await
             .map_err(|e| {
@@ -243,21 +252,70 @@ async fn run_generation_inner(
     markdown::save_markdown(&output_path, &result.markdown)
         .map_err(|e| format!("Failed to save markdown: {}", e))?;
 
-    // Generate PDF
+    // Download server-generated PDF, fall back to local generation
     let _ = app.emit(
         "sse:status",
         sse::SSEStatusPayload {
-            message: "PDF wird erstellt...".into(),
+            message: "PDF wird heruntergeladen...".into(),
         },
     );
 
-    pdf::generate_pdf(&output_path, &guide_title, &result.enriched)
-        .map_err(|e| format!("PDF generation failed: {}", e))?;
+    let pdf_saved = if let Some(ref pdf_url) = result.pdf_url {
+        match download_pdf(pdf_url, &output_path).await {
+            Ok(()) => {
+                log::info!("Server PDF downloaded to {}", output_path.join("guide.pdf").display());
+                true
+            }
+            Err(e) => {
+                log::warn!("Server PDF download failed ({}), falling back to local generation", e);
+                false
+            }
+        }
+    } else {
+        log::info!("No pdf_url in result, falling back to local generation");
+        false
+    };
+
+    if !pdf_saved {
+        let _ = app.emit(
+            "sse:status",
+            sse::SSEStatusPayload {
+                message: "PDF wird lokal erstellt...".into(),
+            },
+        );
+        pdf::generate_pdf(&output_path, &guide_title, &result.enriched)
+            .map_err(|e| format!("PDF generation failed: {}", e))?;
+    }
 
     // Clear pending marker
     pending::clear_pending(&output_path);
 
     *state.recording_status.lock().unwrap() = RecordingStatus::Done;
+
+    Ok(())
+}
+
+/// Download a PDF from a signed URL and save it to the output directory.
+async fn download_pdf(url: &str, output_dir: &Path) -> Result<(), String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("PDF download request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("PDF download returned status {}", response.status()));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read PDF response body: {}", e))?;
+
+    let pdf_path = output_dir.join("guide.pdf");
+    std::fs::write(&pdf_path, &bytes)
+        .map_err(|e| format!("Failed to write PDF file: {}", e))?;
 
     Ok(())
 }
