@@ -19,6 +19,23 @@ fn load_font_family(regular: &str, bold: &str, italic: &str, bold_italic: &str) 
     })
 }
 
+/// Strip markdown formatting from text for plain-text PDF rendering.
+fn strip_markdown(text: &str) -> String {
+    let mut result = text.to_string();
+    // Bold: **text** or __text__
+    result = result.replace("**", "");
+    result = result.replace("__", "");
+    // Italic: *text* or _text_ (only single markers left after bold removal)
+    // Skip single * and _ -- too aggressive, may hit legitimate uses
+    // Headers: # at start of line
+    result = result
+        .lines()
+        .map(|line| line.trim_start_matches('#').trim_start())
+        .collect::<Vec<_>>()
+        .join("\n");
+    result
+}
+
 /// Generate a PDF from enriched step data.
 pub fn generate_pdf(
     output_dir: &Path,
@@ -76,14 +93,16 @@ pub fn generate_pdf(
         doc.push(PageBreak::new());
 
         let order = i + 1;
-        let title = step
+        let title_raw = step
             .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or("(ohne Titel)");
-        let body = step
+        let title = strip_markdown(title_raw);
+        let body_raw = step
             .get("body_markdown")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+        let body = strip_markdown(body_raw);
 
         doc.push(
             Paragraph::new(format!("Schritt {} - {}", order, title))
@@ -92,9 +111,19 @@ pub fn generate_pdf(
         doc.push(Break::new(0.5));
 
         if !body.is_empty() {
-            doc.push(
-                Paragraph::new(body).styled(Style::new().with_font_size(11)),
-            );
+            // Split body into paragraphs on double-newlines or single newlines
+            // so the 3-part structure (Bildschirmzustand / Handlung / Ergebnis)
+            // renders as separate blocks instead of one squished blob.
+            for paragraph in body.split('\n') {
+                let trimmed = paragraph.trim();
+                if trimmed.is_empty() {
+                    doc.push(Break::new(0.2));
+                } else {
+                    doc.push(
+                        Paragraph::new(trimmed).styled(Style::new().with_font_size(11)),
+                    );
+                }
+            }
             doc.push(Break::new(0.5));
         }
 
@@ -110,23 +139,23 @@ pub fn generate_pdf(
             }
         }
 
-        // Warnings
+        // Warnings (skip empty strings)
         if let Some(warnings) = step.get("warnings").and_then(|v| v.as_array()) {
-            for w in warnings.iter().filter_map(|v| v.as_str()) {
+            for w in warnings.iter().filter_map(|v| v.as_str()).filter(|w| !w.trim().is_empty()) {
                 doc.push(Break::new(0.3));
                 doc.push(
-                    Paragraph::new(format!("Warnung: {}", w))
+                    Paragraph::new(format!("Warnung: {}", strip_markdown(w)))
                         .styled(Style::new().bold().with_font_size(10)),
                 );
             }
         }
 
-        // Notes
+        // Notes (skip empty strings)
         if let Some(notes) = step.get("notes").and_then(|v| v.as_array()) {
-            for n in notes.iter().filter_map(|v| v.as_str()) {
+            for n in notes.iter().filter_map(|v| v.as_str()).filter(|n| !n.trim().is_empty()) {
                 doc.push(Break::new(0.3));
                 doc.push(
-                    Paragraph::new(format!("Hinweis: {}", n))
+                    Paragraph::new(format!("Hinweis: {}", strip_markdown(n)))
                         .styled(Style::new().italic().with_font_size(10)),
                 );
             }

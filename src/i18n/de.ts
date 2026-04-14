@@ -44,6 +44,7 @@ const de = {
   "settings.logs_dir": "Protokollverzeichnis",
   "settings.choose": "Wählen",
   "settings.upload_to": "Hochladen an",
+  "settings.pipeline_label": "Pipeline-Version",
   "settings.save": "Speichern",
   "settings.cancel": "Abbrechen",
 

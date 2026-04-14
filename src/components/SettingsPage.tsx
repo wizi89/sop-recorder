@@ -18,6 +18,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     api_key: null,
     upload_target: null,
     skip_pii_check: false,
+    pipeline_version: 1,
   });
   const [showPiiConfirm, setShowPiiConfirm] = useState(false);
 
@@ -104,6 +105,24 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
               style={{ left: settings.skip_pii_check ? 21 : 3 }}
             />
           </button>
+        </div>
+
+        {/* Pipeline version */}
+        <div className="flex items-center justify-between">
+          <label className="label-sm">{t("settings.pipeline_label")}</label>
+          <select
+            value={settings.pipeline_version}
+            onChange={(e) =>
+              setSettings((s) => ({
+                ...s,
+                pipeline_version: Number(e.target.value),
+              }))
+            }
+            className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
+          >
+            <option value={1}>V1</option>
+            <option value={2}>V2</option>
+          </select>
         </div>
 
         {/* Workflows directory */}

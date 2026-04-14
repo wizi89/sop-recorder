@@ -12,6 +12,7 @@ export interface AppSettings {
   api_key: string | null;
   upload_target: string | null;
   skip_pii_check: boolean;
+  pipeline_version: number;
 }
 
 export async function login(

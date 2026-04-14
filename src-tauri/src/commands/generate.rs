@@ -127,6 +127,14 @@ async fn run_generation_inner(
         .and_then(|store| store.get("skip_pii_check").and_then(|v| v.as_bool()))
         .unwrap_or(false);
 
+    // Read pipeline_version setting (1 = fast/v1, 2 = high quality/v2)
+    let pipeline_version: u8 = app
+        .store("settings.json")
+        .ok()
+        .and_then(|store| store.get("pipeline_version").and_then(|v| v.as_u64()))
+        .map(|v| v as u8)
+        .unwrap_or(1);
+
     // In dev mode, allow choosing local server via settings; in release always use production
     let api_url = if cfg!(debug_assertions) {
         app.store("settings.json")
@@ -155,6 +163,7 @@ async fn run_generation_inner(
         api_url.as_deref(),
         3,
         skip_pii_check,
+        pipeline_version,
     )
     .await
     {
@@ -187,6 +196,7 @@ async fn run_generation_inner(
                 api_url.as_deref(),
                 1, // single retry -- if this also fails, give up
                 skip_pii_check,
+                pipeline_version,
             )
             .await
             .map_err(|e| {

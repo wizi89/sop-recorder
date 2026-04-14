@@ -14,6 +14,12 @@ pub struct AppSettings {
     pub upload_target: Option<String>,
     #[serde(default)]
     pub skip_pii_check: bool,
+    #[serde(default = "default_pipeline_version")]
+    pub pipeline_version: u8,
+}
+
+fn default_pipeline_version() -> u8 {
+    1
 }
 
 impl AppSettings {
@@ -43,6 +49,7 @@ impl AppSettings {
         store.set("logs_dir", serde_json::json!(defaults.logs_dir));
         store.set("hide_from_screenshots", serde_json::json!(defaults.hide_from_screenshots));
         store.set("skip_pii_check", serde_json::json!(defaults.skip_pii_check));
+        store.set("pipeline_version", serde_json::json!(defaults.pipeline_version));
     }
 
     pub fn defaults(app: &tauri::AppHandle) -> Self {
@@ -65,6 +72,7 @@ impl AppSettings {
             api_key: None,
             upload_target: None,
             skip_pii_check: false,
+            pipeline_version: 1,
         }
     }
 }
@@ -96,6 +104,12 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let pipeline_version = store
+        .get("pipeline_version")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u8)
+        .unwrap_or(1);
+
     // API key is stored in keyring, not in the store
     let api_key = crate::network::auth::keyring_load("openai-key").ok().flatten();
 
@@ -106,6 +120,7 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         api_key,
         upload_target,
         skip_pii_check,
+        pipeline_version,
     })
 }
 
@@ -127,6 +142,7 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     }
 
     store.set("skip_pii_check", serde_json::json!(settings.skip_pii_check));
+    store.set("pipeline_version", serde_json::json!(settings.pipeline_version));
 
     // API key goes to keyring
     if let Some(key) = &settings.api_key {
