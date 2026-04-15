@@ -100,10 +100,15 @@ export async function runGeneration(outputDir: string): Promise<void> {
   return invoke("run_generation", { outputDir });
 }
 
+export interface OrgFeatures {
+  advanced_settings: boolean;
+}
+
 export interface Quota {
   count: number;
   limit: number;
   remaining: number;
+  features: OrgFeatures;
 }
 
 export async function getQuota(): Promise<Quota> {

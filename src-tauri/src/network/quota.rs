@@ -2,11 +2,19 @@ use serde::Deserialize;
 
 use crate::config;
 
+#[derive(Debug, Deserialize, Clone, serde::Serialize, Default)]
+pub struct OrgFeatures {
+    #[serde(default)]
+    pub advanced_settings: bool,
+}
+
 #[derive(Debug, Deserialize, Clone, serde::Serialize)]
 pub struct Quota {
     pub count: i64,
     pub limit: i64,
     pub remaining: i64,
+    #[serde(default)]
+    pub features: OrgFeatures,
 }
 
 /// Fetch the current user's generation quota from the server.

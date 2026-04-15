@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "../hooks/useTranslation";
-import { getSettings, saveSettings, type AppSettings } from "../lib/tauri";
+import { getSettings, saveSettings, getQuota, type AppSettings } from "../lib/tauri";
 
 interface SettingsPageProps {
   isDev: boolean;
@@ -22,10 +22,14 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     generation_model: "azure/gpt-4.1",
   });
   const [showPiiConfirm, setShowPiiConfirm] = useState(false);
+  const [advancedSettings, setAdvancedSettings] = useState(false);
 
   useEffect(() => {
     getSettings()
       .then(setSettings)
+      .catch(() => {});
+    getQuota()
+      .then((q) => setAdvancedSettings(q.features?.advanced_settings ?? false))
       .catch(() => {});
   }, []);
 
@@ -108,41 +112,45 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           </button>
         </div>
 
-        {/* Pipeline version */}
-        <div className="flex items-center justify-between">
-          <label className="label-sm">{t("settings.pipeline_label")}</label>
-          <select
-            value={settings.pipeline_version}
-            onChange={(e) =>
-              setSettings((s) => ({
-                ...s,
-                pipeline_version: Number(e.target.value),
-              }))
-            }
-            className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
-          >
-            <option value={1}>V1</option>
-            <option value={2}>V2</option>
-          </select>
-        </div>
+        {/* Pipeline version (advanced orgs only) */}
+        {advancedSettings && (
+          <div className="flex items-center justify-between">
+            <label className="label-sm">{t("settings.pipeline_label")}</label>
+            <select
+              value={settings.pipeline_version}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  pipeline_version: Number(e.target.value),
+                }))
+              }
+              className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
+            >
+              <option value={1}>V1</option>
+              <option value={2}>V2</option>
+            </select>
+          </div>
+        )}
 
-        {/* Generation model */}
-        <div className="flex items-center justify-between">
-          <label className="label-sm">{t("settings.model_label")}</label>
-          <select
-            value={settings.generation_model}
-            onChange={(e) =>
-              setSettings((s) => ({
-                ...s,
-                generation_model: e.target.value,
-              }))
-            }
-            className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
-          >
-            <option value="azure/gpt-4.1">GPT-4.1</option>
-            <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
-          </select>
-        </div>
+        {/* Generation model (advanced orgs only) */}
+        {advancedSettings && (
+          <div className="flex items-center justify-between">
+            <label className="label-sm">{t("settings.model_label")}</label>
+            <select
+              value={settings.generation_model}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  generation_model: e.target.value,
+                }))
+              }
+              className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
+            >
+              <option value="azure/gpt-4.1">GPT-4.1</option>
+              <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+            </select>
+          </div>
+        )}
 
         {/* Workflows directory */}
         <div>

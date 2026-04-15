@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-04-15
+
+Server-side PDF generation, model selection, and dependency updates.
+
+### Added
+
+- Server PDF download: the recorder fetches the branded PDF from the server via signed URL, with local genpdf as fallback
+- Model selection setting: choose between GPT-4.1 and Claude Sonnet 4.6 in the settings page (advanced orgs only)
+- Pipeline version setting: choose between V1 (single-call) and V2 (analysis + generation) pipelines (advanced orgs only)
+- Generation model is sent as metadata to the server for per-request model override
+- Org feature flags: model and pipeline dropdowns are gated by `ADVANCED_SETTINGS_ORGS` server env var, fetched via `/quota` response
+
+### Changed
+
+- PDF output now uses the server-generated branded PDF (CogniClone teal palette, Orbitron/Manrope fonts, prereq bar, result section) instead of the basic local genpdf output
+- SSE result payload now includes `pdf_url` field for server PDF download
+
+### Fixed
+
+- Updated rand 0.9.2 to 0.9.4 to fix Dependabot security alert (RUSTSEC advisory)
+
+### Dependencies
+
+- Vite upgraded from v7 to v8 (fixes 3 security vulnerabilities)
+- @vitejs/plugin-react upgraded to v6 for Vite 8 compatibility
+
 ## [0.10.0] - 2026-04-12
 
 Full visual rebrand from SOP Sorcery to CogniClone AI.
