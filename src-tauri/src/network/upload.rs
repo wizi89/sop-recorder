@@ -3,6 +3,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::config;
+use crate::output::step_meta::StepMeta;
 
 const UPLOAD_TIMEOUT_SECS: u64 = 300;
 
@@ -18,6 +19,7 @@ pub async fn upload_multipart(
     skip_pii_check: bool,
     pipeline_version: u8,
     generation_model: &str,
+    steps: Option<&[StepMeta]>,
 ) -> Result<reqwest::Response, String> {
     let base_url = api_url.unwrap_or(config::API_URL_PROD);
     let url = format!("{}/generate", base_url);
@@ -54,13 +56,21 @@ pub async fn upload_multipart(
         form = form.part(field_name, part);
     }
 
-    // Metadata
-    let metadata = serde_json::json!({
+    // Metadata. `steps` is only included when sidecar count matches
+    // screenshot count, so the server can rely on length-equality and treat
+    // absence as "no per-step metadata available -- fall back to global
+    // transcript and proportional step splitting".
+    let mut metadata = serde_json::json!({
         "guide_title": guide_title,
         "step_count": screenshot_paths.len(),
         "pipeline_version": pipeline_version,
         "generation_model": generation_model,
     });
+    if let Some(s) = steps {
+        if s.len() == screenshot_paths.len() && !s.is_empty() {
+            metadata["steps"] = serde_json::json!(s);
+        }
+    }
     form = form.text("metadata", metadata.to_string());
 
     if skip_pii_check {
@@ -113,6 +123,7 @@ pub async fn upload_with_retry(
     skip_pii_check: bool,
     pipeline_version: u8,
     generation_model: &str,
+    steps: Option<&[StepMeta]>,
 ) -> Result<reqwest::Response, String> {
     let mut last_err = String::new();
     let delays = [1, 2, 4]; // seconds
@@ -128,6 +139,7 @@ pub async fn upload_with_retry(
             skip_pii_check,
             pipeline_version,
             generation_model,
+            steps,
         )
         .await
         {

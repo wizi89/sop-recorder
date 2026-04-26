@@ -5,7 +5,7 @@ use tauri_plugin_store::StoreExt;
 
 use crate::commands::auth::SessionCache;
 use crate::network::{auth as net_auth, jobs, sse, upload};
-use crate::output::{markdown, pdf, pending};
+use crate::output::{markdown, pdf, pending, step_meta};
 use crate::state::{AppState, RecordingStatus};
 
 static GENERATING: AtomicBool = AtomicBool::new(false);
@@ -114,6 +114,24 @@ async fn run_generation_inner(
                 .unwrap_or_else(|| "SOP".to_string())
         });
 
+    // Read per-step sidecar JSONs alongside the PNGs. If the sidecar count
+    // diverges from the screenshot count (e.g. user deleted a PNG manually
+    // between stop and generate), drop the array rather than send a
+    // misaligned one -- the server falls back to no per-step alignment.
+    let step_metas = step_meta::read_all(&screenshots_dir);
+    let steps_arg: Option<&[step_meta::StepMeta]> = if step_metas.len() == screenshot_paths.len() {
+        Some(&step_metas)
+    } else {
+        if !step_metas.is_empty() {
+            log::warn!(
+                "step sidecar count ({}) does not match screenshots ({}); falling back to no alignment",
+                step_metas.len(),
+                screenshot_paths.len()
+            );
+        }
+        None
+    };
+
     // Build path refs for upload
     let path_refs: Vec<(u32, &Path)> = screenshot_paths
         .iter()
@@ -172,6 +190,7 @@ async fn run_generation_inner(
         skip_pii_check,
         pipeline_version,
         &generation_model,
+        steps_arg,
     )
     .await
     {
@@ -206,6 +225,7 @@ async fn run_generation_inner(
                 skip_pii_check,
                 pipeline_version,
                 &generation_model,
+                steps_arg,
             )
             .await
             .map_err(|e| {

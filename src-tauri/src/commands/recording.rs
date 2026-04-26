@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_store::StoreExt;
 
@@ -10,6 +11,7 @@ use crate::capture::audio::AudioHandle;
 use crate::capture::input_hooks;
 use crate::capture::screenshot;
 use crate::output::pending;
+use crate::output::step_meta::{self, StepMeta};
 use crate::state::{AppState, RecordingSession, RecordingStatus};
 
 fn get_output_dir(app: &tauri::AppHandle) -> PathBuf {
@@ -63,6 +65,12 @@ pub async fn start_recording(
     if let Err(e) = crate::commands::window::set_display_affinity(app.clone(), hide) {
         log::warn!("Failed to set display affinity: {}", e);
     }
+
+    // Capture the reference instant BEFORE starting audio so screenshot
+    // timestamps reference the same start point as the audio timeline.
+    // Audio capture initialization adds a small constant offset (a few ms)
+    // which is well within the per-step transcript buffer downstream.
+    let recording_start = Instant::now();
 
     // Start audio recording
     let audio_path = output_dir.join("recording.wav");
@@ -118,11 +126,17 @@ pub async fn start_recording(
             return;
         }
 
-        let click_pos = match &event {
-            input_hooks::CaptureEvent::MouseClick { .. } => input_hooks::get_cursor_position(),
-            input_hooks::CaptureEvent::EnterKey => None,
+        let (click_pos, trigger) = match &event {
+            input_hooks::CaptureEvent::MouseClick { .. } => {
+                (input_hooks::get_cursor_position(), "mouse_click")
+            }
+            input_hooks::CaptureEvent::EnterKey => (None, "enter_key"),
         };
 
+        // Stamp the trigger time at the moment the input event fires, before
+        // the screenshot capture is spawned. This is the time we want
+        // attached to the step, not the (variable) write-completion time.
+        let timestamp_seconds = recording_start.elapsed().as_secs_f64();
         let step_num = counter_clone.fetch_add(1, Ordering::SeqCst) + 1;
 
         // Spawn capture work so the rdev thread isn't blocked
@@ -133,6 +147,23 @@ pub async fn start_recording(
         std::thread::spawn(move || {
             match screenshot::capture_and_save(&dir, step_num, click_pos) {
                 Ok(_filename) => {
+                    // Write the sidecar AFTER the PNG has been written so a
+                    // crash between PNG and JSON leaves an unpaired PNG that
+                    // the upload path can detect (and either skip or fail
+                    // loudly), rather than a JSON pointing at a missing PNG.
+                    let meta = StepMeta {
+                        order: step_num,
+                        timestamp_seconds,
+                        click_x: click_pos.map(|(x, _)| x),
+                        click_y: click_pos.map(|(_, y)| y),
+                        trigger: trigger.to_string(),
+                    };
+                    if let Err(e) = step_meta::write_sidecar(&dir, &meta) {
+                        log::error!(
+                            "Step sidecar write failed for step {}: {}",
+                            step_num, e
+                        );
+                    }
                     let _ = app.emit("recording:step_captured", step_num);
                 }
                 Err(e) => {
@@ -148,7 +179,6 @@ pub async fn start_recording(
         output_dir: output_dir.clone(),
         screenshots_dir,
         guide_title,
-        steps: Vec::new(),
         audio_handle: Some(audio_handle),
         input_hook: Some(hook_handle),
         stop_flag: Some(stop_flag),
@@ -235,7 +265,8 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
     // generate path; should always be 0 here after the wait above).
     *state.in_flight_captures.lock().unwrap() = in_flight_counter;
 
-    // Write pending.json
+    // Write pending.json. Per-step metadata lives in step_NN.json sidecars
+    // alongside each PNG, so pending.json only needs the guide title.
     pending::write_pending(&output_dir_path, &guide_title)
         .map_err(|e| format!("Failed to write pending marker: {}", e))?;
 
@@ -338,6 +369,12 @@ pub async fn delete_last_screenshot(
     match fs::remove_file(&path) {
         Ok(()) => {
             log::info!("Undo: deleted {}", path.display());
+            // Remove the matching sidecar so the upload path doesn't see a
+            // dangling JSON pointing at a missing PNG. If the sidecar write
+            // hadn't completed yet (rare race), `delete_sidecar` is a no-op.
+            if let Err(e) = step_meta::delete_sidecar(&session.screenshots_dir, current) {
+                log::warn!("Undo: failed to delete sidecar for step {}: {}", current, e);
+            }
             let _ = app.emit("recording:step_deleted", new_count);
             Ok(new_count)
         }
