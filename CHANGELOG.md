@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-04-28
+
+Webapp domain switch to app.cogniclone.ai, per-screenshot sidecar metadata, and security dependency bumps.
+
+### Added
+
+- Per-screenshot sidecar JSON: each capture writes a `step_NN.json` next to `step_NN.png` with `order`, `timestamp_seconds` (since recording start), `click_x/y`, and `trigger`. The upload aggregates these into `metadata.steps[]` so the server can align narration to screenshots without pre-slicing
+- Crash-resilient capture: each step self-describes after the PNG write succeeds, so aborted recordings always leave matched (png, json) pairs
+
+### Changed
+
+- `WEBAPP_URL_PROD` now points to `https://app.cogniclone.ai`
+- Legal/privacy/terms links in the PII confirmation dialog open `app.cogniclone.ai/{legal,privacy,terms}`
+
+### Removed
+
+- Parallel `Mutex<Vec<f64>>` + `pending.json` screenshot_timestamps from an earlier iteration (superseded by sidecar JSON)
+- Unused `CapturedStep` struct that was never populated
+
+### Security
+
+- `openssl` 0.10.76 -> 0.10.78 (4 alerts: 3 high, 1 low; buffer-overflow + bounds-assertion fixes in derive/aes-key-wrap/digest_final/PSK)
+- `rustls-webpki` 0.103.10 -> 0.103.13 (1 high DoS via CRL; 2 low name-constraint issues)
+- `rand` 0.8.5 -> 0.8.6 (low; custom-logger unsoundness)
+- Note: `rand@0.7.3` alert remains, pulled in by `tauri-utils` via `phf_generator 0.8.0` at build time only; no exploit path and no upstream fix without Tauri changes
+
 ## [0.11.0] - 2026-04-15
 
 Server-side PDF generation, model selection, and dependency updates.
