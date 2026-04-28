@@ -1,6 +1,6 @@
 pub const API_URL_PROD: &str = "https://api.wizimate.com";
 pub const API_URL_DEV: &str = "http://localhost:8000";
-pub const WEBAPP_URL_PROD: &str = "https://flow.wizimate.com";
+pub const WEBAPP_URL_PROD: &str = "https://app.cogniclone.ai";
 pub const WEBAPP_URL_DEV: &str = "http://localhost:3000";
 
 pub fn webapp_url_for_target(upload_target: Option<&str>) -> &'static str {

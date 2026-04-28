@@ -265,13 +265,13 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
               </p>
             </div>
             <div className="flex gap-3" style={{ fontSize: "0.6rem" }}>
-              <button onClick={() => openUrl("https://flow.wizimate.com/legal")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
+              <button onClick={() => openUrl("https://app.cogniclone.ai/legal")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
                 {t("pii.link_legal")}
               </button>
-              <button onClick={() => openUrl("https://flow.wizimate.com/privacy")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
+              <button onClick={() => openUrl("https://app.cogniclone.ai/privacy")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
                 {t("pii.link_privacy")}
               </button>
-              <button onClick={() => openUrl("https://flow.wizimate.com/terms")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
+              <button onClick={() => openUrl("https://app.cogniclone.ai/terms")} className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0">
                 {t("pii.link_terms")}
               </button>
             </div>
