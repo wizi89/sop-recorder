@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-05-04
+
+Legal-page links repointed to the public marketing site after consolidating Impressum, Datenschutzerklärung, and Nutzungsbedingungen on `cogniclone.ai`.
+
+### Changed
+
+- PII confirmation dialog links now open `https://cogniclone.ai/impressum/`, `/datenschutzerklaerung/`, and `/nutzungsbedingungen/` instead of the deprecated `app.cogniclone.ai/{legal,privacy,terms}` paths
+- "Rechtliches" label renamed to "Impressum" to match the new public page slug
+
 ## [0.12.0] - 2026-04-28
 
 Webapp domain switch to app.cogniclone.ai, per-screenshot sidecar metadata, and security dependency bumps.

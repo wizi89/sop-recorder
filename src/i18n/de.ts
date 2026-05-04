@@ -68,7 +68,7 @@ const de = {
   "pii.copy": "Kopieren",
   "pii.copied": "Kopiert!",
   "pii.dismiss": "Schließen",
-  "pii.link_legal": "Rechtliches",
+  "pii.link_legal": "Impressum",
   "pii.link_privacy": "Datenschutz",
   "pii.link_terms": "AGB",
 

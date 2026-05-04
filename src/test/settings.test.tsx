@@ -134,7 +134,7 @@ describe("SettingsPage", () => {
     );
     await user.click(toggles[1]);
 
-    expect(screen.getByText("Rechtliches")).toBeInTheDocument();
+    expect(screen.getByText("Impressum")).toBeInTheDocument();
     expect(screen.getByText("Datenschutz")).toBeInTheDocument();
     expect(screen.getByText("AGB")).toBeInTheDocument();
   });
