@@ -10,7 +10,15 @@ permissions:
 
 jobs:
   release:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            tauri-args: --bundles nsis --config src-tauri/tauri.signing.conf.json
+          - os: macos-latest
+            tauri-args: --bundles app,dmg --target universal-apple-darwin
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -25,6 +33,10 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install macOS Rust targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
         with:
@@ -34,9 +46,11 @@ jobs:
         run: npm ci
 
       - name: Install trusted-signing-cli
+        if: runner.os == 'Windows'
         run: cargo install trusted-signing-cli
 
       - name: Generate signing config
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -64,9 +78,10 @@ jobs:
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
-          args: --config src-tauri/tauri.signing.conf.json
+          args: ${{ matrix.tauri-args }}
 
       - name: Deploy installer to server
+        if: runner.os == 'Windows'
         shell: bash
         run: |
           mkdir -p ~/.ssh
@@ -77,8 +92,12 @@ jobs:
             "$EXE_FILE" \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
 
+  notify:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Notify Slack
-        if: success()
         shell: bash
         run: |
           curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \

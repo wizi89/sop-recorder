@@ -6,7 +6,7 @@ Built with [Tauri v2](https://tauri.app/) (Rust + React + TypeScript).
 
 ## Download
 
-Download the latest installer from [GitHub Releases](https://github.com/wizi89/sop-recorder/releases/latest). Run the `.exe` -- no dependencies required, no admin rights needed.
+Download the latest installer from [GitHub Releases](https://github.com/wizi89/sop-recorder/releases/latest). On Windows, run the `.exe` -- no dependencies required, no admin rights needed. On macOS, download the `.dmg`, open it, and drag the app into Applications.
 
 ## How it works
 
@@ -28,7 +28,8 @@ Download the latest installer from [GitHub Releases](https://github.com/wizi89/s
 - Auto-updater via GitHub Releases
 - System tray integration
 - German UI (i18n)
-- Per-user NSIS installer (no admin rights)
+- Per-user NSIS installer on Windows (no admin rights)
+- macOS `.dmg` and `.app` bundles
 
 ## Development
 
@@ -36,7 +37,8 @@ Download the latest installer from [GitHub Releases](https://github.com/wizi89/s
 
 - [Node.js](https://nodejs.org/) 22+
 - [Rust](https://rustup.rs/) stable
-- Windows 10/11
+- Windows 10/11 for Windows installers
+- macOS 14+ with Xcode Command Line Tools for macOS bundles
 
 ### Setup
 
@@ -57,13 +59,24 @@ npm test                          # Frontend tests (vitest)
 cd src-tauri && cargo test --lib  # Rust tests
 ```
 
-### Build installer
+### Build installers
 
 ```bash
-npx tauri build
+npm run build:desktop
 ```
 
-The NSIS installer is created in `src-tauri/target/release/bundle/nsis/`.
+The default Tauri build creates the platform bundle targets configured for the current OS. Windows uses `src-tauri/tauri.conf.json`; macOS additionally merges `src-tauri/tauri.macos.conf.json`.
+
+For platform-specific builds:
+
+```bash
+npm run build:windows  # Windows NSIS installer
+npm run build:mac      # macOS universal .app + .dmg, run this on macOS
+```
+
+The Windows NSIS installer is created in `src-tauri/target/release/bundle/nsis/`. The macOS universal `.dmg` and `.app` bundles are created in `src-tauri/target/universal-apple-darwin/release/bundle/`.
+
+From a Windows machine, the fastest validation loop for macOS packaging changes is to run `npm test`, `npx tsc --noEmit`, and use the CI workflow on the feature branch so the macOS GitHub Actions runner builds the `.dmg`. Native macOS bundling must run on macOS.
 
 ## Project structure
 
@@ -87,8 +100,8 @@ src-tauri/              Rust backend
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Runs on push to `main` -- tests + build, uploads installer artifact
-- **Release** (`release.yml`): Runs on `v*` tags -- tests + build + GitHub Release with auto-updater manifest
+- **CI** (`ci.yml`): Runs on push to `main`, `feature/**`, pull requests, and manual dispatch -- tests + Windows/macOS builds, uploads installer artifacts
+- **Release** (`release.yml`): Runs on `v*` tags -- Windows/macOS release builds + GitHub Release with auto-updater manifest
 
 ## License
 

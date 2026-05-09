@@ -1,8 +1,9 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "feature/**"]
   pull_request:
     branches: [main]
 
@@ -46,7 +47,21 @@ jobs:
 
   build:
     needs: test
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact-name: windows-installer
+            artifact-path: src-tauri/target/release/bundle/nsis/*.exe
+            build-command: npx tauri build --bundles nsis
+          - os: macos-latest
+            artifact-name: macos-installer
+            artifact-path: |
+              src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
+            build-command: npx tauri build --bundles app,dmg --target universal-apple-darwin
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -61,6 +76,10 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install macOS Rust targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
         with:
@@ -70,7 +89,7 @@ jobs:
         run: npm ci
 
       - name: Build Tauri app
-        run: npx tauri build
+        run: ${{ matrix.build-command }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -78,6 +97,6 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
           retention-days: 7
