@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-05-09
+
+Dependency security release for user-facing runtime alerts.
+
+### Security
+
+- Updated Tauri from 2.10.3 to 2.11.1 to fix the local-origin IPC origin confusion advisory
+- Updated `openssl` from 0.10.78 to 0.10.79 to fix OCSP URL UTF-8 undefined behavior and AES key-wrap-with-padding heap overflow advisories
+- Updated `imageproc` from 0.25.0 to 0.25.1 to fix out-of-bounds read and fragile bounds-check advisories
+- Updated `postcss` from 8.5.8 to 8.5.10 to fix CSS stringification XSS advisory in development dependencies
+- Removed the vulnerable transitive `rand` 0.7.3 path by updating the Tauri dependency stack
+
 ## [0.12.1] - 2026-05-04
 
 Legal-page links repointed to the public marketing site after consolidating Impressum, Datenschutzerklärung, and Nutzungsbedingungen on `cogniclone.ai`.

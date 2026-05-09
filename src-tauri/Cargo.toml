@@ -1,6 +1,6 @@
 [package]
 name = "cogniclone-recorder"
-version = "0.12.1"
+version = "0.12.2"
 description = "CogniClone Recorder"
 authors = ["CogniClone"]
 license = "BSL-1.1"
