@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use tauri::{Emitter, Manager, State};
+#[cfg(windows)]
+use tauri::Manager;
+use tauri::{Emitter, State};
 use tauri_plugin_store::StoreExt;
 
 use crate::capture::audio::AudioHandle;

@@ -328,7 +328,18 @@ pub fn get_cursor_position() -> Option<(i32, i32)> {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub fn get_cursor_position() -> Option<(i32, i32)> {
+    use core_graphics::event::CGEvent;
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+
+    let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).ok()?;
+    let event = CGEvent::new(source).ok()?;
+    let point = event.location();
+    Some((point.x.round() as i32, point.y.round() as i32))
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
 pub fn get_cursor_position() -> Option<(i32, i32)> {
     None
 }
