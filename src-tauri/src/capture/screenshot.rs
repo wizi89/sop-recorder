@@ -21,10 +21,18 @@ pub fn capture_full_screen() -> Result<RgbaImage, String> {
     let mut max_y = i32::MIN;
 
     for m in &monitors {
-        let x = m.x();
-        let y = m.y();
-        let w = m.width() as i32;
-        let h = m.height() as i32;
+        let x = m
+            .x()
+            .map_err(|e| format!("Failed to read monitor x position: {}", e))?;
+        let y = m
+            .y()
+            .map_err(|e| format!("Failed to read monitor y position: {}", e))?;
+        let w = m
+            .width()
+            .map_err(|e| format!("Failed to read monitor width: {}", e))? as i32;
+        let h = m
+            .height()
+            .map_err(|e| format!("Failed to read monitor height: {}", e))? as i32;
         min_x = min_x.min(x);
         min_y = min_y.min(y);
         max_x = max_x.max(x + w);
@@ -41,8 +49,14 @@ pub fn capture_full_screen() -> Result<RgbaImage, String> {
             .capture_image()
             .map_err(|e| format!("Capture failed for monitor: {}", e))?;
 
-        let offset_x = (m.x() - min_x) as u32;
-        let offset_y = (m.y() - min_y) as u32;
+        let offset_x = (m
+            .x()
+            .map_err(|e| format!("Failed to read monitor x position: {}", e))?
+            - min_x) as u32;
+        let offset_y = (m
+            .y()
+            .map_err(|e| format!("Failed to read monitor y position: {}", e))?
+            - min_y) as u32;
 
         for (px, py, pixel) in img.enumerate_pixels() {
             let cx = offset_x + px;
@@ -59,8 +73,16 @@ pub fn capture_full_screen() -> Result<RgbaImage, String> {
 /// Get the virtual screen offset (min_x, min_y) so click coordinates can be mapped.
 pub fn get_virtual_screen_offset() -> (i32, i32) {
     let monitors = Monitor::all().unwrap_or_default();
-    let min_x = monitors.iter().map(|m| m.x()).min().unwrap_or(0);
-    let min_y = monitors.iter().map(|m| m.y()).min().unwrap_or(0);
+    let min_x = monitors
+        .iter()
+        .filter_map(|m| m.x().ok())
+        .min()
+        .unwrap_or(0);
+    let min_y = monitors
+        .iter()
+        .filter_map(|m| m.y().ok())
+        .min()
+        .unwrap_or(0);
     (min_x, min_y)
 }
 
@@ -264,7 +286,8 @@ pub fn capture_and_save(
     let saved_marker = marker
         .and_then(|m| m.scaled(scale).clamped(resized.width(), resized.height()));
     let rgb_img = resized.to_rgb8();
-    rgb_img.save(&path)
+    rgb_img
+        .save(&path)
         .map_err(|e| format!("Failed to save screenshot: {}", e))?;
 
     log::info!("Screenshot saved: {}", path.display());

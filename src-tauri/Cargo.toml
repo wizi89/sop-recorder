@@ -33,7 +33,7 @@ tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["multipart", "stream", "json"] }
 reqwest-eventsource = "0.6"
 keyring = { version = "3", features = ["windows-native"] }
-xcap = "0.0.14"
+xcap = "0.9.4"
 cpal = "0.15"
 hound = "3.5"
 rdev = "0.5"
