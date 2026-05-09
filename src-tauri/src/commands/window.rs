@@ -1,5 +1,4 @@
 use serde::Serialize;
-use tauri::Manager;
 
 #[derive(Serialize)]
 pub struct WorkArea {
@@ -47,9 +46,10 @@ pub fn get_work_area() -> Result<WorkArea, String> {
 pub fn set_display_affinity(app: tauri::AppHandle, hide: bool) -> Result<(), String> {
     #[cfg(windows)]
     {
+        use tauri::Manager;
+        use windows::Win32::Foundation::HWND;
         use windows::Win32::UI::WindowsAndMessaging::SetWindowDisplayAffinity;
         use windows::Win32::UI::WindowsAndMessaging::{WDA_EXCLUDEFROMCAPTURE, WDA_NONE};
-        use windows::Win32::Foundation::HWND;
 
         let window = app
             .get_webview_window("main")

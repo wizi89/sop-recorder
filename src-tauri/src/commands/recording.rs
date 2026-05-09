@@ -108,11 +108,15 @@ pub async fn start_recording(
     // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
 
-    // Get recorder window HWND so clicks on it are ignored (works even if moved)
+    // Get recorder window HWND so clicks on it are ignored (Windows only).
+    #[cfg(windows)]
     let exclude_hwnd = app
         .get_webview_window("main")
         .and_then(|w| w.hwnd().ok())
         .map(|h| h.0 as isize);
+
+    #[cfg(not(windows))]
+    let exclude_hwnd = None;
 
     // Start input hooks -- screenshots are captured immediately in the callback
     let counter_clone = step_counter.clone();
