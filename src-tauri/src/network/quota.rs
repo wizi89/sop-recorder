@@ -15,6 +15,28 @@ pub struct Quota {
     pub remaining: i64,
     #[serde(default)]
     pub features: OrgFeatures,
+    #[serde(default)]
+    pub generation_settings: GenerationSettings,
+}
+
+#[derive(Debug, Deserialize, Clone, serde::Serialize)]
+pub struct GenerationSettings {
+    #[serde(default)]
+    pub pipeline_versions: Vec<u8>,
+    #[serde(default)]
+    pub models: Vec<String>,
+    #[serde(default)]
+    pub default_model: String,
+}
+
+impl Default for GenerationSettings {
+    fn default() -> Self {
+        Self {
+            pipeline_versions: vec![1, 2],
+            models: vec!["azure/gpt-4.1".to_string()],
+            default_model: "azure/gpt-4.1".to_string(),
+        }
+    }
 }
 
 /// Fetch the current user's generation quota from the server.

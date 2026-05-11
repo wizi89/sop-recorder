@@ -109,6 +109,13 @@ export interface Quota {
   limit: number;
   remaining: number;
   features: OrgFeatures;
+  generation_settings?: GenerationSettings;
+}
+
+export interface GenerationSettings {
+  pipeline_versions: number[];
+  models: string[];
+  default_model: string;
 }
 
 export async function getQuota(): Promise<Quota> {

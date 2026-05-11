@@ -3,10 +3,30 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "../hooks/useTranslation";
-import { getSettings, saveSettings, getQuota, type AppSettings } from "../lib/tauri";
+import {
+  getSettings,
+  saveSettings,
+  getQuota,
+  type AppSettings,
+  type GenerationSettings,
+} from "../lib/tauri";
 
 interface SettingsPageProps {
   isDev: boolean;
+}
+
+const FALLBACK_GENERATION_SETTINGS: GenerationSettings = {
+  pipeline_versions: [1, 2],
+  models: ["azure/gpt-4.1"],
+  default_model: "azure/gpt-4.1",
+};
+
+function modelLabel(model: string): string {
+  const name = model.split("/").pop() || model;
+  return name
+    .replace(/^gpt-/, "GPT-")
+    .replace(/^claude-/, "Claude ")
+    .replace(/-/g, " ");
 }
 
 export function SettingsPage({ isDev }: SettingsPageProps) {
@@ -23,13 +43,31 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
   });
   const [showPiiConfirm, setShowPiiConfirm] = useState(false);
   const [advancedSettings, setAdvancedSettings] = useState(false);
+  const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(
+    FALLBACK_GENERATION_SETTINGS,
+  );
 
   useEffect(() => {
     getSettings()
       .then(setSettings)
       .catch(() => {});
     getQuota()
-      .then((q) => setAdvancedSettings(q.features?.advanced_settings ?? false))
+      .then((q) => {
+        setAdvancedSettings(q.features?.advanced_settings ?? false);
+        if (q.generation_settings?.models?.length) {
+          setGenerationSettings(q.generation_settings);
+          setSettings((s) => {
+            if (q.generation_settings!.models.includes(s.generation_model)) {
+              return s;
+            }
+            return {
+              ...s,
+              generation_model:
+                q.generation_settings!.default_model || q.generation_settings!.models[0],
+            };
+          });
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -126,8 +164,14 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
               }
               className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
             >
-              <option value={1}>V1</option>
-              <option value={2}>V2</option>
+              {(generationSettings.pipeline_versions.length
+                ? generationSettings.pipeline_versions
+                : FALLBACK_GENERATION_SETTINGS.pipeline_versions
+              ).map((version) => (
+                <option key={version} value={version}>
+                  V{version}
+                </option>
+              ))}
             </select>
           </div>
         )}
@@ -146,8 +190,14 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
               }
               className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
             >
-              <option value="azure/gpt-4.1">GPT-4.1</option>
-              <option value="anthropic/claude-sonnet-4-6">Claude Sonnet 4.6</option>
+              {(generationSettings.models.length
+                ? generationSettings.models
+                : FALLBACK_GENERATION_SETTINGS.models
+              ).map((model) => (
+                <option key={model} value={model}>
+                  {modelLabel(model)}
+                </option>
+              ))}
             </select>
           </div>
         )}
