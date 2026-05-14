@@ -105,7 +105,8 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
 
     let upload_target = store
         .get("upload_target")
-        .and_then(|v| v.as_str().map(String::from));
+        .and_then(|v| v.as_str().map(String::from))
+        .filter(|target| matches!(target.as_str(), "Local" | "Staging"));
 
     let skip_pii_check = store
         .get("skip_pii_check")
@@ -150,7 +151,11 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     );
 
     if let Some(target) = &settings.upload_target {
-        store.set("upload_target", serde_json::json!(target));
+        if matches!(target.as_str(), "Local" | "Staging") {
+            store.set("upload_target", serde_json::json!(target));
+        } else {
+            store.delete("upload_target");
+        }
     } else {
         store.delete("upload_target");
     }

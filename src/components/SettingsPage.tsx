@@ -251,16 +251,24 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           <div className="flex items-center justify-between">
             <label className="label-sm">{t("settings.upload_to")}</label>
             <select
-              value={settings.upload_target === "Local" ? "Local" : "Production"}
+              value={
+                settings.upload_target === "Local" || settings.upload_target === "Staging"
+                  ? settings.upload_target
+                  : "Production"
+              }
               onChange={(e) =>
                 setSettings((s) => ({
                   ...s,
-                  upload_target: e.target.value === "Local" ? "Local" : null,
+                  upload_target:
+                    e.target.value === "Local" || e.target.value === "Staging"
+                      ? e.target.value
+                      : null,
                 }))
               }
               className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
             >
               <option value="Local">Local</option>
+              <option value="Staging">Staging</option>
               <option value="Production">Production</option>
             </select>
           </div>

@@ -29,6 +29,7 @@ pub fn migrate_keyring() {
 pub fn api_url_for_target(upload_target: Option<&str>) -> &'static str {
     match upload_target {
         Some("Local") => config::API_URL_DEV,
+        Some("Staging") => config::API_URL_STAGING,
         _ => config::API_URL_PROD,
     }
 }
@@ -178,6 +179,11 @@ mod tests {
     #[test]
     fn api_url_local_target_returns_dev() {
         assert_eq!(api_url_for_target(Some("Local")), config::API_URL_DEV);
+    }
+
+    #[test]
+    fn api_url_staging_target_returns_staging() {
+        assert_eq!(api_url_for_target(Some("Staging")), config::API_URL_STAGING);
     }
 
     #[test]

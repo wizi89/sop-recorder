@@ -160,7 +160,7 @@ async fn run_generation_inner(
         .and_then(|store| store.get("generation_model").and_then(|v| v.as_str().map(String::from)))
         .unwrap_or_else(|| "azure/gpt-4.1".to_string());
 
-    // In dev mode, allow choosing local server via settings; in release always use production
+    // In dev mode, allow choosing local/staging server via settings; in release always use production.
     let api_url = if cfg!(debug_assertions) {
         app.store("settings.json")
             .ok()
@@ -169,8 +169,7 @@ async fn run_generation_inner(
                     .get("upload_target")
                     .and_then(|v| v.as_str().map(String::from))
             })
-            .filter(|s| s == "Local")
-            .map(|_| crate::config::API_URL_DEV.to_string())
+            .map(|target| net_auth::api_url_for_target(Some(&target)).to_string())
     } else {
         None
     };

@@ -156,4 +156,16 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/passwörtern oder api-schlüsseln/i)).toBeInTheDocument();
     expect(screen.getByText(/vertraulicher unternehmensinhalte/i)).toBeInTheDocument();
   });
+
+  it("shows staging upload target in dev mode", async () => {
+    render(<SettingsPage isDev={true} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/hochladen an/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("option", { name: "Local" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Staging" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Production" })).toBeInTheDocument();
+  });
 });
