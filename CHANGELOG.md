@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Runtime configuration overrides for backend URLs and the updater. Resolution precedence: environment variables (`COGNICLONE_API_URL`, `COGNICLONE_WEBAPP_URL`, `COGNICLONE_UPDATER_ENABLED`) > TOML file at `%APPDATA%\CogniClone\config.toml` (platform-equivalent on other OSes) > compile-time defaults. Enables self-host deployments where the backend runs on customer infrastructure and the GitHub-based updater may need to be disabled (airgapped networks). SaaS builds see no behavior change unless an override is set.
+
 ## [0.12.2] - 2026-05-09
 
 Dependency security release for user-facing runtime alerts.

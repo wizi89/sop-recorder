@@ -180,17 +180,23 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
 
 #[tauri::command]
 pub async fn get_webapp_url(app: tauri::AppHandle) -> Result<String, String> {
-    if cfg!(debug_assertions) {
-        let target = app
-            .store(STORE_FILENAME)
+    let target = if cfg!(debug_assertions) {
+        app.store(STORE_FILENAME)
             .ok()
             .and_then(|store| {
                 store
                     .get("upload_target")
                     .and_then(|v| v.as_str().map(String::from))
-            });
-        Ok(crate::config::webapp_url_for_target(target.as_deref()).to_string())
+            })
     } else {
-        Ok(crate::config::WEBAPP_URL_PROD.to_string())
-    }
+        None
+    };
+    Ok(crate::config::webapp_url_for_target(target.as_deref()).to_string())
+}
+
+#[tauri::command]
+pub async fn is_updater_enabled() -> bool {
+    crate::runtime_config::runtime()
+        .updater_enabled
+        .unwrap_or(true)
 }

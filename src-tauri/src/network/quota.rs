@@ -1,7 +1,5 @@
 use serde::Deserialize;
 
-use crate::config;
-
 #[derive(Debug, Deserialize, Clone, serde::Serialize, Default)]
 pub struct OrgFeatures {
     #[serde(default)]
@@ -44,7 +42,7 @@ impl Default for GenerationSettings {
 /// Uses `GET /quota` with a Bearer token. Caller is responsible for
 /// providing a non-expired access token (refresh before calling if in doubt).
 pub async fn fetch_quota(access_token: &str, api_url: Option<&str>) -> Result<Quota, String> {
-    let base_url = api_url.unwrap_or(config::API_URL_PROD);
+    let base_url = api_url.unwrap_or_else(|| super::auth::api_url_for_target(None));
     let url = format!("{}/quota", base_url);
 
     let client = reqwest::Client::new();

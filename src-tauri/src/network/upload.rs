@@ -2,7 +2,6 @@ use reqwest::multipart;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::config;
 use crate::output::step_meta::StepMeta;
 
 const UPLOAD_TIMEOUT_SECS: u64 = 300;
@@ -21,7 +20,7 @@ pub async fn upload_multipart(
     generation_model: &str,
     steps: Option<&[StepMeta]>,
 ) -> Result<reqwest::Response, String> {
-    let base_url = api_url.unwrap_or(config::API_URL_PROD);
+    let base_url = api_url.unwrap_or_else(|| super::auth::api_url_for_target(None));
     let url = format!("{}/generate", base_url);
 
     let client = reqwest::Client::builder()

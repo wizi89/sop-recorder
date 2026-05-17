@@ -26,12 +26,22 @@ pub fn migrate_keyring() {
     }
 }
 
-pub fn api_url_for_target(upload_target: Option<&str>) -> &'static str {
+/// Pure mapping from upload target to compile-time default URL. Hermetic:
+/// does not consult environment or config file. Used by tests; callers should
+/// prefer `api_url_for_target`, which also honors runtime overrides.
+fn api_url_default(upload_target: Option<&str>) -> &'static str {
     match upload_target {
         Some("Local") => config::API_URL_DEV,
         Some("Staging") => config::API_URL_STAGING,
         _ => config::API_URL_PROD,
     }
+}
+
+pub fn api_url_for_target(upload_target: Option<&str>) -> &'static str {
+    if let Some(url) = crate::runtime_config::runtime().api_url.as_deref() {
+        return url;
+    }
+    api_url_default(upload_target)
 }
 
 #[derive(Debug, Deserialize)]
@@ -173,26 +183,26 @@ mod tests {
 
     #[test]
     fn api_url_defaults_to_prod() {
-        assert_eq!(api_url_for_target(None), config::API_URL_PROD);
+        assert_eq!(api_url_default(None), config::API_URL_PROD);
     }
 
     #[test]
     fn api_url_local_target_returns_dev() {
-        assert_eq!(api_url_for_target(Some("Local")), config::API_URL_DEV);
+        assert_eq!(api_url_default(Some("Local")), config::API_URL_DEV);
     }
 
     #[test]
     fn api_url_staging_target_returns_staging() {
-        assert_eq!(api_url_for_target(Some("Staging")), config::API_URL_STAGING);
+        assert_eq!(api_url_default(Some("Staging")), config::API_URL_STAGING);
     }
 
     #[test]
     fn api_url_production_target_returns_prod() {
-        assert_eq!(api_url_for_target(Some("Production")), config::API_URL_PROD);
+        assert_eq!(api_url_default(Some("Production")), config::API_URL_PROD);
     }
 
     #[test]
     fn api_url_unknown_target_returns_prod() {
-        assert_eq!(api_url_for_target(Some("anything")), config::API_URL_PROD);
+        assert_eq!(api_url_default(Some("anything")), config::API_URL_PROD);
     }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
+import { invoke } from "@tauri-apps/api/core";
 
 type UpdaterStatus = "idle" | "checking" | "available" | "downloading" | "error";
 
@@ -15,8 +16,15 @@ export function useUpdater() {
     let cancelled = false;
     setStatus("checking");
 
-    check()
-      .then((u) => {
+    (async () => {
+      try {
+        const enabled = await invoke<boolean>("is_updater_enabled");
+        if (cancelled) return;
+        if (!enabled) {
+          setStatus("idle");
+          return;
+        }
+        const u = await check();
         if (cancelled) return;
         if (u) {
           setUpdate(u);
@@ -25,10 +33,10 @@ export function useUpdater() {
         } else {
           setStatus("idle");
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setStatus("idle");
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;

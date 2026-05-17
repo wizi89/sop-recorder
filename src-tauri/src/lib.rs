@@ -3,6 +3,7 @@ pub mod commands;
 pub mod config;
 pub mod network;
 pub mod output;
+pub mod runtime_config;
 pub mod state;
 use commands::{auth, generate, permissions, quota, recording, settings, window};
 
@@ -65,6 +66,7 @@ pub fn run() {
             settings::get_settings,
             settings::save_settings,
             settings::get_webapp_url,
+            settings::is_updater_enabled,
             recording::start_recording,
             recording::stop_recording,
             recording::delete_last_screenshot,

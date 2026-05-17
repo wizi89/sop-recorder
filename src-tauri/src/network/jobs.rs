@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use crate::config;
 use super::auth;
 use super::sse::SSEResultPayload;
 
@@ -17,7 +16,7 @@ pub async fn poll_job_result(
     api_base: &str,
     max_attempts: u32,
 ) -> Result<SSEResultPayload, String> {
-    let base_url = api_url.unwrap_or(config::API_URL_PROD);
+    let base_url = api_url.unwrap_or_else(|| super::auth::api_url_for_target(None));
     let url = format!("{}/generate/{}/result", base_url, job_id);
 
     let client = reqwest::Client::builder()
