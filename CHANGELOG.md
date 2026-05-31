@@ -7,9 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.4] - 2026-05-31
+
+Self-host enablement: runtime config overrides for backend URLs/updater, plus a staging upload target for dev builds.
+
 ### Added
 
 - Runtime configuration overrides for backend URLs and the updater. Resolution precedence: environment variables (`COGNICLONE_API_URL`, `COGNICLONE_WEBAPP_URL`, `COGNICLONE_UPDATER_ENABLED`) > TOML file at `%APPDATA%\CogniClone\config.toml` (platform-equivalent on other OSes) > compile-time defaults. Enables self-host deployments where the backend runs on customer infrastructure and the GitHub-based updater may need to be disabled (airgapped networks). SaaS builds see no behavior change unless an override is set.
+- Staging upload target in dev builds: Settings now offers `Local`/`Staging`/`Production` for `upload_target`, with `Staging` routed to `https://api.staging.cogniclone.ai` and `https://app.staging.cogniclone.ai`. Release builds remain pinned to production.
+
+## [0.12.3] - 2026-05-11
+
+Backend-driven generation options so server-side pipeline/model changes propagate to the recorder without a release.
+
+### Added
+
+- `GET /me/quota` now returns a `generation_settings` block (`pipeline_versions`, `models`, `default_model`) which Settings consumes to populate the pipeline-version and model dropdowns. The recorder falls back to `pipeline_versions: [1, 2]` and `azure/gpt-4.1` when the field is absent so older servers keep working.
 
 ## [0.12.2] - 2026-05-09
 
