@@ -45,6 +45,16 @@ const de = {
   "mic.permission_denied":
     "Mikrofon-Zugriff verweigert -- in den Systemeinstellungen erlauben",
 
+  // Permission bootstrap (macOS TCC)
+  "permissions.screen_recording_denied":
+    "Bildschirmaufnahme verweigert -- ohne diese Berechtigung sieht CogniClone nur den Desktop",
+  "permissions.mic_and_screen_denied":
+    "Mikrofon und Bildschirmaufnahme verweigert -- beide werden für Aufnahmen benötigt",
+  "permissions.grant":
+    "Erlauben",
+  "permissions.grant_to_start":
+    "Berechtigungen erteilen, um eine Aufnahme zu starten",
+
   // Settings
   "settings.title": "Einstellungen",
   "settings.hide_screenshots": "In Screenshots ausblenden",

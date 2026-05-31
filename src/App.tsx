@@ -17,7 +17,10 @@ import {
   deleteLastScreenshot,
   listSessionScreenshots,
   getMicrophonePermissionState,
+  getScreenRecordingPermissionState,
+  requestAllPermissions,
   type MicPermissionState,
+  type ScreenRecordingPermissionState,
 } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -40,6 +43,8 @@ function MainApp() {
   const [version, setVersion] = useState("");
   const [skipPiiCheck, setSkipPiiCheck] = useState(false);
   const [micPermission, setMicPermission] = useState<MicPermissionState>("unknown");
+  const [screenRecordingPermission, setScreenRecordingPermission] =
+    useState<ScreenRecordingPermissionState>("unknown");
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
@@ -66,10 +71,25 @@ function MainApp() {
   useEffect(() => {
     getVersion().then(setVersion);
     loadSettings();
-    // Query microphone permission state on launch so we can surface a
-    // warning chip before the user attempts to record.
+    // Probe permission states up-front so the UI can surface a banner
+    // before the user attempts to record. On macOS without these the
+    // recorder either fails (mic) or silently captures the wallpaper
+    // (screen recording).
     getMicrophonePermissionState().then(setMicPermission);
+    getScreenRecordingPermissionState().then(setScreenRecordingPermission);
   }, [loadSettings]);
+
+  // Fire all macOS TCC prompts in one batch from a single user gesture,
+  // then re-read state so the banner clears without a relaunch.
+  const handleRequestPermissions = useCallback(async () => {
+    try {
+      const next = await requestAllPermissions();
+      setMicPermission(next.microphone);
+      setScreenRecordingPermission(next.screen_recording);
+    } catch (e) {
+      console.warn("Permission bootstrap failed:", e);
+    }
+  }, []);
 
   // Reload settings + quota when main window gains focus (e.g. after settings
   // window closes, or after the admin tops up the user's quota externally).
@@ -354,6 +374,8 @@ function MainApp() {
           onCancelFromReview={recorder.cancelFromReview}
           onGenerateFromFolder={handleGenerateFromFolder}
           micPermission={micPermission}
+          screenRecordingPermission={screenRecordingPermission}
+          onRequestPermissions={handleRequestPermissions}
           version={version}
         />
       </div>

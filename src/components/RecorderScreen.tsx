@@ -10,7 +10,7 @@ import { useElapsedTime, formatElapsed } from "../hooks/useElapsedTime";
 import { useAudioLevel } from "../hooks/useAudioLevel";
 import type { RecorderStatus } from "../hooks/useRecorder";
 import type { RateLimitInfo } from "../lib/serverErrors";
-import type { Quota, MicPermissionState } from "../lib/tauri";
+import type { Quota, MicPermissionState, ScreenRecordingPermissionState } from "../lib/tauri";
 
 interface RecorderScreenProps {
   email: string | null;
@@ -23,6 +23,8 @@ interface RecorderScreenProps {
   outputDir: string | null;
   skipPiiCheck?: boolean;
   micPermission?: MicPermissionState;
+  screenRecordingPermission?: ScreenRecordingPermissionState;
+  onRequestPermissions?: () => void;
   onStart: () => void;
   onStop: () => void;
   onCancel: () => void;
@@ -53,6 +55,8 @@ export function RecorderScreen({
   outputDir,
   skipPiiCheck,
   micPermission,
+  screenRecordingPermission,
+  onRequestPermissions,
   onStart,
   onStop,
   onCancel,
@@ -205,6 +209,8 @@ export function RecorderScreen({
     return t("status.ready");
   })();
   const isReady = status === "idle" && !error && !statusMessage;
+  const permissionsBlocked =
+    micPermission === "denied" || screenRecordingPermission === "denied";
 
   // Quota chip: shown on idle/done/error/pii_blocked/rate_limited screens.
   // The compact recording mode returns early above, so by the time we reach
@@ -261,22 +267,44 @@ export function RecorderScreen({
         </button>
       </div>
 
-      {/* Microphone permission warning chip (shown only when denied) */}
-      {micPermission === "denied" && (
+      {/* Permission banner: shown when mic or screen recording is missing.
+          Single CTA triggers the OS prompts via the Rust bootstrap command,
+          so the user grants everything in one sitting instead of being
+          interrupted by a fresh prompt at every recording start. */}
+      {(micPermission === "denied" || screenRecordingPermission === "denied") && (
         <div className="flex justify-center pt-2 px-4">
           <div
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 border"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 border w-full"
             style={{
-              fontSize: "0.625rem",
-              background: "rgba(220, 60, 60, 0.12)",
+              fontSize: "0.7rem",
+              background: "rgba(220, 60, 60, 0.10)",
               borderColor: "rgba(220, 60, 60, 0.35)",
-              color: "rgba(255, 130, 130, 0.95)",
+              color: "rgba(255, 180, 180, 0.95)",
             }}
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
-            {t("mic.permission_denied")}
+            <div className="flex-1 leading-tight">
+              {micPermission === "denied" && screenRecordingPermission === "denied"
+                ? t("permissions.mic_and_screen_denied")
+                : micPermission === "denied"
+                  ? t("mic.permission_denied")
+                  : t("permissions.screen_recording_denied")}
+            </div>
+            {onRequestPermissions && (
+              <button
+                onClick={onRequestPermissions}
+                className="rounded px-2 py-1 border-none cursor-pointer font-medium"
+                style={{
+                  fontSize: "0.65rem",
+                  background: "rgba(255, 180, 180, 0.18)",
+                  color: "rgba(255, 220, 220, 0.95)",
+                }}
+              >
+                {t("permissions.grant")}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -332,8 +360,14 @@ export function RecorderScreen({
           {(status === "idle" || status === "done" || status === "error" || status === "pii_blocked" || status === "rate_limited") && (
             <button
               onClick={onStart}
+              disabled={permissionsBlocked}
+              title={permissionsBlocked ? t("permissions.grant_to_start") : undefined}
               className="btn-primary w-56 py-3 text-sm"
-              style={{ animation: isReady ? "cta-breathe 3s ease-in-out infinite" : "none" }}
+              style={{
+                animation: isReady && !permissionsBlocked ? "cta-breathe 3s ease-in-out infinite" : "none",
+                opacity: permissionsBlocked ? 0.5 : 1,
+                cursor: permissionsBlocked ? "not-allowed" : "pointer",
+              }}
             >
               {t("status.start")}
             </button>

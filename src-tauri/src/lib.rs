@@ -89,6 +89,8 @@ pub fn run() {
             pipelines::get_selected_pipeline,
             pipelines::set_selected_pipeline,
             permissions::get_microphone_permission_state,
+            permissions::get_screen_recording_permission_state,
+            permissions::request_all_permissions,
             window::set_display_affinity,
             window::get_work_area,
         ])

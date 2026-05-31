@@ -80,20 +80,50 @@ export async function readScreenshotBytes(path: string): Promise<Uint8Array> {
 }
 
 export type MicPermissionState = "granted" | "denied" | "unknown";
+export type ScreenRecordingPermissionState = "granted" | "denied" | "unknown";
 
-/**
- * Query the microphone permission state at app launch. Returns one of
- * `"granted" | "denied" | "unknown"`. On `denied` the UI should render a
- * warning chip telling the user to resolve the issue before recording.
- */
+function normalizePermission<T extends "granted" | "denied" | "unknown">(state: string): T {
+  if (state === "granted" || state === "denied") return state as T;
+  return "unknown" as T;
+}
+
 export async function getMicrophonePermissionState(): Promise<MicPermissionState> {
   try {
-    const state = await invoke<string>("get_microphone_permission_state");
-    if (state === "granted" || state === "denied") return state;
-    return "unknown";
+    return normalizePermission<MicPermissionState>(
+      await invoke<string>("get_microphone_permission_state"),
+    );
   } catch {
     return "unknown";
   }
+}
+
+export async function getScreenRecordingPermissionState(): Promise<ScreenRecordingPermissionState> {
+  try {
+    return normalizePermission<ScreenRecordingPermissionState>(
+      await invoke<string>("get_screen_recording_permission_state"),
+    );
+  } catch {
+    return "unknown";
+  }
+}
+
+export interface PermissionsState {
+  microphone: MicPermissionState;
+  screen_recording: ScreenRecordingPermissionState;
+}
+
+/**
+ * Trigger the macOS TCC prompts for mic + screen recording in one batch.
+ * No-op on Windows (returns `granted` for both).
+ */
+export async function requestAllPermissions(): Promise<PermissionsState> {
+  const raw = await invoke<{ microphone: string; screen_recording: string }>(
+    "request_all_permissions",
+  );
+  return {
+    microphone: normalizePermission<MicPermissionState>(raw.microphone),
+    screen_recording: normalizePermission<ScreenRecordingPermissionState>(raw.screen_recording),
+  };
 }
 
 export async function runGeneration(outputDir: string): Promise<void> {
