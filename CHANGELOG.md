@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- `openssl` 0.10.79 -> 0.10.80 (medium; potential out-of-bounds write in `CipherCtxRef::cipher_update_inplace` for AES-KW-PAD ciphers)
+- `tar` 0.4.45 -> 0.4.46 (medium; PAX header desynchronization issue)
+
 ## [0.12.4] - 2026-05-31
 
 Self-host enablement: runtime config overrides for backend URLs/updater, plus a staging upload target for dev builds.
