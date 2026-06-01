@@ -27,17 +27,14 @@ impl Default for SessionCache {
 }
 
 pub fn get_api_base(app: &tauri::AppHandle) -> &'static str {
-    let target = if cfg!(debug_assertions) {
-        app.store("settings.json")
-            .ok()
-            .and_then(|store| {
-                store
-                    .get("upload_target")
-                    .and_then(|v| v.as_str().map(String::from))
-            })
-    } else {
-        None
-    };
+    let target = app
+        .store("settings.json")
+        .ok()
+        .and_then(|store| {
+            store
+                .get("upload_target")
+                .and_then(|v| v.as_str().map(String::from))
+        });
     net_auth::api_url_for_target(target.as_deref())
 }
 

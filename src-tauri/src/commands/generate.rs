@@ -160,19 +160,19 @@ async fn run_generation_inner(
         .and_then(|store| store.get("generation_model").and_then(|v| v.as_str().map(String::from)))
         .unwrap_or_else(|| "azure/gpt-4.1".to_string());
 
-    // In dev mode, allow choosing local/staging server via settings; in release always use production.
-    let api_url = if cfg!(debug_assertions) {
-        app.store("settings.json")
-            .ok()
-            .and_then(|store| {
-                store
-                    .get("upload_target")
-                    .and_then(|v| v.as_str().map(String::from))
-            })
-            .map(|target| net_auth::api_url_for_target(Some(&target)).to_string())
-    } else {
-        None
-    };
+    // Honor upload_target unconditionally. The Settings UI only exposes
+    // the dropdown to orgs in ADVANCED_SETTINGS_ORGS (server-driven via
+    // features.advanced_settings), so end users can't accidentally route
+    // their traffic away from production.
+    let api_url = app
+        .store("settings.json")
+        .ok()
+        .and_then(|store| {
+            store
+                .get("upload_target")
+                .and_then(|v| v.as_str().map(String::from))
+        })
+        .map(|target| net_auth::api_url_for_target(Some(&target)).to_string());
 
     // Upload with retry.
     // If the first attempt fails with 401 (token invalid despite refresh),

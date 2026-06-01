@@ -180,17 +180,14 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
 
 #[tauri::command]
 pub async fn get_webapp_url(app: tauri::AppHandle) -> Result<String, String> {
-    let target = if cfg!(debug_assertions) {
-        app.store(STORE_FILENAME)
-            .ok()
-            .and_then(|store| {
-                store
-                    .get("upload_target")
-                    .and_then(|v| v.as_str().map(String::from))
-            })
-    } else {
-        None
-    };
+    let target = app
+        .store(STORE_FILENAME)
+        .ok()
+        .and_then(|store| {
+            store
+                .get("upload_target")
+                .and_then(|v| v.as_str().map(String::from))
+        });
     Ok(crate::config::webapp_url_for_target(target.as_deref()).to_string())
 }
 

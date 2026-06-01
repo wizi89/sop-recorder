@@ -284,7 +284,6 @@ function MainApp() {
             onLogin={auth.login}
             loading={auth.loading}
             error={auth.error}
-            onOpenSettings={handleOpenSettings}
             version={version}
           />
         </div>

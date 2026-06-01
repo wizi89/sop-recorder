@@ -6,6 +6,7 @@ const de = {
   "login.signing_in": "Anmeldung...",
   "login.enter_credentials": "Bitte E-Mail und Passwort eingeben.",
   "login.forgot_password": "Passwort vergessen?",
+  "login.create_account": "Konto erstellen",
   "login.sign_out": "Abmelden",
 
   // Recording

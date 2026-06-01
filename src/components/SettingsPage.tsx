@@ -3,10 +3,12 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "../hooks/useTranslation";
+import { emit } from "@tauri-apps/api/event";
 import {
   getSettings,
   saveSettings,
   getQuota,
+  logout,
   type AppSettings,
   type GenerationSettings,
 } from "../lib/tauri";
@@ -46,10 +48,17 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(
     FALLBACK_GENERATION_SETTINGS,
   );
+  // Track the upload_target loaded from disk so we can detect a backend
+  // switch on save. A switch invalidates the current session (tokens are
+  // backend-bound), so the user has to log in again.
+  const [initialUploadTarget, setInitialUploadTarget] = useState<string | null>(null);
 
   useEffect(() => {
     getSettings()
-      .then(setSettings)
+      .then((s) => {
+        setSettings(s);
+        setInitialUploadTarget(s.upload_target);
+      })
       .catch(() => {});
     getQuota()
       .then((q) => {
@@ -74,6 +83,17 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
   const handleSave = async () => {
     try {
       await saveSettings(settings);
+      // Backend switch invalidates the current session token. Log out
+      // and tell the main window so it bounces to the login screen
+      // instead of letting the next request 401 silently.
+      if (settings.upload_target !== initialUploadTarget) {
+        try {
+          await logout();
+        } catch (e) {
+          console.warn("Logout after backend switch failed:", e);
+        }
+        await emit("auth:session_expired");
+      }
       const win = getCurrentWindow();
       await win.close();
     } catch (e) {
@@ -246,28 +266,35 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           </div>
         </div>
 
-        {/* Dev mode: upload target */}
-        {isDev && (
+        {/* Upload target (advanced orgs only). Server-driven via
+            features.advanced_settings so we don't ship Production/Staging
+            switching to end users -- only the cogniclone org sees this.
+            The Local option only renders in dev builds since it points
+            at localhost; advanced orgs running a release binary should
+            only ever see Production/Staging. */}
+        {advancedSettings && (
           <div className="flex items-center justify-between">
             <label className="label-sm">{t("settings.upload_to")}</label>
             <select
               value={
-                settings.upload_target === "Local" || settings.upload_target === "Staging"
-                  ? settings.upload_target
-                  : "Production"
+                settings.upload_target === "Staging"
+                  ? "Staging"
+                  : settings.upload_target === "Local" && isDev
+                    ? "Local"
+                    : "Production"
               }
               onChange={(e) =>
                 setSettings((s) => ({
                   ...s,
                   upload_target:
-                    e.target.value === "Local" || e.target.value === "Staging"
+                    e.target.value === "Staging" || (e.target.value === "Local" && isDev)
                       ? e.target.value
                       : null,
                 }))
               }
               className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
             >
-              <option value="Local">Local</option>
+              {isDev && <option value="Local">Local</option>}
               <option value="Staging">Staging</option>
               <option value="Production">Production</option>
             </select>

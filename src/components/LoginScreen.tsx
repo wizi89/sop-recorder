@@ -5,7 +5,6 @@ interface LoginScreenProps {
   onLogin: (email: string, password: string) => Promise<void>;
   loading: boolean;
   error: string | null;
-  onOpenSettings: () => void;
   version: string;
 }
 
@@ -13,7 +12,6 @@ export function LoginScreen({
   onLogin,
   loading,
   error,
-  onOpenSettings,
   version,
 }: LoginScreenProps) {
   const { t } = useTranslation();
@@ -28,16 +26,6 @@ export function LoginScreen({
 
   return (
     <div className="flex flex-col h-full bg-surface">
-      {/* Settings gear */}
-      <div className="flex justify-end px-3 pt-3">
-        <button onClick={onOpenSettings} className="icon-btn" title={t("settings.title")}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        </button>
-      </div>
-
       {/* Form */}
       <form onSubmit={handleSubmit} className="flex-1 flex flex-col items-center justify-center gap-5 px-4">
         {/* CogniClone Logo */}
@@ -72,7 +60,7 @@ export function LoginScreen({
           />
         </div>
 
-        <div className="w-72 text-right">
+        <div className="w-72 flex justify-between">
           <button
             type="button"
             className="bg-transparent border-none cursor-pointer text-on-surface-variant hover:text-on-surface"
@@ -85,6 +73,19 @@ export function LoginScreen({
             }}
           >
             {t("login.forgot_password")}
+          </button>
+          <button
+            type="button"
+            className="bg-transparent border-none cursor-pointer text-on-surface-variant hover:text-on-surface"
+            style={{ fontSize: "0.6875rem", transition: "color 0.15s" }}
+            onClick={async () => {
+              const { openUrl } = await import("@tauri-apps/plugin-opener");
+              const { getWebappUrl } = await import("../lib/tauri");
+              const baseUrl = await getWebappUrl();
+              await openUrl(`${baseUrl}/signup`);
+            }}
+          >
+            {t("login.create_account")}
           </button>
         </div>
 

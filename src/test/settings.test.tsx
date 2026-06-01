@@ -13,10 +13,27 @@ const mockSettings = {
   skip_pii_check: false,
 };
 
+const mockQuotaBasic = {
+  count: 0,
+  limit: 100,
+  remaining: 100,
+  features: { advanced_settings: false },
+  generation_settings: { pipeline_versions: [1, 2], models: ["azure/gpt-4.1"], default_model: "azure/gpt-4.1" },
+};
+
+const mockQuotaAdvanced = {
+  ...mockQuotaBasic,
+  features: { advanced_settings: true },
+};
+
+let mockQuota = mockQuotaBasic;
+
 beforeEach(() => {
+  mockQuota = mockQuotaBasic;
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     if (cmd === "get_settings") return { ...mockSettings };
     if (cmd === "save_settings") return;
+    if (cmd === "get_quota") return mockQuota;
     return;
   });
 });
@@ -157,7 +174,19 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/vertraulicher unternehmensinhalte/i)).toBeInTheDocument();
   });
 
-  it("shows staging upload target in dev mode", async () => {
+  it("hides upload target for orgs without advanced_settings", async () => {
+    mockQuota = mockQuotaBasic;
+    render(<SettingsPage isDev={true} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/pii/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/hochladen an/i)).not.toBeInTheDocument();
+  });
+
+  it("shows Local, Staging, Production for advanced org in dev build", async () => {
+    mockQuota = mockQuotaAdvanced;
     render(<SettingsPage isDev={true} />);
 
     await waitFor(() => {
@@ -165,6 +194,19 @@ describe("SettingsPage", () => {
     });
 
     expect(screen.getByRole("option", { name: "Local" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Staging" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Production" })).toBeInTheDocument();
+  });
+
+  it("shows only Staging and Production for advanced org in release build", async () => {
+    mockQuota = mockQuotaAdvanced;
+    render(<SettingsPage isDev={false} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/hochladen an/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("option", { name: "Local" })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Staging" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Production" })).toBeInTheDocument();
   });

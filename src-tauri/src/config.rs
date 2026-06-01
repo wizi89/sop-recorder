@@ -3,7 +3,7 @@ pub const API_URL_DEV: &str = "http://localhost:8000";
 pub const API_URL_STAGING: &str = "https://api.staging.cogniclone.ai";
 pub const WEBAPP_URL_PROD: &str = "https://app.cogniclone.ai";
 pub const WEBAPP_URL_DEV: &str = "http://localhost:3000";
-pub const WEBAPP_URL_STAGING: &str = "https://app.staging.cogniclone.ai";
+pub const WEBAPP_URL_STAGING: &str = "https://staging.cogniclone.ai";
 
 /// Pure mapping from upload target to compile-time default URL. Hermetic:
 /// does not consult environment or config file. Used by tests; callers should

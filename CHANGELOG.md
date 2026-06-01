@@ -7,10 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.5] - 2026-06-01
+
+Staging-target switching for advanced orgs, login-screen cleanup, and a small dependency security bump.
+
+### Added
+
+- "Konto erstellen" link on the login screen, next to "Passwort vergessen?", opens the webapp signup page (`/signup`) for the currently configured backend.
+- Auto-logout on backend switch: changing `upload_target` in Settings now invalidates the current session (Supabase JWTs are bound to one backend) and bounces the user to the login screen instead of letting the next request 401 silently.
+
+### Changed
+
+- `upload_target` dropdown is now visible to orgs in `ADVANCED_SETTINGS_ORGS` regardless of build mode (was: dev builds only). The `Local` option remains dev-only since it points at localhost; advanced orgs running a release binary see only `Staging` and `Production`. Server-side gating is unchanged -- end users never see the dropdown.
+- Release builds now honor `upload_target` for API and webapp URL resolution (dropped the `cfg!(debug_assertions)` gates in `commands::auth::get_api_base`, `commands::generate::run_generation_inner`, and `commands::settings::get_webapp_url`). Required so advanced-org users can actually reach Staging from a downloaded release binary; end users still can't see the dropdown.
+- Login screen no longer renders the Settings gear -- pre-login backend choice is no longer needed since switches happen post-login via the dropdown.
+- Staging webapp URL corrected from `https://app.staging.cogniclone.ai` to `https://staging.cogniclone.ai`.
+
 ### Security
 
-- `openssl` 0.10.79 -> 0.10.80 (medium; potential out-of-bounds write in `CipherCtxRef::cipher_update_inplace` for AES-KW-PAD ciphers)
-- `tar` 0.4.45 -> 0.4.46 (medium; PAX header desynchronization issue)
+- `openssl` 0.10.79 -> 0.10.80 (medium; potential out-of-bounds write in `CipherCtxRef::cipher_update_inplace` for AES-KW-PAD ciphers).
+- `tar` 0.4.45 -> 0.4.46 (medium; PAX header desynchronization issue).
 
 ## [0.12.4] - 2026-05-31
 
