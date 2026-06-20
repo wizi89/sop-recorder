@@ -22,6 +22,9 @@ const de = {
   "status.open_folder": "Ordner öffnen",
   "status.retry": "Erneut versuchen",
   "status.retry_from_disk": "Aus Aufnahme erneut versuchen",
+  "status.generate_from_folder": "Aus Ordner generieren",
+  "status.invalid_recording_folder":
+    "Dieser Ordner enthält keine Aufnahme. Bitte einen Ordner mit einer Aufzeichnung (recording.wav und screenshots/) wählen.",
   "status.undo_last": "Letzten Schritt entfernen",
   "status.stopping": "Aufnahmen werden verarbeitet...",
 

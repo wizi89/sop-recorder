@@ -36,6 +36,9 @@ interface RecorderScreenProps {
   onConfirmGeneration: () => void;
   onCancelFromReview: () => void;
   onUpgradeQuota?: () => void;
+  /** When provided, renders a secondary button to run generation against a
+   *  picked recording folder (regenerate an existing recording). */
+  onGenerateFromFolder?: () => void;
   version: string;
 }
 
@@ -63,6 +66,7 @@ export function RecorderScreen({
   onConfirmGeneration,
   onCancelFromReview,
   onUpgradeQuota,
+  onGenerateFromFolder,
   version,
 }: RecorderScreenProps) {
   const { t } = useTranslation();
@@ -334,6 +338,18 @@ export function RecorderScreen({
               {t("status.start")}
             </button>
           )}
+          {/* Secondary action: generate against an existing recording folder,
+              skipping the record step. The primary CTA above always stays
+              "Aufnahme starten". Reuses the selected model/pipeline. */}
+          {onGenerateFromFolder &&
+            (status === "idle" || status === "done" || status === "error") && (
+              <button
+                onClick={onGenerateFromFolder}
+                className="btn-secondary w-56 py-3 text-sm"
+              >
+                {t("status.generate_from_folder")}
+              </button>
+            )}
         </div>
       </div>
 

@@ -127,14 +127,22 @@ export function useRecorder() {
    * Reads outputDir via a ref rather than via closure so the latest value
    * is visible even across the async boundary.
    */
-  const confirmGeneration = useCallback(async () => {
+  // Shared generation runner: invoke the pipeline against `dir` and walk the
+  // post-generation state machine (done / error / pii_blocked / rate_limited).
+  // Reused by confirmGeneration (review screen) and generateFromDir (dev).
+  const runAgainst = useCallback(async (dir: string) => {
     if (generatingRef.current) return;
-    const currentOutputDir = outputDirRef.current;
-    if (!currentOutputDir) return;
-    setState((s) => ({ ...s, status: "processing" as const, statusMessage: "", error: null }));
+    outputDirRef.current = dir;
+    setState((s) => ({
+      ...s,
+      outputDir: dir,
+      status: "processing" as const,
+      statusMessage: "",
+      error: null,
+    }));
     generatingRef.current = true;
     try {
-      await runGeneration(currentOutputDir);
+      await runGeneration(dir);
       setState((s) => ({ ...s, status: "done" as const, statusMessage: "" }));
     } catch (e) {
       const msg = String(e);
@@ -150,6 +158,24 @@ export function useRecorder() {
       generatingRef.current = false;
     }
   }, []);
+
+  const confirmGeneration = useCallback(async () => {
+    const currentOutputDir = outputDirRef.current;
+    if (!currentOutputDir) return;
+    await runAgainst(currentOutputDir);
+  }, [runAgainst]);
+
+  /**
+   * Run the full generation pipeline against an arbitrary recording folder
+   * picked from disk (must contain recording.wav and a screenshots/ dir).
+   * Reuses the exact live flow -- the currently selected model/pipeline
+   * settings, upload, SSE, and persistence -- so a previously captured
+   * recording can be regenerated without re-recording (e.g. retry with a
+   * different model/pipeline).
+   */
+  const generateFromDir = useCallback(async (dir: string) => {
+    await runAgainst(dir);
+  }, [runAgainst]);
 
   /**
    * Cancel from the review screen: discard the captured session and return
@@ -251,6 +277,7 @@ export function useRecorder() {
     start,
     stop,
     confirmGeneration,
+    generateFromDir,
     cancelFromReview,
     cancel,
     reset,

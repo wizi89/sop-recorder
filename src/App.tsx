@@ -15,10 +15,12 @@ import {
   getWorkArea,
   getSettings,
   deleteLastScreenshot,
+  listSessionScreenshots,
   getMicrophonePermissionState,
   type MicPermissionState,
 } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { open } from "@tauri-apps/plugin-dialog";
 const IS_DEV = import.meta.env.DEV;
 
 const IDLE_SIZE = new LogicalSize(460, 440);
@@ -219,6 +221,38 @@ function MainApp() {
     await recorder.confirmGeneration();
   }, [recorder]);
 
+  // Pick an existing recording folder and run the full generation pipeline
+  // against it, reusing login + the currently selected model/pipeline + upload
+  // + persistence. Lets a user regenerate from a previously captured recording
+  // without re-recording (e.g. retry with a different model/pipeline). The
+  // folder must contain `recording.wav` and a `screenshots/` directory (a
+  // recorder session dir).
+  const handleGenerateFromFolder = useCallback(async () => {
+    try {
+      const dir = await open({
+        directory: true,
+        multiple: false,
+        title: "Aufnahme-Ordner wählen",
+      });
+      if (typeof dir === "string") {
+        // Guard: make sure the picked folder is actually a recording session
+        // (has captured screenshots) before kicking off a real generation, so a
+        // wrong folder fails fast with a friendly message instead of a cryptic
+        // pipeline error after upload. list_session_screenshots returns [] when
+        // there is no screenshots/ subdir.
+        const shots = await listSessionScreenshots(dir);
+        if (!shots || shots.length === 0) {
+          recorder.setError(t("status.invalid_recording_folder"));
+          return;
+        }
+        await recorder.generateFromDir(dir);
+      }
+    } catch (e) {
+      console.error("Generate from folder failed:", e);
+      recorder.setError(t("status.invalid_recording_folder"));
+    }
+  }, [recorder, t]);
+
   // Loading state
   if (auth.loading) {
     return (
@@ -318,6 +352,7 @@ function MainApp() {
           onUndoLastScreenshot={handleUndoLastScreenshot}
           onConfirmGeneration={recorder.confirmGeneration}
           onCancelFromReview={recorder.cancelFromReview}
+          onGenerateFromFolder={handleGenerateFromFolder}
           micPermission={micPermission}
           version={version}
         />

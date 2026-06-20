@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.6] - 2026-06-20
+
+Generate-from-folder is now available to all users, with a guard for invalid folders.
+
+### Changed
+
+- "Aus Ordner generieren" (generate from an existing recording folder) is now shown to all users in release builds; it was previously gated to dev builds (`import.meta.env.DEV`). It appears as a secondary button below the permanent "Aufnahme starten" CTA on the idle/done/error states and reuses the currently selected model/pipeline, upload, and persistence -- letting users regenerate an SOP from a previously captured recording without re-recording (for example, to retry with a different model). The primary "Aufnahme starten" CTA is unchanged.
+
+### Added
+
+- Invalid-folder guard for "Aus Ordner generieren": picking a folder that is not a recording session (no `screenshots/`) is rejected up front with a friendly message ("Dieser Ordner enthält keine Aufnahme...") via a cheap local check, instead of failing mid-pipeline after upload.
+
 ## [0.12.5] - 2026-06-01
 
 Staging-target switching for advanced orgs, login-screen cleanup, and a small dependency security bump.
