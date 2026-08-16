@@ -31,10 +31,13 @@ const de = {
   // Review screen (post-stop, pre-generate)
   "review.title": "Aufnahme prüfen",
   "review.summary": "{count} Screenshots -- {elapsed} Min aufgenommen",
+  "review.summary_count_only": "{count} Screenshots in diesem Ordner",
   "review.loading": "Screenshots werden geladen...",
   "review.step_label": "Schritt {n}",
   "review.confirm": "Generieren",
   "review.cancel": "Verwerfen",
+  "review.pipeline_label": "Art der Anleitung",
+  "review.pipeline_default": "Standard",
 
   // Microphone permission
   "mic.permission_denied":

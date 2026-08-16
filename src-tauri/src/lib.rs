@@ -5,7 +5,7 @@ pub mod network;
 pub mod output;
 pub mod runtime_config;
 pub mod state;
-use commands::{auth, generate, permissions, quota, recording, settings, window};
+use commands::{auth, generate, permissions, pipelines, quota, recording, settings, window};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -74,6 +74,9 @@ pub fn run() {
             recording::read_screenshot_bytes,
             generate::run_generation,
             quota::get_quota,
+            pipelines::get_pipelines,
+            pipelines::get_selected_pipeline,
+            pipelines::set_selected_pipeline,
             permissions::get_microphone_permission_state,
             window::set_display_affinity,
             window::get_work_area,

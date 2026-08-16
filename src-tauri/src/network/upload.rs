@@ -19,6 +19,7 @@ pub async fn upload_multipart(
     pipeline_version: u8,
     generation_model: &str,
     steps: Option<&[StepMeta]>,
+    pipeline_id: Option<&str>,
 ) -> Result<reqwest::Response, String> {
     let base_url = api_url.unwrap_or_else(|| super::auth::api_url_for_target(None));
     let url = format!("{}/generate", base_url);
@@ -69,6 +70,12 @@ pub async fn upload_multipart(
         if s.len() == screenshot_paths.len() && !s.is_empty() {
             metadata["steps"] = serde_json::json!(s);
         }
+    }
+    // The user's pipeline choice, by id only. Omitted entirely when nothing is
+    // selected: absence is the normal case and the server falls through to its
+    // default path.
+    if let Some(id) = pipeline_id.filter(|s| !s.is_empty()) {
+        metadata["pipeline_id"] = serde_json::json!(id);
     }
     form = form.text("metadata", metadata.to_string());
 
@@ -123,6 +130,7 @@ pub async fn upload_with_retry(
     pipeline_version: u8,
     generation_model: &str,
     steps: Option<&[StepMeta]>,
+    pipeline_id: Option<&str>,
 ) -> Result<reqwest::Response, String> {
     let mut last_err = String::new();
     let delays = [1, 2, 4]; // seconds
@@ -139,6 +147,7 @@ pub async fn upload_with_retry(
             pipeline_version,
             generation_model,
             steps,
+            pipeline_id,
         )
         .await
         {

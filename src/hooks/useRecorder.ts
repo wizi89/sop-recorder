@@ -166,16 +166,27 @@ export function useRecorder() {
   }, [runAgainst]);
 
   /**
-   * Run the full generation pipeline against an arbitrary recording folder
-   * picked from disk (must contain recording.wav and a screenshots/ dir).
-   * Reuses the exact live flow -- the currently selected model/pipeline
-   * settings, upload, SSE, and persistence -- so a previously captured
-   * recording can be regenerated without re-recording (e.g. retry with a
-   * different model/pipeline).
+   * Open an arbitrary recording folder picked from disk (must contain
+   * recording.wav and a screenshots/ dir) for review, so a previously captured
+   * recording can be regenerated without re-recording.
+   *
+   * It goes to `review` rather than straight to generation because that screen
+   * carries the pipeline selector, and a folder has no record-time moment at
+   * which a choice could otherwise be expressed. Confirming from there runs the
+   * exact live flow: current model/pipeline settings, upload, SSE, persistence.
    */
   const generateFromDir = useCallback(async (dir: string) => {
-    await runAgainst(dir);
-  }, [runAgainst]);
+    outputDirRef.current = dir;
+    setState((s) => ({
+      ...s,
+      status: "review" as const,
+      outputDir: dir,
+      statusMessage: "",
+      error: null,
+      piiFindings: null,
+      rateLimit: null,
+    }));
+  }, []);
 
   /**
    * Cancel from the review screen: discard the captured session and return

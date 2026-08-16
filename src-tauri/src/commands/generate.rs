@@ -160,6 +160,11 @@ async fn run_generation_inner(
         .and_then(|store| store.get("generation_model").and_then(|v| v.as_str().map(String::from)))
         .unwrap_or_else(|| "azure/gpt-4.1".to_string());
 
+    // The user's pipeline choice from the review screen. Independent of the
+    // advanced-settings gate: every org may pick a pipeline, no org sees the
+    // pipeline_version / model / upload-target controls unless allowlisted.
+    let pipeline_id = super::pipelines::selected_pipeline_id(&app);
+
     // Honor upload_target unconditionally. The Settings UI only exposes
     // the dropdown to orgs in ADVANCED_SETTINGS_ORGS (server-driven via
     // features.advanced_settings), so end users can't accidentally route
@@ -190,6 +195,7 @@ async fn run_generation_inner(
         pipeline_version,
         &generation_model,
         steps_arg,
+        pipeline_id.as_deref(),
     )
     .await
     {
@@ -225,6 +231,7 @@ async fn run_generation_inner(
                 pipeline_version,
                 &generation_model,
                 steps_arg,
+                pipeline_id.as_deref(),
             )
             .await
             .map_err(|e| {
