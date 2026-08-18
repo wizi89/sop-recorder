@@ -126,6 +126,36 @@ export async function getWebappUrl(): Promise<string> {
   return invoke("get_webapp_url");
 }
 
+/**
+ * One selectable generation pipeline. `display_name` and `description` are
+ * user-facing copy authored on the server; `id` is the only value ever sent
+ * back with an upload.
+ */
+export interface Pipeline {
+  id: string;
+  display_name: string;
+  description: string;
+}
+
+/**
+ * Fetch the pipeline catalogue. Never rejects on a server or network failure:
+ * the command falls back to the last good catalogue, or an empty list. An
+ * empty list means "no selector", not "something went wrong".
+ */
+export async function getPipelines(): Promise<Pipeline[]> {
+  return invoke("get_pipelines");
+}
+
+/** Read the remembered pipeline choice. Empty string means none. */
+export async function getSelectedPipeline(): Promise<string> {
+  return invoke("get_selected_pipeline");
+}
+
+/** Remember a pipeline choice for next time. Empty string clears it. */
+export async function setSelectedPipeline(pipelineId: string): Promise<void> {
+  return invoke("set_selected_pipeline", { pipelineId });
+}
+
 export interface WorkArea {
   x: number;
   y: number;

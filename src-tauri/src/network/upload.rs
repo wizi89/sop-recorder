@@ -19,6 +19,7 @@ pub async fn upload_multipart(
     pipeline_version: u8,
     generation_model: &str,
     steps: Option<&[StepMeta]>,
+    pipeline_id: Option<&str>,
 ) -> Result<reqwest::Response, String> {
     let base_url = api_url.unwrap_or_else(|| super::auth::api_url_for_target(None));
     let url = format!("{}/generate", base_url);
@@ -70,6 +71,12 @@ pub async fn upload_multipart(
             metadata["steps"] = serde_json::json!(s);
         }
     }
+    // The user's pipeline choice, by id only. Omitted entirely when nothing is
+    // selected: absence is the normal case and the server falls through to its
+    // default path.
+    if let Some(id) = pipeline_id.filter(|s| !s.is_empty()) {
+        metadata["pipeline_id"] = serde_json::json!(id);
+    }
     form = form.text("metadata", metadata.to_string());
 
     if skip_pii_check {
@@ -101,7 +108,19 @@ pub async fn upload_multipart(
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
         log::error!("Upload failed: {} - {}", status, body);
-        return Err(format!("Server error ({}): {}", status, body));
+        // Every refusal the server authors carries {"error": code, "message":
+        // German text} written for the person at the keyboard. Show that text
+        // instead of the raw JSON; the body stays in the log for support.
+        // The "(4xx" prefix is load-bearing: upload_with_retry matches on it to
+        // decide what not to retry.
+        let message = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v["message"].as_str().map(str::to_string))
+            .filter(|m| !m.is_empty());
+        return Err(match message {
+            Some(m) => format!("({}) {}", status, m),
+            None => format!("Server error ({}): {}", status, body),
+        });
     }
 
     // For SSE, we need to return the response to stream events
@@ -123,6 +142,7 @@ pub async fn upload_with_retry(
     pipeline_version: u8,
     generation_model: &str,
     steps: Option<&[StepMeta]>,
+    pipeline_id: Option<&str>,
 ) -> Result<reqwest::Response, String> {
     let mut last_err = String::new();
     let delays = [1, 2, 4]; // seconds
@@ -139,6 +159,7 @@ pub async fn upload_with_retry(
             pipeline_version,
             generation_model,
             steps,
+            pipeline_id,
         )
         .await
         {
