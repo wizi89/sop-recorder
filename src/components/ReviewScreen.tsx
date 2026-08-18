@@ -136,14 +136,17 @@ export function ReviewScreen({
               </option>
             ))}
           </select>
-          {selectedPipeline?.description && (
-            <p
-              className="text-on-surface-variant mt-2"
-              style={{ fontSize: "0.6875rem" }}
-            >
-              {selectedPipeline.description}
-            </p>
-          )}
+          {/* The default entry gets a description too. It is the one option
+              that is not a pipeline, so without one it reads as a mystery
+              setting sitting among named ones. */}
+          <p
+            className="text-on-surface-variant mt-2"
+            style={{ fontSize: "0.6875rem" }}
+          >
+            {selectedPipeline
+              ? selectedPipeline.description
+              : t("review.pipeline_default_description")}
+          </p>
         </div>
       )}
 

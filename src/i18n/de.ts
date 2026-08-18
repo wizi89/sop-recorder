@@ -38,6 +38,8 @@ const de = {
   "review.cancel": "Verwerfen",
   "review.pipeline_label": "Art der Anleitung",
   "review.pipeline_default": "Standard",
+  "review.pipeline_default_description":
+    "Die allgemeine Generierung. Passt zu jeder Aufnahme.",
 
   // Microphone permission
   "mic.permission_denied":
