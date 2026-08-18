@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-08-18
+
+### Fixed
+
+- A remembered pipeline choice that no longer exists on the server is now cleared from the stored settings, not only from the dropdown. The review screen reset the visible selection to "Standard" while the upload continued to send the old id (it is read from the store, not from the screen), so a pipeline that had been renamed, deleted, or unlabelled server-side produced a generation refused for a guide type the user could see they had not selected.
+
 ## [0.13.0] - 2026-08-18
 
 Users can choose which kind of guide a recording should become, when the server offers a choice.
@@ -364,7 +370,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/wizi89/sop-recorder/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/wizi89/sop-recorder/compare/v0.12.6...v0.13.0
 [0.10.0]: https://github.com/wizi89/sop-recorder/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/wizi89/sop-recorder/compare/v0.8.4...v0.9.0
