@@ -109,6 +109,46 @@ export function ReviewScreen({
         </p>
       </div>
 
+      {/* Pipeline selector. Renders only at two or more entries: a dropdown
+          with one option is not a choice, and zero entries is the designed
+          invisible state for an installation with nothing configured.
+
+          Sits above the thumbnail strip, not above the buttons: a native
+          <select> opens downward from wherever it is, and at the bottom of the
+          window the option list spilled past the window edge. Same row shape
+          and classes as the settings dropdowns, so the two read as one control
+          vocabulary. */}
+      {showPipelines && (
+        <div className="px-4 pb-2">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="pipeline-select" className="label-sm">
+              {t("review.pipeline_label")}
+            </label>
+            <select
+              id="pipeline-select"
+              value={selectedId}
+              onChange={(e) => select(e.target.value)}
+              className="bg-surface-container-highest text-on-background min-w-0 rounded-lg px-3 py-2 text-sm outline-none"
+            >
+              <option value="">{t("review.pipeline_default")}</option>
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedPipeline?.description && (
+            <p
+              className="text-on-surface-variant mt-1"
+              style={{ fontSize: "0.625rem" }}
+            >
+              {selectedPipeline.description}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Thumbnail strip */}
       <div className="flex-1 min-h-0 px-4 overflow-y-auto">
         {loading && (
@@ -155,47 +195,6 @@ export function ReviewScreen({
           </div>
         )}
       </div>
-
-      {/* Pipeline selector. Renders only at two or more entries: a dropdown
-          with one option is not a choice, and zero entries is the designed
-          invisible state for an installation with nothing configured. */}
-      {showPipelines && (
-        <div className="px-4 pt-2">
-          <label
-            htmlFor="pipeline-select"
-            className="text-on-surface-variant block"
-            style={{ fontSize: "0.6875rem" }}
-          >
-            {t("review.pipeline_label")}
-          </label>
-          <select
-            id="pipeline-select"
-            value={selectedId}
-            onChange={(e) => select(e.target.value)}
-            className="w-full mt-1 rounded px-2 py-1 text-on-surface"
-            style={{
-              fontSize: "0.75rem",
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.12)",
-            }}
-          >
-            <option value="">{t("review.pipeline_default")}</option>
-            {pipelines.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.display_name}
-              </option>
-            ))}
-          </select>
-          {selectedPipeline?.description && (
-            <p
-              className="text-on-surface-variant mt-1"
-              style={{ fontSize: "0.625rem" }}
-            >
-              {selectedPipeline.description}
-            </p>
-          )}
-        </div>
-      )}
 
       {/* Action buttons */}
       <div className="flex gap-2 px-4 pb-3 pt-2">
