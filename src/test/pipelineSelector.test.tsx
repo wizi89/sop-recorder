@@ -122,6 +122,29 @@ describe("ReviewScreen pipeline selector", () => {
 
     const select = await screen.findByLabelText<HTMLSelectElement>(/art der anleitung/i);
     await waitFor(() => expect(select.value).toBe(""));
+
+    // The STORE has to be cleared too, not just the dropdown. The upload reads
+    // the stored id directly, so a reset that stops at component state shows
+    // "Standard" while still sending a pipeline the server no longer offers --
+    // and the server refuses that outright.
+    await waitFor(() =>
+      expect(mockInvoke).toHaveBeenCalledWith("set_selected_pipeline", {
+        pipelineId: "",
+      }),
+    );
+  });
+
+  it("leaves a still-offered stored selection persisted", async () => {
+    // The clear above must be conditional: clearing on every mount would lose
+    // the remembered choice this feature exists to keep.
+    mockCommands({ pipelines: TWO_PIPELINES, selected: "onboarding" });
+    render(<ReviewScreen {...defaults} />);
+
+    const select = await screen.findByLabelText<HTMLSelectElement>(/art der anleitung/i);
+    await waitFor(() => expect(select.value).toBe("onboarding"));
+    expect(mockInvoke).not.toHaveBeenCalledWith("set_selected_pipeline", {
+      pipelineId: "",
+    });
   });
 
   it("shows a count-only summary when there is no live recording timing", async () => {

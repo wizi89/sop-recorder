@@ -31,9 +31,9 @@ export interface UsePipelinesResult {
  * that succeeded would be an error message about a feature the user may not
  * even use.
  *
- * A stored selection that is no longer in the catalogue is dropped rather than
- * sent: the pipeline was deleted or unlabelled server-side, and the server
- * would fall through to its default path anyway.
+ * A stored selection that is no longer in the catalogue is cleared from the
+ * store, not merely from this component's state: the pipeline was deleted or
+ * unlabelled server-side, and the upload path reads the stored id on its own.
  */
 export function usePipelines(enabled: boolean = true): UsePipelinesResult {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -51,7 +51,17 @@ export function usePipelines(enabled: boolean = true): UsePipelinesResult {
       ]);
       if (!mountedRef.current) return;
       setPipelines(catalogue);
-      setSelectedId(catalogue.some((p) => p.id === stored) ? stored : "");
+      const stillOffered = catalogue.some((p) => p.id === stored);
+      setSelectedId(stillOffered ? stored : "");
+      if (stored && !stillOffered) {
+        // Clear the STORE, not just this component's state. The upload reads
+        // the stored id directly (commands::pipelines::selected_pipeline_id),
+        // so resetting only the dropdown would show "Standard" while still
+        // sending a pipeline the server no longer offers -- which the server
+        // now refuses outright, turning a stale preference into a failed
+        // generation the user cannot explain from what is on screen.
+        void setSelectedPipeline("").catch(() => {});
+      }
     })();
 
     return () => {
