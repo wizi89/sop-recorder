@@ -119,29 +119,27 @@ export function ReviewScreen({
           and classes as the settings dropdowns, so the two read as one control
           vocabulary. */}
       {showPipelines && (
-        <div className="px-4 pb-2">
-          <div className="flex items-center justify-between gap-2">
-            <label htmlFor="pipeline-select" className="label-sm">
-              {t("review.pipeline_label")}
-            </label>
-            <select
-              id="pipeline-select"
-              value={selectedId}
-              onChange={(e) => select(e.target.value)}
-              className="bg-surface-container-highest text-on-background min-w-0 rounded-lg px-3 py-2 text-sm outline-none"
-            >
-              <option value="">{t("review.pipeline_default")}</option>
-              {pipelines.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.display_name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="px-4 pt-2 pb-5">
+          <label htmlFor="pipeline-select" className="label-sm">
+            {t("review.pipeline_label")}
+          </label>
+          <select
+            id="pipeline-select"
+            value={selectedId}
+            onChange={(e) => select(e.target.value)}
+            className="bg-surface-container-highest text-on-background mt-2 w-full rounded-lg px-3 py-2 text-sm outline-none"
+          >
+            <option value="">{t("review.pipeline_default")}</option>
+            {pipelines.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.display_name}
+              </option>
+            ))}
+          </select>
           {selectedPipeline?.description && (
             <p
-              className="text-on-surface-variant mt-1"
-              style={{ fontSize: "0.625rem" }}
+              className="text-on-surface-variant mt-2"
+              style={{ fontSize: "0.6875rem" }}
             >
               {selectedPipeline.description}
             </p>
