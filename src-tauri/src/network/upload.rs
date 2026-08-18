@@ -108,7 +108,19 @@ pub async fn upload_multipart(
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
         log::error!("Upload failed: {} - {}", status, body);
-        return Err(format!("Server error ({}): {}", status, body));
+        // Every refusal the server authors carries {"error": code, "message":
+        // German text} written for the person at the keyboard. Show that text
+        // instead of the raw JSON; the body stays in the log for support.
+        // The "(4xx" prefix is load-bearing: upload_with_retry matches on it to
+        // decide what not to retry.
+        let message = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v["message"].as_str().map(str::to_string))
+            .filter(|m| !m.is_empty());
+        return Err(match message {
+            Some(m) => format!("({}) {}", status, m),
+            None => format!("Server error ({}): {}", status, body),
+        });
     }
 
     // For SSE, we need to return the response to stream events
