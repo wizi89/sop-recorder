@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-18
+
+Users can choose which kind of guide a recording should become, when the server offers a choice.
+
+### Added
+
+- Pipeline selector ("Art der Anleitung") on the review screen. The recorder fetches the catalogue from the server's `GET /pipelines` and sends the chosen `id` with the upload, so a new guide type appears in an already-installed build with no application update. The selection is remembered and preselected for the next recording, and the selected entry's description is shown as supporting text below the dropdown.
+- The selector is available when generating from an existing recording folder as well, which has no record-time moment at which a choice could otherwise be expressed.
+
+### Changed
+
+- "Aus Ordner generieren" now opens the review screen instead of generating immediately. The flow is the same whether or not pipelines are configured: review the capture, choose a guide type if offered, then confirm.
+- A refused upload now shows the message the server wrote for the user (for example "Die gewählte Anleitungsart ist derzeit nicht verfügbar...") instead of the raw JSON response body. The full body is still written to the log.
+
+### Notes
+
+- The selector renders only when the server offers two or more pipelines. Zero entries, one entry, and an unreachable endpoint all render nothing and never block recording, so installations without pipelines configured see no change at all.
+- It is independent of `advanced_settings`: every organization may pick a guide type, and none gains the pipeline-version, model, or upload-target controls by doing so.
+
 ## [0.12.6] - 2026-06-20
 
 Generate-from-folder is now available to all users, with a guard for invalid folders.
@@ -345,7 +364,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/wizi89/sop-recorder/compare/v0.12.6...v0.13.0
 [0.10.0]: https://github.com/wizi89/sop-recorder/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/wizi89/sop-recorder/compare/v0.8.4...v0.9.0
 [0.8.4]: https://github.com/wizi89/sop-recorder/compare/v0.8.3...v0.8.4
