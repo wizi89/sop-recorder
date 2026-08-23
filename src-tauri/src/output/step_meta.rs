@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+use crate::capture::screenshot::MarkerBox;
+
 /// Per-screenshot metadata persisted as a sidecar JSON next to each
 /// `step_NN.png`. Each capture writes its own sidecar after the PNG is
 /// successfully on disk, so an aborted recording always leaves matched
@@ -13,6 +15,16 @@ pub struct StepMeta {
     pub click_x: Option<i32>,
     pub click_y: Option<i32>,
     pub trigger: String,
+    /// Where the click marker was drawn, in the saved image's pixels. Absent for
+    /// keypress steps, which draw none.
+    ///
+    /// Optional with a default on purpose: `read_all` abandons the scan on the
+    /// first parse failure, so a required field here would make every sidecar
+    /// written by an earlier build unreadable. A recording captured before an
+    /// update and generated after it would then lose per-step alignment, and
+    /// lose it silently.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub marker_box: Option<MarkerBox>,
 }
 
 fn sidecar_path(output_dir: &Path, order: u32) -> std::path::PathBuf {
@@ -76,6 +88,7 @@ mod tests {
             click_x: Some(320),
             click_y: Some(480),
             trigger: "mouse_click".into(),
+            marker_box: None,
         };
         write_sidecar(dir.path(), &meta).unwrap();
 
@@ -96,6 +109,7 @@ mod tests {
                     click_x: None,
                     click_y: None,
                     trigger: "enter_key".into(),
+                    marker_box: None,
                 },
             )
             .unwrap();
@@ -108,6 +122,58 @@ mod tests {
     }
 
     #[test]
+    fn sidecar_from_a_previous_build_still_parses() {
+        // The shape written before marker geometry existed. If a required field
+        // were added, this fails to parse, `read_all` abandons the scan here,
+        // and every later step is lost with it.
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("step_01.json"),
+            r#"{"order":1,"timestamp_seconds":1.5,"click_x":320,"click_y":480,"trigger":"mouse_click"}"#,
+        )
+        .unwrap();
+        write_sidecar(
+            dir.path(),
+            &StepMeta {
+                order: 2,
+                timestamp_seconds: 2.5,
+                click_x: Some(10),
+                click_y: Some(20),
+                trigger: "mouse_click".into(),
+                marker_box: Some(MarkerBox { x0: 1, y0: 2, x1: 3, y1: 4 }),
+            },
+        )
+        .unwrap();
+
+        let all = read_all(dir.path());
+        assert_eq!(all.len(), 2, "an old sidecar must not stop the scan");
+        assert_eq!(all[0].marker_box, None);
+        assert_eq!(all[0].click_x, Some(320));
+        assert!(all[1].marker_box.is_some());
+    }
+
+    #[test]
+    fn keypress_sidecar_records_no_marker_geometry() {
+        // No marker is drawn for a keypress, so the field is absent rather than
+        // present-and-wrong. The server reads that absence together with
+        // `trigger` to tell "no marker" from "marker, position unknown".
+        let dir = tempdir().unwrap();
+        let meta = StepMeta {
+            order: 1,
+            timestamp_seconds: 3.0,
+            click_x: None,
+            click_y: None,
+            trigger: "enter_key".into(),
+            marker_box: None,
+        };
+        write_sidecar(dir.path(), &meta).unwrap();
+
+        let raw = fs::read_to_string(dir.path().join("step_01.json")).unwrap();
+        assert!(!raw.contains("marker_box"), "keypress sidecar: {}", raw);
+        assert_eq!(read_all(dir.path())[0].marker_box, None);
+    }
+
+    #[test]
     fn delete_sidecar_is_idempotent() {
         let dir = tempdir().unwrap();
         let meta = StepMeta {
@@ -116,6 +182,7 @@ mod tests {
             click_x: None,
             click_y: None,
             trigger: "mouse_click".into(),
+            marker_box: None,
         };
         write_sidecar(dir.path(), &meta).unwrap();
         delete_sidecar(dir.path(), 7).unwrap();

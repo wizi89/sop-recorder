@@ -126,10 +126,11 @@ pub async fn start_recording(
             return;
         }
 
+        // The hook carries the position it made the suppression decision with,
+        // so the overlay is drawn at the same point that decision used. Polling
+        // the cursor again here would sample a different moment.
         let (click_pos, trigger) = match &event {
-            input_hooks::CaptureEvent::MouseClick { .. } => {
-                (input_hooks::get_cursor_position(), "mouse_click")
-            }
+            input_hooks::CaptureEvent::MouseClick { pos } => (*pos, "mouse_click"),
             input_hooks::CaptureEvent::EnterKey => (None, "enter_key"),
         };
 
@@ -146,7 +147,7 @@ pub async fn start_recording(
         flight.fetch_add(1, Ordering::SeqCst);
         std::thread::spawn(move || {
             match screenshot::capture_and_save(&dir, step_num, click_pos) {
-                Ok(_filename) => {
+                Ok(marker_box) => {
                     // Write the sidecar AFTER the PNG has been written so a
                     // crash between PNG and JSON leaves an unpaired PNG that
                     // the upload path can detect (and either skip or fail
@@ -157,6 +158,7 @@ pub async fn start_recording(
                         click_x: click_pos.map(|(x, _)| x),
                         click_y: click_pos.map(|(_, y)| y),
                         trigger: trigger.to_string(),
+                        marker_box,
                     };
                     if let Err(e) = step_meta::write_sidecar(&dir, &meta) {
                         log::error!(
