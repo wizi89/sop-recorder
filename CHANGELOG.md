@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-23
+
+Two deliberate clicks a quarter of a second apart are no longer silently collapsed into one step, and every screenshot now records where its click marker was drawn.
+
+### Fixed
+
+- Clicks are suppressed only when they land at the *same cursor position* within a short window, instead of by time alone. The previous rule dropped any event within 300 ms of the last captured one with no knowledge of where the cursor was, so tabbing quickly through a form and clicking two different controls 250 ms apart discarded the second one. There was no log line and no counter; the step was simply missing from the finished document.
+- Every suppressed event is now written to the log with its position and the interval since the previous capture. A rule that drops input invisibly is the defect; a narrower silent rule keeps it.
+- Holding Enter no longer produces one screenshot per key repeat. Auto-repeat is now separated from deliberate input by the key release, which auto-repeat never emits, rather than by a clock, which cannot tell them apart at any usable width: Windows waits about 500 ms before the first repeat, so it arrives outside any window narrow enough to be safe. A few seconds of a held or stuck Enter previously pushed the screenshot count past the server's limit and the whole generation was refused.
+- The log no longer discards its own oldest entries during a recording. It kept 40 KB and threw the overflow away, so a single Enter held for five seconds emitted enough auto-repeat lines to delete the first half-minute of the same recording. That made the suppression log, which exists so that dropped input can be audited afterwards, report that nothing had been suppressed in a recording where it had. Rotated files are now kept.
+- A click that lands on the recorder's own window is now logged as ignored instead of vanishing. It has always been discarded on purpose, so that pressing "Start" or "Stop" never becomes a step, but it was the one remaining path that dropped input without leaving any trace, which is exactly what makes a missing step impossible to diagnose afterwards.
+- A recording no longer sees each click once per recording started since the application launched. The input hook was installed again on every recording start and never removed, so the second recording of a session received every click twice, the third three times, and so on. The old time-only rule concealed this; the new suppression log is what surfaced it.
+
+### Added
+
+- Each screenshot's sidecar records `marker_box`, the click marker's bounding box in the *saved* image's pixels. The marker is painted into the image before it is written and the image is then downscaled by a factor that never left the machine, so nothing receiving these screenshots could previously locate it. The field is optional and absent for keypress steps, which draw no marker.
+
+### Notes
+
+- `marker_box` is written only by this version onward. Sidecars from earlier builds still parse and still align, and recordings made before this release simply carry no marker geometry.
+- The suppression window is 250 ms and is bounded at 300 ms by design, so this rule can never drop an event the previous one kept.
+
 ## [0.13.1] - 2026-08-18
 
 ### Fixed

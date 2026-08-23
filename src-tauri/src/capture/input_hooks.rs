@@ -1,5 +1,5 @@
 use rdev::{listen, Event, EventType};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Once};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -116,114 +116,167 @@ struct Baseline {
     keypress: KeyState,
 }
 
+/// One recording's listening state, or `None` between recordings.
+///
+/// This slot exists because `rdev::listen` cannot be called twice. It parks its
+/// callback in a process-global that the next call overwrites, installs a
+/// `WH_MOUSE_LL` hook that nothing ever removes, and then blocks in
+/// `GetMessageA` forever. Calling it per recording therefore accumulated one OS
+/// hook per recording while all of them dispatched to the newest closure, so the
+/// N-th recording of an app session saw every physical click N times: one
+/// capture followed by N-1 same-position events 0-1 ms later. The old flat
+/// debounce swallowed those silently, which is why this survived until D4 made
+/// suppression observable. See `docs/FINDINGS.md` in `sop-sorcery`.
+///
+/// So the hook is installed exactly once for the process, and starting a
+/// recording swaps the session through here instead.
+static SESSION: Mutex<Option<Session>> = Mutex::new(None);
+static HOOK_INSTALLED: Once = Once::new();
+
+struct Session {
+    exclude_hwnd: Option<isize>,
+    started_at: Instant,
+    baseline: Baseline,
+    on_event: Arc<dyn Fn(CaptureEvent) + Send + Sync>,
+}
+
 pub struct InputHookHandle {
-    stop_flag: Arc<Mutex<bool>>,
+    _private: (),
 }
 
 impl InputHookHandle {
+    /// End the recording's session. The OS hook stays installed for the life of
+    /// the process, because rdev offers no way to remove it, but with no session
+    /// it dispatches nothing.
     pub fn stop(&self) {
-        *self.stop_flag.lock().unwrap() = true;
+        end_session();
     }
 }
 
-/// Start listening for global mouse clicks and Enter key in a background thread.
-/// Calls `on_event` directly in the listener thread for each captured event.
-/// Screenshots are taken immediately -- no queuing.
+fn begin_session(exclude_hwnd: Option<isize>, on_event: Arc<dyn Fn(CaptureEvent) + Send + Sync>) {
+    *SESSION.lock().unwrap() = Some(Session {
+        exclude_hwnd,
+        started_at: Instant::now(),
+        baseline: Baseline::default(),
+        on_event,
+    });
+}
+
+fn end_session() {
+    *SESSION.lock().unwrap() = None;
+}
+
+/// Start listening for global mouse clicks and Enter key. Calls `on_event`
+/// directly in the listener thread for each captured event. Screenshots are
+/// taken immediately -- no queuing.
 pub fn start_listener_with_callback<F>(
     exclude_hwnd: Option<isize>,
     on_event: F,
 ) -> InputHookHandle
 where
-    F: Fn(CaptureEvent) + Send + 'static,
+    F: Fn(CaptureEvent) + Send + Sync + 'static,
 {
-    let stop_flag = Arc::new(Mutex::new(false));
-    let stop_clone = stop_flag.clone();
+    begin_session(exclude_hwnd, Arc::new(on_event));
 
-    thread::spawn(move || {
-        let started_at = Instant::now();
-        let baseline = Arc::new(Mutex::new(Baseline::default()));
-        let stop = stop_clone;
-
-        let callback = move |event: Event| {
-            if *stop.lock().unwrap() {
-                return;
+    HOOK_INSTALLED.call_once(|| {
+        thread::spawn(|| {
+            if let Err(e) = listen(dispatch) {
+                log::error!("Input hook listener error: {:?}", e);
             }
-
-            let now = Instant::now();
-
-            // Ignore clicks during the startup guard (the "Start" button click)
-            if now.duration_since(started_at) < Duration::from_millis(STARTUP_GUARD_MS) {
-                return;
-            }
-
-            match event.event_type {
-                EventType::ButtonPress(rdev::Button::Left) => {
-                    // Ignore clicks on the recorder window (works even if window is moved)
-                    if is_click_on_excluded_window(exclude_hwnd) {
-                        return;
-                    }
-
-                    // Sampled here, not carried by the event: rdev's ButtonPress
-                    // has no coordinates. This is the same position the overlay
-                    // is later drawn at, so the suppression decision and the
-                    // picture agree.
-                    let pos = get_cursor_position();
-                    let captured = CaptureEvent::MouseClick { pos };
-
-                    let mut base = baseline.lock().unwrap();
-                    let since = base.mouse.map(|(p, at)| (p, now.duration_since(at)));
-
-                    if should_suppress(&captured, since) {
-                        // Every suppression leaves a trace. A rule that drops
-                        // events invisibly is the defect being fixed here, and a
-                        // narrower silent rule keeps the disease.
-                        let (x, y) = pos.unwrap_or_default();
-                        log::info!(
-                            "input_hooks: suppressed click at ({}, {}), {} ms after the previous capture at the same position",
-                            x, y,
-                            since.map(|(_, d)| d.as_millis()).unwrap_or(0),
-                        );
-                        return;
-                    }
-
-                    // An unknown position cannot serve as a baseline, so it
-                    // clears one rather than storing a fake origin.
-                    base.mouse = pos.map(|p| (p, now));
-                    drop(base);
-                    on_event(captured);
-                }
-                EventType::KeyRelease(rdev::Key::Return) => {
-                    note_key_release(&mut baseline.lock().unwrap().keypress);
-                }
-                EventType::KeyPress(rdev::Key::Return) => {
-                    let mut base = baseline.lock().unwrap();
-                    let since = base.keypress.since(now);
-
-                    if gate_keypress(&mut base.keypress, now) {
-                        log::info!(
-                            "input_hooks: suppressed Enter auto-repeat, {} ms after the previous keypress",
-                            since.map(|d| d.as_millis()).unwrap_or(0),
-                        );
-                        return;
-                    }
-
-                    // `gate_keypress` already advanced `base.keypress`. It
-                    // deliberately does NOT touch `base.mouse`: a keypress has no
-                    // position and must not move the baseline the next click is
-                    // compared against.
-                    drop(base);
-                    on_event(CaptureEvent::EnterKey);
-                }
-                _ => {}
-            }
-        };
-
-        if let Err(e) = listen(callback) {
-            log::error!("Input hook listener error: {:?}", e);
-        }
+        });
     });
 
-    InputHookHandle { stop_flag }
+    InputHookHandle { _private: () }
+}
+
+/// The single OS-level callback. Does nothing unless a recording is in session.
+fn dispatch(event: Event) {
+    let mut guard = SESSION.lock().unwrap();
+    let Some(session) = guard.as_mut() else {
+        return;
+    };
+
+    let now = Instant::now();
+
+    // Ignore clicks during the startup guard (the "Start" button click). Timed
+    // from the session, not from the process, so it still guards the second
+    // recording of a session as well as the first.
+    if now.duration_since(session.started_at) < Duration::from_millis(STARTUP_GUARD_MS) {
+        return;
+    }
+
+    let captured = match event.event_type {
+        EventType::ButtonPress(rdev::Button::Left) => {
+            // Ignore clicks on the recorder window (works even if window is moved).
+            // Logged like every other drop: D4 asks that no path discards an
+            // event without leaving a trace, and this one is easy to overlook
+            // because it reads as routing rather than as suppression.
+            if is_click_on_excluded_window(session.exclude_hwnd) {
+                let (x, y) = get_cursor_position().unwrap_or_default();
+                log::info!(
+                    "input_hooks: ignored click at ({}, {}), landed on the recorder window",
+                    x, y,
+                );
+                return;
+            }
+
+            // Sampled here, not carried by the event: rdev's ButtonPress has no
+            // coordinates. This is the same position the overlay is later drawn
+            // at, so the suppression decision and the picture agree.
+            let pos = get_cursor_position();
+            let captured = CaptureEvent::MouseClick { pos };
+            let since = session
+                .baseline
+                .mouse
+                .map(|(p, at)| (p, now.duration_since(at)));
+
+            if should_suppress(&captured, since) {
+                // Every suppression leaves a trace. A rule that drops events
+                // invisibly is the defect being fixed here, and a narrower
+                // silent rule keeps the disease.
+                let (x, y) = pos.unwrap_or_default();
+                log::info!(
+                    "input_hooks: suppressed click at ({}, {}), {} ms after the previous capture at the same position",
+                    x, y,
+                    since.map(|(_, d)| d.as_millis()).unwrap_or(0),
+                );
+                return;
+            }
+
+            // An unknown position cannot serve as a baseline, so it clears one
+            // rather than storing a fake origin.
+            session.baseline.mouse = pos.map(|p| (p, now));
+            captured
+        }
+        EventType::KeyRelease(rdev::Key::Return) => {
+            note_key_release(&mut session.baseline.keypress);
+            return;
+        }
+        EventType::KeyPress(rdev::Key::Return) => {
+            let since = session.baseline.keypress.since(now);
+
+            if gate_keypress(&mut session.baseline.keypress, now) {
+                log::info!(
+                    "input_hooks: suppressed Enter auto-repeat, {} ms after the previous keypress",
+                    since.map(|d| d.as_millis()).unwrap_or(0),
+                );
+                return;
+            }
+
+            // `gate_keypress` already advanced the key state. It deliberately
+            // does NOT touch `baseline.mouse`: a keypress has no position and
+            // must not move the baseline the next click is compared against.
+            CaptureEvent::EnterKey
+        }
+        _ => return,
+    };
+
+    // Released before the callback runs, as the per-recording baseline lock was:
+    // `on_event` spawns the capture, and holding the session across it would
+    // block every later input event on whatever that spawn does first.
+    let on_event = session.on_event.clone();
+    drop(guard);
+    on_event(captured);
 }
 
 /// Check if the click landed on the excluded window (by HWND).
@@ -290,6 +343,50 @@ mod tests {
 
     fn ms(n: u64) -> Duration {
         Duration::from_millis(n)
+    }
+
+    /// The leak this guards: `rdev::listen` was called once per recording, so
+    /// the N-th recording of an app session had N OS hooks installed and saw
+    /// every physical click N times. There is exactly one session, whichever
+    /// recording last claimed it, and ending it leaves none.
+    ///
+    /// Exercises `begin_session`/`end_session` rather than
+    /// `start_listener_with_callback` on purpose: the latter installs a real
+    /// system-wide input hook, which a test run has no business doing.
+    #[test]
+    fn a_second_recording_replaces_the_session_rather_than_adding_one() {
+        begin_session(None, Arc::new(|_| {}));
+        begin_session(Some(42), Arc::new(|_| {}));
+
+        {
+            let guard = SESSION.lock().unwrap();
+            let session = guard.as_ref().expect("a session must be active");
+            assert_eq!(
+                session.exclude_hwnd,
+                Some(42),
+                "the newest recording owns the session",
+            );
+        }
+
+        end_session();
+        assert!(
+            SESSION.lock().unwrap().is_none(),
+            "one stop must end the one session, not leave an earlier one listening",
+        );
+    }
+
+    #[test]
+    fn a_new_session_does_not_inherit_the_previous_baseline() {
+        begin_session(None, Arc::new(|_| {}));
+        SESSION.lock().unwrap().as_mut().unwrap().baseline.mouse =
+            Some(((400, 300), Instant::now()));
+
+        begin_session(None, Arc::new(|_| {}));
+        assert!(
+            SESSION.lock().unwrap().as_ref().unwrap().baseline.mouse.is_none(),
+            "a click at the previous recording's last position must not be suppressed",
+        );
+        end_session();
     }
 
     #[test]

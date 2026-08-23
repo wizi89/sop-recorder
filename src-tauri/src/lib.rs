@@ -18,6 +18,17 @@ pub fn run() {
         log::LevelFilter::Warn
     };
     let mut log_builder = tauri_plugin_log::Builder::default()
+        // The suppression log IS the audit trail: D4 requires every dropped
+        // input event to leave a trace precisely so the rule can be checked
+        // afterwards. At the plugin's defaults (40 KB, discard the rotated
+        // file) that trail destroys itself: one Enter held for five seconds
+        // emits ~80 auto-repeat lines in under three seconds, which rotated a
+        // real recording's first 35 seconds out of existence and made an audit
+        // report "no clicks were suppressed" for a recording in which three
+        // were. A false negative from the evidence channel is worse than no
+        // evidence channel.
+        .max_file_size(5_000_000)
+        .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
         .level(log::LevelFilter::Info)
         .level_for("keyring", log::LevelFilter::Warn)
         .level_for("reqwest::connect", reqwest_connect_level)
