@@ -30,3 +30,7 @@ test-installer/
 # Signing keys
 src-tauri/keys
 src-tauri/keys.pub
+
+# Local agent/tooling config
+.mcp.json
+.serena/
