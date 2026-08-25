@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Aufnahme 6.2 -- Schrittzahl prüfen</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    min-height:100%; background:#0f1115; color:#e8eaed; cursor:default;
+    user-select:none; -webkit-user-select:none;
+    font:15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+  }
+  header {
+    position:sticky; top:0; z-index:5; background:#161a21;
+    border-bottom:1px solid #2a2f3a; padding:14px 24px;
+    display:flex; align-items:center; gap:32px; flex-wrap:wrap;
+  }
+  header h1 { font-size:17px; font-weight:700; }
+  .tally { display:flex; gap:26px; margin-left:auto; }
+  .tally div { text-align:right; }
+  .tally .k { font-size:11px; letter-spacing:.11em; text-transform:uppercase; color:#8b93a3; }
+  .tally .v { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .hint { color:#8b93a3; font-size:13px; }
+
+  main { padding:22px 24px 60px; display:grid; gap:18px;
+         grid-template-columns:repeat(auto-fit, minmax(430px, 1fr)); max-width:1500px; }
+  .case { background:#161a21; border:1px solid #2a2f3a; border-radius:12px; padding:20px 22px; }
+  .case h2 { font-size:15px; margin-bottom:2px; }
+  .case .num { color:#7dd3fc; font-weight:700; }
+  .todo { color:#c7cedb; margin:10px 0 4px; }
+  .why { color:#8b93a3; font-size:13px; margin-bottom:14px; }
+  .expect { display:inline-block; background:#1f2937; border:1px solid #374151;
+            border-radius:6px; padding:4px 11px; font-size:13px; color:#e8eaed; }
+  .expect b { color:#4ade80; }
+
+  .targets { display:flex; gap:10px; margin:16px 0 12px; flex-wrap:wrap; }
+  .t {
+    flex:1; min-width:74px; height:96px; border-radius:9px;
+    background:#28303d; border:2px solid #3a4453;
+    display:flex; align-items:center; justify-content:center;
+    font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; color:#93a2b8;
+  }
+  .t.big { height:120px; font-size:34px; }
+  .t.hit { background:#1d4ed8; border-color:#3b82f6; color:#fff; }
+
+  .meter { font-size:13px; color:#8b93a3; font-variant-numeric:tabular-nums; }
+  .meter b { color:#e8eaed; font-size:16px; }
+  .warn { color:#fbbf24; }
+  .bad  { color:#f87171; }
+  .good { color:#4ade80; }
+
+  footer { padding:0 24px 50px; max-width:1500px; color:#8b93a3; font-size:13px; }
+  footer code { background:#1f2937; padding:2px 6px; border-radius:4px; color:#e8eaed; }
+  footer b { color:#e8eaed; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Aufnahme 6.2 &middot; Schrittzahl</h1>
+  <span class="hint">Alle vier Fälle in EINER Aufnahme. Taste <b>r</b> setzt die Zähler zurück (wird nicht aufgezeichnet).</span>
+  <div class="tally">
+    <div><div class="k">Klicks gesamt</div><div class="v" id="tClicks">0</div></div>
+    <div><div class="k">Enter gesamt</div><div class="v" id="tEnter">0</div></div>
+    <div><div class="k">Erwartete Schritte</div><div class="v good" id="tExpect">11</div></div>
+  </div>
+</header>
+
+<main>
+
+  <section class="case">
+    <h2><span class="num">Fall 1</span> &middot; Doppelklick, gleiche Stelle</h2>
+    <div class="todo">Klicke <b>3-mal doppelt</b> auf das Feld. So schnell wie ein echter Doppelklick, Maus nicht bewegen.</div>
+    <div class="why">Sechs physische Klicks, drei Absichten. Die Unterdrückung greift nur bei identischer Position innerhalb von 250 ms.</div>
+    <div class="targets"><div class="t big" id="c1">0</div></div>
+    <div class="meter">Physische Klicks: <b id="c1n">0</b> &nbsp;|&nbsp; <span class="expect">erwartet: <b>3 Schritte</b></span></div>
+  </section>
+
+  <section class="case">
+    <h2><span class="num">Fall 2</span> &middot; Fünf verschiedene Stellen, schnell</h2>
+    <div class="todo">Klicke die fünf Felder <b>der Reihe nach</b>, so schnell du kannst. Jedes genau einmal.</div>
+    <div class="why">Genau der Fehler, der diese ganze Änderung ausgelöst hat: die alte Regel verwarf hier den zweiten Klick, ohne etwas zu melden.</div>
+    <div class="targets">
+      <div class="t" data-c2="1">1</div><div class="t" data-c2="2">2</div><div class="t" data-c2="3">3</div>
+      <div class="t" data-c2="4">4</div><div class="t" data-c2="5">5</div>
+    </div>
+    <div class="meter">Getroffen: <b id="c2n">0</b> / 5 &nbsp;|&nbsp; schnellster Abstand: <b id="c2gap">--</b> &nbsp;|&nbsp; <span class="expect">erwartet: <b>5 Schritte</b></span></div>
+  </section>
+
+  <section class="case">
+    <h2><span class="num">Fall 3</span> &middot; Enter direkt nach einem Klick</h2>
+    <div class="todo">Klicke <b>einmal</b> auf das Feld und drücke <b>sofort Enter</b>, ohne die Maus zu bewegen.</div>
+    <div class="why">Der Rückfall, den die Positionsregel am leichtesten wieder einbaut: Enter hat keine Position und darf die des Klicks nicht erben.</div>
+    <div class="targets"><div class="t big" id="c3">Klick</div></div>
+    <div class="meter">Klick: <b id="c3c">nein</b> &nbsp;|&nbsp; Enter danach: <b id="c3e">nein</b> &nbsp;|&nbsp; Abstand: <b id="c3gap">--</b> &nbsp;|&nbsp; <span class="expect">erwartet: <b>2 Schritte</b></span></div>
+  </section>
+
+  <section class="case">
+    <h2><span class="num">Fall 4</span> &middot; Enter gedrückt halten</h2>
+    <div class="todo">Halte <b>Enter etwa 5 Sekunden</b> gedrückt. Nicht klicken.</div>
+    <div class="why">Der einzige Fall, dessen Fehlverhalten die Aufnahme kostet statt nur einen Schritt: genug Wiederholungen und der Server lehnt die ganze Generierung ab.</div>
+    <div class="targets"><div class="t big" id="c4">--</div></div>
+    <div class="meter">Haltedauer: <b id="c4t">0.0 s</b> &nbsp;|&nbsp; Auto-Repeats vom Betriebssystem: <b id="c4r">0</b> &nbsp;|&nbsp; <span class="expect">erwartet: <b>1 Schritt</b></span></div>
+  </section>
+
+</main>
+
+<footer>
+  <p><b>Danach:</b> Aufnahme stoppen und die PNG-Dateien im Aufnahmeordner zählen &mdash;
+  <code>ls "…/SOP &lt;datum&gt;/screenshots"/step_*.png | wc -l</code>. Erwartet: <b>11</b> (3 + 5 + 2 + 1).</p>
+  <p>Weicht die Zahl ab, sagt die Aufschlüsselung oben, wo. Fall 4 ist der wichtige: mehr als ein
+  oder zwei Schritte dort bedeutet, dass der Auto-Repeat-Schutz nicht greift, und das ist ein Abbruch
+  der Prüfung, kein Schönheitsfehler.</p>
+</footer>
+
+<script>
+  const $ = id => document.getElementById(id);
+  let clicks = 0, enters = 0;
+  let c1 = 0, c2 = new Set(), c2last = 0, c2gap = Infinity;
+  let c3click = 0, c4start = 0, c4rep = 0, c4timer = null;
+
+  function bumpTotals() { $("tClicks").textContent = clicks; $("tEnter").textContent = enters; }
+
+  // Counted at the document: a stray click on empty page area still becomes a
+  // step, and a tally that missed those would quietly excuse an extra one.
+  document.addEventListener("mousedown", () => { clicks++; bumpTotals(); });
+
+  // Case 1
+  $("c1").addEventListener("mousedown", () => {
+    c1++; $("c1").textContent = c1; $("c1n").textContent = c1;
+    $("c1").classList.add("hit"); bumpTotals();
+  });
+
+  // Case 2 -- the interesting number is the SHORTEST gap achieved
+  document.querySelectorAll("[data-c2]").forEach(el => {
+    el.addEventListener("mousedown", () => {
+      const now = performance.now();
+      if (c2last) c2gap = Math.min(c2gap, now - c2last);
+      c2last = now;
+      c2.add(el.dataset.c2);
+      el.classList.add("hit");
+      $("c2n").textContent = c2.size;
+      const g = $("c2gap");
+      if (c2gap < Infinity) {
+        g.textContent = Math.round(c2gap) + " ms";
+        // Under 250 ms at DIFFERENT positions is exactly what must survive now.
+        g.className = c2gap < 250 ? "good" : "warn";
+      }
+      bumpTotals();
+    });
+  });
+
+  // Case 3
+  $("c3").addEventListener("mousedown", () => {
+    c3click = performance.now();
+    $("c3").classList.add("hit"); $("c3").textContent = "jetzt Enter";
+    $("c3c").textContent = "ja"; bumpTotals();
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "r" && !e.repeat) return reset();
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+
+    if (!e.repeat) {
+      enters++; bumpTotals();
+      // A fresh press: case 3 if a click is waiting, otherwise the held-key case.
+      if (c3click && $("c3e").textContent === "nein") {
+        const dt = Math.round(performance.now() - c3click);
+        $("c3e").textContent = "ja";
+        const g = $("c3gap"); g.textContent = dt + " ms";
+        g.className = dt < 300 ? "good" : "warn";
+        return;
+      }
+      c4start = performance.now(); c4rep = 0;
+      clearInterval(c4timer);
+      c4timer = setInterval(() => {
+        const s = (performance.now() - c4start) / 1000;
+        $("c4t").textContent = s.toFixed(1) + " s";
+        $("c4t").className = s >= 4 ? "good" : "";
+        $("c4").textContent = s.toFixed(1);
+        $("c4").classList.add("hit");
+      }, 50);
+    } else {
+      // Auto-repeat: the OS stream the recorder has to collapse to one step.
+      c4rep++; $("c4r").textContent = c4rep;
+    }
+  });
+
+  document.addEventListener("keyup", e => {
+    if (e.key !== "Enter") return;
+    clearInterval(c4timer);
+    if (c4start) {
+      const s = (performance.now() - c4start) / 1000;
+      $("c4t").textContent = s.toFixed(1) + " s";
+      $("c4t").className = s >= 4 ? "good" : "bad";
+      $("c4").textContent = s.toFixed(1) + " s";
+    }
+  });
+
+  function reset() {
+    clicks = enters = c1 = 0; c2 = new Set(); c2last = 0; c2gap = Infinity;
+    c3click = 0; c4start = 0; c4rep = 0; clearInterval(c4timer);
+    document.querySelectorAll(".t").forEach(el => el.classList.remove("hit"));
+    $("c1").textContent = "0"; $("c1n").textContent = "0";
+    document.querySelectorAll("[data-c2]").forEach(el => el.textContent = el.dataset.c2);
+    $("c2n").textContent = "0"; $("c2gap").textContent = "--"; $("c2gap").className = "";
+    $("c3").textContent = "Klick"; $("c3c").textContent = "nein";
+    $("c3e").textContent = "nein"; $("c3gap").textContent = "--"; $("c3gap").className = "";
+    $("c4").textContent = "--"; $("c4t").textContent = "0.0 s"; $("c4t").className = "";
+    $("c4r").textContent = "0";
+    bumpTotals();
+  }
+</script>
+
+</body>
+</html>

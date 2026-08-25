@@ -125,8 +125,8 @@ struct Baseline {
 /// hook per recording while all of them dispatched to the newest closure, so the
 /// N-th recording of an app session saw every physical click N times: one
 /// capture followed by N-1 same-position events 0-1 ms later. The old flat
-/// debounce swallowed those silently, which is why this survived until D4 made
-/// suppression observable. See `docs/FINDINGS.md` in `sop-sorcery`.
+/// debounce swallowed those silently, which is why this survived until every
+/// suppression started being logged.
 ///
 /// So the hook is installed exactly once for the process, and starting a
 /// recording swaps the session through here instead.
