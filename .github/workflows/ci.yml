@@ -2,6 +2,11 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      build_installers:
+        description: "Also build the Windows and macOS installers"
+        type: boolean
+        default: true
   push:
     branches: [main, "feature/**"]
   pull_request:
@@ -45,8 +50,19 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+  # Tests run on every push; the installers do not. A macOS bundle takes about
+  # ten minutes, which is a long time to wait on a branch where most commits
+  # cannot affect packaging at all.
+  #
+  # Installers are built when the result is actually wanted: on main, on a
+  # manual run, or on any commit whose message says so with [build]. Release
+  # tags go through release.yml, which is untouched by this.
   build:
     needs: test
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_installers) ||
+      contains(github.event.head_commit.message, '[build]')
     strategy:
       fail-fast: false
       matrix:

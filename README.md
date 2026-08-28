@@ -124,7 +124,7 @@ src-tauri/              Rust backend
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Runs on push to `main`, `feature/**`, pull requests, and manual dispatch -- tests + Windows/macOS builds, uploads installer artifacts
+- **CI** (`ci.yml`): Runs on push to `main`, `feature/**`, pull requests, and manual dispatch. Tests run every time; the installers do not, because a macOS bundle takes about ten minutes and most commits cannot affect packaging. Installers are built on `main`, on a manual run, or on any commit whose message contains `[build]`, and are uploaded as artifacts
 - **Release** (`release.yml`): Runs on `v*` tags -- Windows/macOS release builds + GitHub Release with auto-updater manifest
 
 ## License
