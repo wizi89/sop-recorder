@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The recorder works on macOS. Every defect below was invisible on Windows, where the two coordinate spaces coincide, the Keychain has no analogue, and the input hook needs no permission.
+
+### Fixed
+
+- Screenshots on a Retina display captured only the top-left quarter of the screen. `Monitor` reports geometry in logical points while `capture_image` returns physical pixels, and the canvas was sized from the former and filled from the latter, so three quarters of every screenshot was discarded at a 2x scale factor. The composite is now built in physical pixels, with each monitor scaled to a single canvas so a mixed-DPI desktop still assembles correctly.
+- Click markers were drawn at a fraction of their correct position, for the same reason: a click arrives in logical points and was painted into an image measured in physical pixels. A click halfway across a 2x display landed a quarter of the way in. The marker is now mapped through the geometry the image was composited against, and drawn at the canvas scale so it stays the same apparent size rather than shrinking to a speck the model cannot see.
+- Pressing any key during a recording killed the application. The input listener built a human-readable name for every keyboard event inside its tap callback, via a Text Input Services call that asserts it is running on the main queue; the callback runs on its own thread, so the assertion fired and the process died on `SIGTRAP`. macOS now uses a hand-rolled event tap that reads only the button and the key code and never touches Text Input Services.
+- The recorder's own control bar was composited into every screenshot, sitting on top of the thing each step was meant to document. Windows excluded it with `WDA_EXCLUDEFROMCAPTURE`; macOS now uses the direct analogue, an `NSWindow` whose sharing type is `None`, which the capture path honours.
+- The compact recording bar appeared wherever the main window happened to be, usually centred over the work being recorded. The work-area query was implemented only for Windows and returned an error on macOS, which the caller quietly swallowed, leaving the window unmoved. It is now derived from the screen's visible frame, so the bar anchors to the corner as intended. It is also no longer draggable: moving it mid-recording was tempting and the press that started the drag was captured as a step.
+- Stopping a recording took two clicks. The bar is always on top but is not the key window, and macOS spends the first click into an inactive window activating it rather than delivering it to the control underneath.
+- Clicking the recorder's own Stop button was recorded as a step, appending a bogus final entry to every guide, and two while stopping still took two clicks. Identifying the window under the cursor from the input hook is not possible on macOS -- the APIs that could are main-thread-only and the hook runs on its own thread -- so the window now reports where it is and the check is arithmetic.
+- The Accessibility permission was never checked. Without it the event tap is refused outright, so the recorder showed a running timer and captured nothing at all, and the user only discovered it once the recording was over. It is now probed at startup, prompted for alongside the microphone and screen-recording prompts, and reported in the permission banner.
+
+### Added
+
+- The permission banner lists every missing permission on its own line rather than naming a fused combination, which needed a new string for each pair and did not survive a third permission being added.
+- `scripts/macos-dev-cert.sh` creates a stable self-signed code-signing identity for local development, and `cargo run` and `cargo test` sign through it. The Keychain grants access to a code identity, and an ad-hoc dev build's identity is its binary hash, which changes on every build -- so every rebuild looked like a new program and macOS asked for the login password again. See the README for the full explanation.
+
+### Changed
+
+- Dev builds keep their credentials under a separate Keychain service from the shipped app. A dev build reading the release app's items is an untrusted caller and is challenged for the login password on every read; giving dev its own items means the dev binary creates them and is on their access list from the start. A developer's real login is left untouched, and a dev build cannot spend a release token by accident.
+
+### Notes
+
+- macOS builds are still ad-hoc signed and unnotarized. Because the Keychain and the privacy database both key off the code signature, every shipped update changes that identity: users are re-prompted for Keychain access and are likely to have to re-grant Screen Recording and Accessibility after each update, and Gatekeeper blocks the first launch. A Developer ID certificate and notarization are the fix; neither is in place yet.
+
+
 ## [0.14.0] - 2026-08-23
 
 Two deliberate clicks a quarter of a second apart are no longer silently collapsed into one step, and every screenshot now records where its click marker was drawn.
