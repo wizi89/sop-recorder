@@ -52,6 +52,30 @@ npm install
 npx tauri dev
 ```
 
+#### macOS: stop the Keychain asking for your password on every rebuild
+
+The recorder keeps your login in the macOS Keychain. The Keychain grants access
+to a *code identity*, and a dev build is ad-hoc signed -- so that identity is
+just the binary's hash, which changes on every `cargo build`. Each rebuild looks
+like a new program that was never granted access, and macOS asks for your
+password again. "Always Allow" only whitelists the one build it was clicked for.
+
+Signing every dev build with one stable certificate fixes it:
+
+```bash
+./scripts/macos-dev-cert.sh   # once per machine
+```
+
+This creates a self-signed "CogniClone Dev" code-signing identity in your login
+keychain. `src-tauri/.cargo/config.toml` then routes `cargo run` and `cargo test`
+through `scripts/macos-dev-sign-run.sh`, which signs the binary with it before
+running. The next keychain prompt is the last one -- click "Always Allow".
+
+The setup is local-only and fail-safe: without the identity the runner execs the
+binary unsigned, exactly as cargo would, so CI and fresh clones are unaffected.
+It does nothing for shipped builds, which need a real Developer ID certificate
+and notarization (see below).
+
 ### Run tests
 
 ```bash

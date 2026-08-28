@@ -3,7 +3,23 @@ use serde::Deserialize;
 
 use crate::config;
 
+/// Keychain service the credentials live under.
+///
+/// Dev builds deliberately use a separate service from the shipped app. The
+/// macOS Keychain grants access to a *code identity*, and a dev build's identity
+/// is not the shipped app's -- so a dev build reading the release app's items
+/// is an untrusted caller, and macOS prompts for the login password on every
+/// read, twice over (once for each item). Giving dev its own items means the
+/// dev binary creates them itself, and the creating process is on the item's
+/// ACL from the start, so it is never asked again.
+///
+/// The release name is untouched, so a developer's real login survives, and a
+/// dev build can never spend a release token by accident.
+#[cfg(debug_assertions)]
+const SERVICE_NAME: &str = "cogniclone-dev";
+#[cfg(not(debug_assertions))]
 const SERVICE_NAME: &str = "cogniclone";
+
 const LEGACY_SERVICE_NAME: &str = "sop-sorcery";
 
 /// Migrate credentials from the old "sop-sorcery" keyring to "cogniclone".
