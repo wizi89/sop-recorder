@@ -94,6 +94,7 @@ pub fn run() {
             permissions::request_all_permissions,
             window::set_display_affinity,
             window::set_recorder_region,
+            window::restart_app,
             window::get_work_area,
         ])
         .run(tauri::generate_context!())

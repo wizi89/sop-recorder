@@ -3,6 +3,7 @@ import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api
 import { getVersion } from "@tauri-apps/api/app";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LoginScreen } from "./components/LoginScreen";
+import { PermissionsScreen } from "./components/PermissionsScreen";
 import { RecorderScreen } from "./components/RecorderScreen";
 import { SettingsPage } from "./components/SettingsPage";
 import { useAuth } from "./hooks/useAuth";
@@ -21,6 +22,7 @@ import {
   getScreenRecordingPermissionState,
   getAccessibilityPermissionState,
   requestAllPermissions,
+  restartApp,
   type MicPermissionState,
   type ScreenRecordingPermissionState,
   type AccessibilityPermissionState,
@@ -50,6 +52,10 @@ function MainApp() {
     useState<ScreenRecordingPermissionState>("unknown");
   const [accessibilityPermission, setAccessibilityPermission] =
     useState<AccessibilityPermissionState>("unknown");
+  // The first-run screen is dismissed for this launch, not forever: the
+  // recorder's banner keeps carrying whatever is still missing.
+  const [permissionSetupSkipped, setPermissionSetupSkipped] = useState(false);
+  const [requestingPermissions, setRequestingPermissions] = useState(false);
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
@@ -73,22 +79,49 @@ function MainApp() {
       .catch(() => {});
   }, []);
 
+  const refreshPermissions = useCallback(async () => {
+    const [mic, screen, accessibility] = await Promise.all([
+      getMicrophonePermissionState(),
+      getScreenRecordingPermissionState(),
+      getAccessibilityPermissionState(),
+    ]);
+    setMicPermission(mic);
+    setScreenRecordingPermission(screen);
+    setAccessibilityPermission(accessibility);
+  }, []);
+
   useEffect(() => {
     getVersion().then(setVersion);
     loadSettings();
-    // Probe permission states up-front so the UI can surface a banner
-    // before the user attempts to record. On macOS without these the
-    // recorder either fails (mic), silently captures the wallpaper (screen
-    // recording), or runs a recording that captures no steps whatsoever
-    // (accessibility, which is what the global input hook needs).
-    getMicrophonePermissionState().then(setMicPermission);
-    getScreenRecordingPermissionState().then(setScreenRecordingPermission);
-    getAccessibilityPermissionState().then(setAccessibilityPermission);
-  }, [loadSettings]);
+    // Probe permission states up-front so the UI can surface the setup screen
+    // before the user attempts to record. On macOS without these the recorder
+    // either fails (mic), silently captures the wallpaper (screen recording),
+    // or runs a recording that captures no steps whatsoever (accessibility,
+    // which is what the global input hook needs).
+    void refreshPermissions();
+  }, [loadSettings, refreshPermissions]);
+
+  // Screen Recording and Accessibility are granted in System Settings, not in
+  // the dialog, so the app is not told when it happens. Poll while the setup
+  // screen is up, and only while it is up, so returning from System Settings
+  // updates the rows instead of leaving them stale. Stops as soon as
+  // everything is granted, or the screen is dismissed.
+  const permissionsAllGranted =
+    micPermission === "granted" &&
+    screenRecordingPermission === "granted" &&
+    accessibilityPermission === "granted";
+  const permissionSetupVisible = !permissionsAllGranted && !permissionSetupSkipped;
+
+  useEffect(() => {
+    if (!permissionSetupVisible) return;
+    const id = setInterval(() => void refreshPermissions(), 1500);
+    return () => clearInterval(id);
+  }, [permissionSetupVisible, refreshPermissions]);
 
   // Fire all macOS TCC prompts in one batch from a single user gesture,
   // then re-read state so the banner clears without a relaunch.
   const handleRequestPermissions = useCallback(async () => {
+    setRequestingPermissions(true);
     try {
       const next = await requestAllPermissions();
       setMicPermission(next.microphone);
@@ -96,6 +129,8 @@ function MainApp() {
       setAccessibilityPermission(next.accessibility);
     } catch (e) {
       console.warn("Permission bootstrap failed:", e);
+    } finally {
+      setRequestingPermissions(false);
     }
   }, []);
 
@@ -360,6 +395,27 @@ function MainApp() {
             loading={auth.loading}
             error={auth.error}
             version={version}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Logged in, but the OS has not granted what a recording needs -> set that
+  // up first, in one sitting, rather than interrupting the first recording.
+  if (permissionSetupVisible) {
+    return (
+      <div className="flex flex-col h-full">
+        {updateBanner}
+        <div className="flex-1 min-h-0">
+          <PermissionsScreen
+            micPermission={micPermission}
+            screenRecordingPermission={screenRecordingPermission}
+            accessibilityPermission={accessibilityPermission}
+            onRequestPermissions={handleRequestPermissions}
+            onRestart={() => void restartApp()}
+            onSkip={() => setPermissionSetupSkipped(true)}
+            requesting={requestingPermissions}
           />
         </div>
       </div>

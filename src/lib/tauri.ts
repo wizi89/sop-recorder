@@ -148,6 +148,14 @@ export async function requestAllPermissions(): Promise<PermissionsState> {
   };
 }
 
+/**
+ * Relaunch the app so newly granted macOS permissions take effect.
+ * Screen Recording and Accessibility apply only to a fresh process.
+ */
+export async function restartApp(): Promise<void> {
+  return invoke("restart_app");
+}
+
 export async function runGeneration(outputDir: string): Promise<void> {
   return invoke("run_generation", { outputDir });
 }

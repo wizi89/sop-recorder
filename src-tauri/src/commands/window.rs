@@ -209,3 +209,14 @@ pub fn set_recorder_region(region: Option<(i32, i32, i32, i32)>) {
     log::info!("Recorder region reported as {:?}", region);
     crate::capture::input_hooks::set_excluded_region(region);
 }
+
+/// Relaunch the app.
+///
+/// macOS applies a newly granted Screen Recording or Accessibility permission
+/// only to a fresh process, so the honest first-run flow is one deliberate
+/// restart the user chooses rather than two they stumble into.
+#[tauri::command]
+pub fn restart_app(app: tauri::AppHandle) {
+    log::info!("Restarting to pick up newly granted permissions");
+    app.restart();
+}

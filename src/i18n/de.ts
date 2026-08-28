@@ -52,6 +52,31 @@ const de = {
     "Bedienungshilfen verweigert -- ohne diese Berechtigung erkennt CogniClone keine Klicks und zeichnet keine Schritte auf",
   "permissions.grant":
     "Erlauben",
+
+  // First-run permission screen
+  "permissions.setup_title": "Berechtigungen erteilen",
+  "permissions.setup_intro":
+    "CogniClone benötigt drei Berechtigungen, um eine Anleitung aufzeichnen zu können. Du erteilst sie einmal -- danach fragt die App nicht wieder.",
+  "permissions.mic_title": "Mikrofon",
+  "permissions.mic_why":
+    "Zeichnet deine gesprochene Erklärung auf, aus der die Beschreibung der Schritte entsteht.",
+  "permissions.screen_title": "Bildschirmaufnahme",
+  "permissions.screen_why":
+    "Erstellt bei jedem Klick ein Bildschirmfoto, das den jeweiligen Schritt zeigt.",
+  "permissions.accessibility_title": "Bedienungshilfen",
+  "permissions.accessibility_why":
+    "Erkennt Klicks und Tastendrücke, damit CogniClone weiß, wann ein neuer Schritt beginnt.",
+  "permissions.state_granted": "Erteilt",
+  "permissions.state_denied": "Fehlt",
+  "permissions.state_unknown": "Wird geprüft",
+  "permissions.grant_all": "Alle Berechtigungen erteilen",
+  "permissions.restart_hint":
+    "Bildschirmaufnahme und Bedienungshilfen werden erst nach einem Neustart der App wirksam -- das verlangt macOS.",
+  "permissions.restart": "App neu starten",
+  "permissions.settings_hint":
+    "Erteilst du eine Berechtigung in den Systemeinstellungen, erkennt CogniClone das automatisch.",
+  "permissions.skip": "Später erteilen",
+  "permissions.all_granted": "Alle Berechtigungen sind erteilt.",
   "permissions.grant_to_start":
     "Berechtigungen erteilen, um eine Aufnahme zu starten",
 
