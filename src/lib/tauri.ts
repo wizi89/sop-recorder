@@ -81,6 +81,11 @@ export async function readScreenshotBytes(path: string): Promise<Uint8Array> {
 
 export type MicPermissionState = "granted" | "denied" | "unknown";
 export type ScreenRecordingPermissionState = "granted" | "denied" | "unknown";
+/**
+ * Whether the global input hook can be installed. macOS only: without the
+ * Accessibility grant the recorder runs and captures no steps at all.
+ */
+export type AccessibilityPermissionState = "granted" | "denied" | "unknown";
 
 function normalizePermission<T extends "granted" | "denied" | "unknown">(state: string): T {
   if (state === "granted" || state === "denied") return state as T;
@@ -107,22 +112,39 @@ export async function getScreenRecordingPermissionState(): Promise<ScreenRecordi
   }
 }
 
+export async function getAccessibilityPermissionState(): Promise<AccessibilityPermissionState> {
+  try {
+    return normalizePermission<AccessibilityPermissionState>(
+      await invoke<string>("get_accessibility_permission_state"),
+    );
+  } catch {
+    return "unknown";
+  }
+}
+
 export interface PermissionsState {
   microphone: MicPermissionState;
   screen_recording: ScreenRecordingPermissionState;
+  accessibility: AccessibilityPermissionState;
 }
 
 /**
- * Trigger the macOS TCC prompts for mic + screen recording in one batch.
- * No-op on Windows (returns `granted` for both).
+ * Trigger the macOS TCC prompts for mic, screen recording and accessibility in
+ * one batch. No-op on Windows (returns `granted` for all three).
+ *
+ * Accessibility reports `denied` on the run that first prompts: macOS opens
+ * System Settings for it rather than deciding in the dialog.
  */
 export async function requestAllPermissions(): Promise<PermissionsState> {
-  const raw = await invoke<{ microphone: string; screen_recording: string }>(
-    "request_all_permissions",
-  );
+  const raw = await invoke<{
+    microphone: string;
+    screen_recording: string;
+    accessibility: string;
+  }>("request_all_permissions");
   return {
     microphone: normalizePermission<MicPermissionState>(raw.microphone),
     screen_recording: normalizePermission<ScreenRecordingPermissionState>(raw.screen_recording),
+    accessibility: normalizePermission<AccessibilityPermissionState>(raw.accessibility),
   };
 }
 
@@ -195,4 +217,18 @@ export interface WorkArea {
 
 export async function getWorkArea(): Promise<WorkArea> {
   return invoke("get_work_area");
+}
+
+/**
+ * Tell the capture side where the compact recording bar is, as
+ * [x, y, width, height] in logical points from the top-left of the primary
+ * display, or `null` when it is not on screen.
+ *
+ * Clicks inside it are the user driving the recorder -- pressing Stop -- and
+ * must not become steps of the process being recorded.
+ */
+export async function setRecorderRegion(
+  region: [number, number, number, number] | null,
+): Promise<void> {
+  return invoke("set_recorder_region", { region });
 }

@@ -90,8 +90,10 @@ pub fn run() {
             pipelines::set_selected_pipeline,
             permissions::get_microphone_permission_state,
             permissions::get_screen_recording_permission_state,
+            permissions::get_accessibility_permission_state,
             permissions::request_all_permissions,
             window::set_display_affinity,
+            window::set_recorder_region,
             window::get_work_area,
         ])
         .run(tauri::generate_context!())

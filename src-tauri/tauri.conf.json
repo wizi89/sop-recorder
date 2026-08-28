@@ -20,7 +20,8 @@
         "fullscreen": false,
         "decorations": true,
         "center": true,
-        "theme": "Dark"
+        "theme": "Dark",
+        "acceptFirstMouse": true
       }
     ],
     "security": {

@@ -13,14 +13,17 @@ import { useTranslation } from "./hooks/useTranslation";
 import { useQuota } from "./hooks/useQuota";
 import {
   getWorkArea,
+  setRecorderRegion,
   getSettings,
   deleteLastScreenshot,
   listSessionScreenshots,
   getMicrophonePermissionState,
   getScreenRecordingPermissionState,
+  getAccessibilityPermissionState,
   requestAllPermissions,
   type MicPermissionState,
   type ScreenRecordingPermissionState,
+  type AccessibilityPermissionState,
 } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -45,6 +48,8 @@ function MainApp() {
   const [micPermission, setMicPermission] = useState<MicPermissionState>("unknown");
   const [screenRecordingPermission, setScreenRecordingPermission] =
     useState<ScreenRecordingPermissionState>("unknown");
+  const [accessibilityPermission, setAccessibilityPermission] =
+    useState<AccessibilityPermissionState>("unknown");
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
@@ -73,10 +78,12 @@ function MainApp() {
     loadSettings();
     // Probe permission states up-front so the UI can surface a banner
     // before the user attempts to record. On macOS without these the
-    // recorder either fails (mic) or silently captures the wallpaper
-    // (screen recording).
+    // recorder either fails (mic), silently captures the wallpaper (screen
+    // recording), or runs a recording that captures no steps whatsoever
+    // (accessibility, which is what the global input hook needs).
     getMicrophonePermissionState().then(setMicPermission);
     getScreenRecordingPermissionState().then(setScreenRecordingPermission);
+    getAccessibilityPermissionState().then(setAccessibilityPermission);
   }, [loadSettings]);
 
   // Fire all macOS TCC prompts in one batch from a single user gesture,
@@ -86,6 +93,7 @@ function MainApp() {
       const next = await requestAllPermissions();
       setMicPermission(next.microphone);
       setScreenRecordingPermission(next.screen_recording);
+      setAccessibilityPermission(next.accessibility);
     } catch (e) {
       console.warn("Permission bootstrap failed:", e);
     }
@@ -144,14 +152,26 @@ function MainApp() {
       const MARGIN = 12;
       setTimeout(() => {
         Promise.all([getWorkArea(), appWindow.scaleFactor(), appWindow.outerSize()])
-          .then(([area, scale, outerSize]) => {
+          .then(async ([area, scale, outerSize]) => {
             const margin = Math.round(MARGIN * scale);
             const x = area.x + area.width - outerSize.width - margin;
             const y = area.y + area.height - outerSize.height - margin;
-            appWindow.setPosition(new PhysicalPosition(x, y));
+            await appWindow.setPosition(new PhysicalPosition(x, y));
+            // Tell the capture side where the bar ended up, so clicking its
+            // own Stop button is not recorded as a step of the process. Sent
+            // after the move, in the logical points the input hook works in.
+            await setRecorderRegion([
+              Math.round(x / scale),
+              Math.round(y / scale),
+              Math.round(outerSize.width / scale),
+              Math.round(outerSize.height / scale),
+            ]);
           })
-          .catch(() => {
-            // Fallback: keep current position
+          .catch((e) => {
+            // Position unknown: leave the window where it is and report no
+            // region, so a stale one cannot swallow real clicks.
+            console.warn("Could not anchor the recording bar:", e);
+            void setRecorderRegion(null);
           });
       }, 50);
     } else {
@@ -160,6 +180,7 @@ function MainApp() {
       appWindow.setDecorations(true);
       appWindow.setResizable(false);
       appWindow.center();
+      void setRecorderRegion(null);
     }
   }, [recorder.status]);
 
@@ -375,6 +396,7 @@ function MainApp() {
           onGenerateFromFolder={handleGenerateFromFolder}
           micPermission={micPermission}
           screenRecordingPermission={screenRecordingPermission}
+          accessibilityPermission={accessibilityPermission}
           onRequestPermissions={handleRequestPermissions}
           version={version}
         />

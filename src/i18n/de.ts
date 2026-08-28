@@ -48,8 +48,8 @@ const de = {
   // Permission bootstrap (macOS TCC)
   "permissions.screen_recording_denied":
     "Bildschirmaufnahme verweigert -- ohne diese Berechtigung sieht CogniClone nur den Desktop",
-  "permissions.mic_and_screen_denied":
-    "Mikrofon und Bildschirmaufnahme verweigert -- beide werden für Aufnahmen benötigt",
+  "permissions.accessibility_denied":
+    "Bedienungshilfen verweigert -- ohne diese Berechtigung erkennt CogniClone keine Klicks und zeichnet keine Schritte auf",
   "permissions.grant":
     "Erlauben",
   "permissions.grant_to_start":

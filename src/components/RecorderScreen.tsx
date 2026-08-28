@@ -10,7 +10,12 @@ import { useElapsedTime, formatElapsed } from "../hooks/useElapsedTime";
 import { useAudioLevel } from "../hooks/useAudioLevel";
 import type { RecorderStatus } from "../hooks/useRecorder";
 import type { RateLimitInfo } from "../lib/serverErrors";
-import type { Quota, MicPermissionState, ScreenRecordingPermissionState } from "../lib/tauri";
+import type {
+  Quota,
+  MicPermissionState,
+  ScreenRecordingPermissionState,
+  AccessibilityPermissionState,
+} from "../lib/tauri";
 
 interface RecorderScreenProps {
   email: string | null;
@@ -24,6 +29,7 @@ interface RecorderScreenProps {
   skipPiiCheck?: boolean;
   micPermission?: MicPermissionState;
   screenRecordingPermission?: ScreenRecordingPermissionState;
+  accessibilityPermission?: AccessibilityPermissionState;
   onRequestPermissions?: () => void;
   onStart: () => void;
   onStop: () => void;
@@ -56,6 +62,7 @@ export function RecorderScreen({
   skipPiiCheck,
   micPermission,
   screenRecordingPermission,
+  accessibilityPermission,
   onRequestPermissions,
   onStart,
   onStop,
@@ -104,8 +111,12 @@ export function RecorderScreen({
     const vuColor = audioLevel > 0.8 ? "#FBBF24" : "#34D399";
     const undoDisabled = captureCount === 0;
 
+    // The bar is deliberately NOT a drag region. It anchors itself to the
+    // corner of the work area for the whole recording; making it draggable
+    // invited the user to move it mid-recording, and the press that started
+    // the drag was captured as the recording's first step.
     return (
-      <div data-tauri-drag-region className="flex items-center h-full bg-surface overflow-hidden select-none">
+      <div className="flex items-center h-full bg-surface overflow-hidden select-none">
         <button
           onClick={handleCancel}
           className="h-full border-none cursor-pointer font-semibold"
@@ -209,8 +220,19 @@ export function RecorderScreen({
     return t("status.ready");
   })();
   const isReady = status === "idle" && !error && !statusMessage;
-  const permissionsBlocked =
-    micPermission === "denied" || screenRecordingPermission === "denied";
+  // Every permission the recorder is missing, one line each. A fused
+  // sentence per combination needed a new string for every pair and did not
+  // survive a third permission being added.
+  const deniedPermissions = [
+    micPermission === "denied" ? t("mic.permission_denied") : null,
+    screenRecordingPermission === "denied"
+      ? t("permissions.screen_recording_denied")
+      : null,
+    accessibilityPermission === "denied"
+      ? t("permissions.accessibility_denied")
+      : null,
+  ].filter((m): m is string => m !== null);
+  const permissionsBlocked = deniedPermissions.length > 0;
 
   // Quota chip: shown on idle/done/error/pii_blocked/rate_limited screens.
   // The compact recording mode returns early above, so by the time we reach
@@ -267,11 +289,11 @@ export function RecorderScreen({
         </button>
       </div>
 
-      {/* Permission banner: shown when mic or screen recording is missing.
+      {/* Permission banner: shown when any recording permission is missing.
           Single CTA triggers the OS prompts via the Rust bootstrap command,
           so the user grants everything in one sitting instead of being
           interrupted by a fresh prompt at every recording start. */}
-      {(micPermission === "denied" || screenRecordingPermission === "denied") && (
+      {permissionsBlocked && (
         <div className="flex justify-center pt-2 px-4">
           <div
             className="flex items-center gap-2 rounded-lg px-3 py-2 border w-full"
@@ -286,11 +308,9 @@ export function RecorderScreen({
               <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
             <div className="flex-1 leading-tight">
-              {micPermission === "denied" && screenRecordingPermission === "denied"
-                ? t("permissions.mic_and_screen_denied")
-                : micPermission === "denied"
-                  ? t("mic.permission_denied")
-                  : t("permissions.screen_recording_denied")}
+              {deniedPermissions.map((message) => (
+                <div key={message}>{message}</div>
+              ))}
             </div>
             {onRequestPermissions && (
               <button
