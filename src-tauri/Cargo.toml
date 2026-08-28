@@ -15,6 +15,14 @@ edition = "2021"
 name = "sop_recorder_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# Release binaries ship without their symbol table. Cargo's default keeps it,
+# which cost about a quarter of the binary -- 27 MB per architecture, and macOS
+# ships two of them in one universal bundle. Nothing reads those symbols: a
+# crash report from a released build is symbolicated against the build's own
+# artifacts, not the shipped binary.
+[profile.release]
+strip = true
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
