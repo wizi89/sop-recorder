@@ -877,6 +877,7 @@ name = "cogniclone-recorder"
 version = "0.14.0"
 dependencies = [
  "chrono",
+ "core-foundation 0.10.1",
  "core-graphics 0.24.0",
  "cpal",
  "dirs-next",
@@ -887,6 +888,8 @@ dependencies = [
  "imageproc",
  "keyring",
  "log",
+ "objc2",
+ "objc2-app-kit",
  "rdev",
  "reqwest 0.12.28",
  "reqwest-eventsource",

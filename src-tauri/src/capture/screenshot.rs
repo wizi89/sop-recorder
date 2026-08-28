@@ -5,16 +5,43 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use xcap::Monitor;
 
+/// The desktop a capture was composited against.
+///
+/// Two coordinate spaces meet in this module and they are not the same one on
+/// every platform. `Monitor`'s geometry and the OS's cursor position are in
+/// *logical* units; `Monitor::capture_image` hands back *physical* pixels. On
+/// Windows the two coincide, so the difference stayed invisible; on a Retina
+/// Mac there are two pixels per logical unit and conflating them cost the
+/// screenshot three quarters of the screen.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct VirtualScreen {
+    /// Top-left of the virtual desktop, in logical units -- the space a click
+    /// position arrives in, so it is what gets subtracted from one.
+    origin: (i32, i32),
+    /// Canvas pixels per logical unit.
+    scale: f64,
+}
+
+impl VirtualScreen {
+    /// Where a click lands on the composited canvas.
+    fn to_canvas(&self, click_x: i32, click_y: i32) -> (i32, i32) {
+        (
+            ((click_x - self.origin.0) as f64 * self.scale).round() as i32,
+            ((click_y - self.origin.1) as f64 * self.scale).round() as i32,
+        )
+    }
+}
+
 /// Capture the full virtual screen across all monitors.
-/// Returns the composited image.
-pub fn capture_full_screen() -> Result<RgbaImage, String> {
+/// Returns the composited image and the geometry it was composited against.
+pub fn capture_full_screen() -> Result<(RgbaImage, VirtualScreen), String> {
     let monitors = Monitor::all().map_err(|e| format!("Failed to enumerate monitors: {}", e))?;
 
     if monitors.is_empty() {
         return Err("No monitors found".into());
     }
 
-    // Calculate virtual screen bounds
+    // Virtual screen bounds, in logical units.
     let mut min_x = i32::MAX;
     let mut min_y = i32::MAX;
     let mut max_x = i32::MIN;
@@ -39,8 +66,22 @@ pub fn capture_full_screen() -> Result<RgbaImage, String> {
         max_y = max_y.max(y + h);
     }
 
-    let total_w = (max_x - min_x) as u32;
-    let total_h = (max_y - min_y) as u32;
+    // One canvas scale for the whole desktop, taken from the densest monitor so
+    // no display is composited below its native resolution. A less dense one is
+    // scaled up to match, which is the only way a mixed-DPI desktop can share a
+    // single canvas at all.
+    let scale = monitors
+        .iter()
+        .filter_map(|m| m.scale_factor().ok())
+        .filter(|s| *s > 0.0)
+        .fold(1.0f64, |acc, s| acc.max(s as f64));
+
+    let total_w = (((max_x - min_x) as f64) * scale).round() as u32;
+    let total_h = (((max_y - min_y) as f64) * scale).round() as u32;
+    let screen = VirtualScreen {
+        origin: (min_x, min_y),
+        scale,
+    };
     let mut canvas = RgbaImage::new(total_w, total_h);
 
     // Capture each monitor and composite onto the canvas
@@ -49,14 +90,42 @@ pub fn capture_full_screen() -> Result<RgbaImage, String> {
             .capture_image()
             .map_err(|e| format!("Capture failed for monitor: {}", e))?;
 
-        let offset_x = (m
+        let x = m
             .x()
-            .map_err(|e| format!("Failed to read monitor x position: {}", e))?
-            - min_x) as u32;
-        let offset_y = (m
+            .map_err(|e| format!("Failed to read monitor x position: {}", e))?;
+        let y = m
             .y()
-            .map_err(|e| format!("Failed to read monitor y position: {}", e))?
-            - min_y) as u32;
+            .map_err(|e| format!("Failed to read monitor y position: {}", e))?;
+        let logical_w = m
+            .width()
+            .map_err(|e| format!("Failed to read monitor width: {}", e))?;
+        let logical_h = m
+            .height()
+            .map_err(|e| format!("Failed to read monitor height: {}", e))?;
+
+        // What this monitor must occupy on the canvas. The captured image is
+        // already this size whenever the monitor is the one that set the scale,
+        // so the resize is skipped on the overwhelmingly common single-monitor
+        // desktop rather than paying for a no-op resample.
+        let target_w = ((logical_w as f64) * scale).round() as u32;
+        let target_h = ((logical_h as f64) * scale).round() as u32;
+        let img = if img.width() == target_w && img.height() == target_h {
+            img
+        } else {
+            log::info!(
+                "Rescaling monitor capture from {}x{} to {}x{} for the shared canvas",
+                img.width(),
+                img.height(),
+                target_w,
+                target_h,
+            );
+            DynamicImage::ImageRgba8(img)
+                .resize_exact(target_w, target_h, image::imageops::FilterType::Lanczos3)
+                .to_rgba8()
+        };
+
+        let (offset_x, offset_y) = screen.to_canvas(x, y);
+        let (offset_x, offset_y) = (offset_x.max(0) as u32, offset_y.max(0) as u32);
 
         for (px, py, pixel) in img.enumerate_pixels() {
             let cx = offset_x + px;
@@ -67,23 +136,7 @@ pub fn capture_full_screen() -> Result<RgbaImage, String> {
         }
     }
 
-    Ok(canvas)
-}
-
-/// Get the virtual screen offset (min_x, min_y) so click coordinates can be mapped.
-pub fn get_virtual_screen_offset() -> (i32, i32) {
-    let monitors = Monitor::all().unwrap_or_default();
-    let min_x = monitors
-        .iter()
-        .filter_map(|m| m.x().ok())
-        .min()
-        .unwrap_or(0);
-    let min_y = monitors
-        .iter()
-        .filter_map(|m| m.y().ok())
-        .min()
-        .unwrap_or(0);
-    (min_x, min_y)
+    Ok((canvas, screen))
 }
 
 const CLICK_MARKER_RADIUS: i32 = 18;
@@ -134,62 +187,135 @@ impl MarkerBox {
     }
 }
 
-/// Render a click overlay on the screenshot: red semi-transparent dot + white cursor arrow.
+/// The cursor arrow, as offsets from the click point at scale 1. Kept apart
+/// from the drawing so the marker box and the tests measure the same shape the
+/// renderer draws rather than a restatement of it.
+const ARROW_OFFSETS: [(i32, i32); 7] = [
+    (0, 0),
+    (0, 20),
+    (5, 16),
+    (10, 24),
+    (13, 22),
+    (8, 14),
+    (14, 14),
+];
+
+/// The box the marker occupies for a click at a canvas point, at `scale`.
+///
+/// The arrow hangs below and to the right of the click point, so a box around
+/// the disc alone would leave its lower tips in the image.
+fn marker_box_at(cx: i32, cy: i32, scale: f64) -> MarkerBox {
+    let radius = scaled_radius(scale);
+    let mut marker = MarkerBox {
+        x0: cx - radius,
+        y0: cy - radius,
+        x1: cx + radius,
+        y1: cy + radius,
+    };
+    for (dx, dy) in arrow_points(cx, cy, scale) {
+        marker.x0 = marker.x0.min(dx);
+        marker.y0 = marker.y0.min(dy);
+        marker.x1 = marker.x1.max(dx);
+        marker.y1 = marker.y1.max(dy);
+    }
+    marker
+}
+
+fn scaled_radius(scale: f64) -> i32 {
+    (CLICK_MARKER_RADIUS as f64 * scale).round() as i32
+}
+
+fn arrow_points(cx: i32, cy: i32, scale: f64) -> [(i32, i32); 7] {
+    ARROW_OFFSETS.map(|(dx, dy)| {
+        (
+            cx + (dx as f64 * scale).round() as i32,
+            cy + (dy as f64 * scale).round() as i32,
+        )
+    })
+}
+
+/// Render a click overlay on the screenshot: red semi-transparent dot + white
+/// cursor arrow.
+///
+/// `click` is in the OS's logical coordinate space, as the input hook reports
+/// it; `screen` is the geometry the image was composited against and is the
+/// only thing that knows where that lands in these pixels. The marker is drawn
+/// at the canvas's scale so it stays the same apparent size on a Retina display
+/// as on a 1x one, rather than shrinking to a speck the model cannot see.
 ///
 /// Returns the box the marker was drawn into, in this image's pixels. Derived
 /// from the drawing itself rather than restated, so the two cannot drift apart.
-pub fn render_click_overlay(img: &mut RgbaImage, click_x: i32, click_y: i32) -> MarkerBox {
-    let (offset_x, offset_y) = get_virtual_screen_offset();
-    let cx = (click_x - offset_x) as i32;
-    let cy = (click_y - offset_y) as i32;
+pub fn render_click_overlay(
+    img: &mut RgbaImage,
+    click_x: i32,
+    click_y: i32,
+    screen: &VirtualScreen,
+) -> MarkerBox {
+    let (cx, cy) = screen.to_canvas(click_x, click_y);
 
-    // Red semi-transparent dot (radius=18, alpha=0.7 -> 179)
+    // Red semi-transparent dot (alpha=0.7 -> 179)
     let red = Rgba([255, 0, 0, 179]);
-    draw_filled_circle_mut(img, (cx, cy), CLICK_MARKER_RADIUS, red);
+    draw_filled_circle_mut(img, (cx, cy), scaled_radius(screen.scale), red);
 
     // White cursor arrow polygon (simplified)
     let white = Rgba([255, 255, 255, 230]);
-    let arrow_points = [
-        Point::new(cx, cy),
-        Point::new(cx, cy + 20),
-        Point::new(cx + 5, cy + 16),
-        Point::new(cx + 10, cy + 24),
-        Point::new(cx + 13, cy + 22),
-        Point::new(cx + 8, cy + 14),
-        Point::new(cx + 14, cy + 14),
-    ];
-    draw_polygon_mut(img, &arrow_points, white);
+    let points: Vec<Point<i32>> = arrow_points(cx, cy, screen.scale)
+        .iter()
+        .map(|(x, y)| Point::new(*x, *y))
+        .collect();
+    draw_polygon_mut(img, &points, white);
 
-    // The arrow hangs below and to the right of the click point, so a box
-    // around the disc alone would leave its lower tips in the image.
-    let mut marker = MarkerBox {
-        x0: cx - CLICK_MARKER_RADIUS,
-        y0: cy - CLICK_MARKER_RADIUS,
-        x1: cx + CLICK_MARKER_RADIUS,
-        y1: cy + CLICK_MARKER_RADIUS,
-    };
-    for p in &arrow_points {
-        marker.x0 = marker.x0.min(p.x);
-        marker.y0 = marker.y0.min(p.y);
-        marker.x1 = marker.x1.max(p.x);
-        marker.y1 = marker.y1.max(p.y);
-    }
-    marker
+    marker_box_at(cx, cy, screen.scale)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The box the overlay draws for a click at (cx, cy) on an unscaled image.
-    /// Mirrors `render_click_overlay` without needing a screen to draw on.
+    /// The box the overlay draws for a click at canvas point (cx, cy) on a 1x
+    /// desktop. The renderer's own geometry, so a test cannot pass against a
+    /// shape the renderer does not draw.
     fn drawn_box(cx: i32, cy: i32) -> MarkerBox {
-        MarkerBox {
-            x0: cx - CLICK_MARKER_RADIUS,
-            y0: cy - CLICK_MARKER_RADIUS,
-            x1: cx + CLICK_MARKER_RADIUS,
-            y1: cy + 24,
-        }
+        marker_box_at(cx, cy, 1.0)
+    }
+
+    fn screen(origin: (i32, i32), scale: f64) -> VirtualScreen {
+        VirtualScreen { origin, scale }
+    }
+
+    /// The Retina defect this module was rebuilt around. `Monitor` reports
+    /// geometry and the OS reports the cursor in logical units, while
+    /// `capture_image` returns physical pixels: on a 2x display a click at
+    /// logical (500, 400) is at pixel (1000, 800) of the capture. Marking the
+    /// logical point put every marker at a quarter of the desktop's area, up
+    /// and to the left of the thing the user actually clicked.
+    #[test]
+    fn a_click_is_mapped_into_the_canvas_at_its_scale() {
+        assert_eq!(screen((0, 0), 2.0).to_canvas(500, 400), (1000, 800));
+        assert_eq!(screen((0, 0), 1.0).to_canvas(500, 400), (500, 400));
+    }
+
+    /// The origin is subtracted in logical units, before the scale is applied:
+    /// a monitor left of the primary is placed by the OS in the same space the
+    /// cursor is reported in, not in canvas pixels.
+    #[test]
+    fn the_origin_is_subtracted_before_the_scale_is_applied() {
+        // Primary at (0, 0), a second display 1470 logical units to its left.
+        assert_eq!(screen((-1470, 0), 2.0).to_canvas(-1470, 0), (0, 0));
+        assert_eq!(screen((-1470, 0), 2.0).to_canvas(0, 0), (2940, 0));
+    }
+
+    /// A marker drawn at a fixed pixel radius onto a 2x canvas is half the
+    /// apparent size, and after the downscale to 1920 wide it is a speck.
+    #[test]
+    fn the_marker_keeps_its_apparent_size_on_a_dense_display() {
+        let at_1x = drawn_box(1000, 1000);
+        let at_2x = marker_box_at(2000, 2000, 2.0);
+        assert_eq!(
+            at_2x.x1 - at_2x.x0,
+            (at_1x.x1 - at_1x.x0) * 2,
+            "the marker must scale with the canvas, not stay 18 pixels on every display"
+        );
     }
 
     #[test]
@@ -259,9 +385,9 @@ pub fn capture_and_save(
     step_number: u32,
     click_position: Option<(i32, i32)>,
 ) -> Result<Option<MarkerBox>, String> {
-    let mut img = capture_full_screen()?;
+    let (mut img, screen) = capture_full_screen()?;
 
-    let marker = click_position.map(|(x, y)| render_click_overlay(&mut img, x, y));
+    let marker = click_position.map(|(x, y)| render_click_overlay(&mut img, x, y, &screen));
 
     let filename = format!("step_{:02}.png", step_number);
     let path = output_dir.join(&filename);

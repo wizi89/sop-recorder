@@ -1,5 +1,5 @@
-use rdev::{listen, Event, EventType};
-use std::sync::{Arc, Mutex, Once};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -131,7 +131,49 @@ struct Baseline {
 /// So the hook is installed exactly once for the process, and starting a
 /// recording swaps the session through here instead.
 static SESSION: Mutex<Option<Session>> = Mutex::new(None);
-static HOOK_INSTALLED: Once = Once::new();
+
+/// Whether the process-wide hook is installed, or is being installed right now.
+///
+/// A `Once` would be the obvious fit and was the wrong one on macOS: there
+/// `listen` is a `CGEventTapCreate` that fails immediately, rather than
+/// blocking forever, when Accessibility has not been granted. A `Once` counts
+/// that failure as the installation, so a user who grants the permission and
+/// starts a second recording gets no hook and no second attempt for the life of
+/// the process. This is cleared when `listen` returns an error, so the next
+/// recording tries again.
+static HOOK_INSTALLED: AtomicBool = AtomicBool::new(false);
+
+/// The recorder's own window, as (x, y, width, height) in the coordinate space
+/// `get_cursor_position` reports clicks in: logical points, origin at the
+/// top-left of the primary display.
+///
+/// Windows identifies the recorder's window by HWND and asks the OS what lies
+/// under the cursor. macOS cannot answer that question from here -- the only
+/// APIs that do are AppKit, which traps the process when touched off the main
+/// thread, and the tap callback this serves runs on its own thread. So the
+/// window reports where it is whenever it moves, and the check is arithmetic.
+///
+/// `None` between recordings, and whenever the window's position is unknown;
+/// both mean "suppress nothing", which is the safe direction. A surplus step
+/// costs attention, a missing one costs the recording.
+static EXCLUDED_REGION: Mutex<Option<(i32, i32, i32, i32)>> = Mutex::new(None);
+
+/// Tell the input hook where the recorder's window is, or that it is gone.
+pub fn set_excluded_region(region: Option<(i32, i32, i32, i32)>) {
+    *EXCLUDED_REGION.lock().unwrap() = region;
+}
+
+/// Whether a point falls inside the recorder's own window.
+///
+/// Split out from the platform hook so it can be tested without a window, a
+/// cursor, or a screen.
+fn point_is_in_region(point: (i32, i32), region: Option<(i32, i32, i32, i32)>) -> bool {
+    let Some((x, y, w, h)) = region else {
+        return false;
+    };
+    let (px, py) = point;
+    px >= x && px < x + w && py >= y && py < y + h
+}
 
 struct Session {
     exclude_hwnd: Option<isize>,
@@ -164,6 +206,8 @@ fn begin_session(exclude_hwnd: Option<isize>, on_event: Arc<dyn Fn(CaptureEvent)
 
 fn end_session() {
     *SESSION.lock().unwrap() = None;
+    // The bar goes back to being an ordinary window between recordings.
+    set_excluded_region(None);
 }
 
 /// Start listening for global mouse clicks and Enter key. Calls `on_event`
@@ -178,19 +222,43 @@ where
 {
     begin_session(exclude_hwnd, Arc::new(on_event));
 
-    HOOK_INSTALLED.call_once(|| {
+    if HOOK_INSTALLED
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+    {
         thread::spawn(|| {
-            if let Err(e) = listen(dispatch) {
-                log::error!("Input hook listener error: {:?}", e);
+            // Both backends own this thread for the life of the process on
+            // success and return only on failure.
+            if let Err(e) = install_os_hook() {
+                log::error!(
+                    "Input hook listener error: {}. No input will be captured for this recording. \
+                     On macOS this is what an ungranted Accessibility permission looks like.",
+                    e,
+                );
+                HOOK_INSTALLED.store(false, Ordering::SeqCst);
             }
         });
-    });
+    }
 
     InputHookHandle { _private: () }
 }
 
+/// The three OS input events this module reacts to, named independently of
+/// whichever backend reported them.
+///
+/// The backends do not agree on a representation and cannot: on macOS the one
+/// this used to share with Windows is the thing that crashes (see
+/// `macos_hook`), so the shared decision logic below is reached through this
+/// instead of through any one platform's event type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RawEvent {
+    LeftMouseDown,
+    ReturnPress,
+    ReturnRelease,
+}
+
 /// The single OS-level callback. Does nothing unless a recording is in session.
-fn dispatch(event: Event) {
+fn dispatch(event: RawEvent) {
     let mut guard = SESSION.lock().unwrap();
     let Some(session) = guard.as_mut() else {
         return;
@@ -205,8 +273,8 @@ fn dispatch(event: Event) {
         return;
     }
 
-    let captured = match event.event_type {
-        EventType::ButtonPress(rdev::Button::Left) => {
+    let captured = match event {
+        RawEvent::LeftMouseDown => {
             // Ignore clicks on the recorder window (works even if window is moved).
             // Logged like every other drop: D4 asks that no path discards an
             // event without leaving a trace, and this one is easy to overlook
@@ -220,9 +288,10 @@ fn dispatch(event: Event) {
                 return;
             }
 
-            // Sampled here, not carried by the event: rdev's ButtonPress has no
-            // coordinates. This is the same position the overlay is later drawn
-            // at, so the suppression decision and the picture agree.
+            // Sampled here rather than carried by the event, so it is read the
+            // same way on both platforms. This is the same position the overlay
+            // is later drawn at, so the suppression decision and the picture
+            // agree.
             let pos = get_cursor_position();
             let captured = CaptureEvent::MouseClick { pos };
             let since = session
@@ -248,11 +317,11 @@ fn dispatch(event: Event) {
             session.baseline.mouse = pos.map(|p| (p, now));
             captured
         }
-        EventType::KeyRelease(rdev::Key::Return) => {
+        RawEvent::ReturnRelease => {
             note_key_release(&mut session.baseline.keypress);
             return;
         }
-        EventType::KeyPress(rdev::Key::Return) => {
+        RawEvent::ReturnPress => {
             let since = session.baseline.keypress.since(now);
 
             if gate_keypress(&mut session.baseline.keypress, now) {
@@ -268,7 +337,6 @@ fn dispatch(event: Event) {
             // must not move the baseline the next click is compared against.
             CaptureEvent::EnterKey
         }
-        _ => return,
     };
 
     // Released before the callback runs, as the per-recording baseline lock was:
@@ -277,6 +345,141 @@ fn dispatch(event: Event) {
     let on_event = session.on_event.clone();
     drop(guard);
     on_event(captured);
+}
+
+/// Install the process-wide OS input hook and run it. Returns only on failure.
+#[cfg(windows)]
+fn install_os_hook() -> Result<(), String> {
+    use rdev::{listen, EventType};
+
+    listen(|event| {
+        let raw = match event.event_type {
+            EventType::ButtonPress(rdev::Button::Left) => RawEvent::LeftMouseDown,
+            EventType::KeyPress(rdev::Key::Return) => RawEvent::ReturnPress,
+            EventType::KeyRelease(rdev::Key::Return) => RawEvent::ReturnRelease,
+            _ => return,
+        };
+        dispatch(raw);
+    })
+    .map_err(|e| format!("{:?}", e))
+}
+
+/// Install the process-wide OS input hook and run it. Returns only on failure.
+///
+/// This is a hand-rolled `CGEventTap` rather than `rdev::listen`, which is what
+/// Windows uses, because rdev's macOS listener crashes the whole app on the
+/// first key pressed during a recording.
+///
+/// rdev fills in a human-readable `name` for every keyboard event, and does it
+/// inside the tap callback via `TISGetInputSourceProperty`. Text Input Services
+/// asserts it is called on the main queue; the tap callback runs on this
+/// spawned thread's run loop, so the assertion fires and the process dies on
+/// `SIGTRAP` in `_dispatch_assert_queue_fail`. There is no way to opt out of
+/// that work from outside rdev -- it happens before the event is handed over --
+/// and the recorder needs none of it. So the tap is built here, reading only
+/// the button and the key code, and never touching TIS.
+#[cfg(target_os = "macos")]
+fn install_os_hook() -> Result<(), String> {
+    use core_foundation::base::TCFType;
+    use core_foundation::runloop::{kCFRunLoopCommonModes, CFRunLoop};
+    use core_graphics::event::{
+        CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
+        EventField,
+    };
+
+    /// `kVK_Return` and `kVK_ANSI_KeypadEnter`: the two key codes that mean
+    /// "Enter" on a Mac keyboard. Numeric because they are ANSI virtual key
+    /// codes, fixed by the hardware layout and independent of the language the
+    /// keyboard is set to -- which is the whole reason no layout lookup, and
+    /// therefore no TIS call, is needed to recognise them.
+    const RETURN_KEY_CODES: [i64; 2] = [36, 76];
+
+    extern "C" {
+        fn CGEventTapEnable(tap: core_foundation::mach_port::CFMachPortRef, enable: bool);
+    }
+
+    // The tap's own port, so the callback can switch it back on.
+    //
+    // macOS disables a tap unilaterally if its callback ever runs long, and
+    // tells it so by delivering one `TapDisabledByTimeout` event. Nothing else
+    // is reported: without this the recorder would carry on showing a running
+    // timer and silently capture nothing more for the rest of the recording.
+    // The callback runs on this same thread, so a thread-local is all the
+    // sharing that is needed.
+    thread_local! {
+        static TAP_PORT: std::cell::Cell<core_foundation::mach_port::CFMachPortRef> =
+            const { std::cell::Cell::new(std::ptr::null_mut()) };
+    }
+
+    let tap = CGEventTap::new(
+        CGEventTapLocation::HID,
+        CGEventTapPlacement::HeadInsertEventTap,
+        // Listen only: the recorder observes input, it must never swallow or
+        // alter a click the user meant for the app they are recording.
+        CGEventTapOptions::ListenOnly,
+        vec![
+            CGEventType::LeftMouseDown,
+            CGEventType::KeyDown,
+            CGEventType::KeyUp,
+        ],
+        |_proxy, event_type, event| {
+            let raw = match event_type {
+                CGEventType::TapDisabledByTimeout | CGEventType::TapDisabledByUserInput => {
+                    log::warn!(
+                        "input_hooks: macOS disabled the event tap ({:?}); re-enabling it",
+                        event_type,
+                    );
+                    let port = TAP_PORT.with(|p| p.get());
+                    if !port.is_null() {
+                        // Safety: the port is this thread's own live tap, and
+                        // the run loop it belongs to is the one calling us.
+                        unsafe { CGEventTapEnable(port, true) };
+                    }
+                    None
+                }
+                CGEventType::LeftMouseDown => Some(RawEvent::LeftMouseDown),
+                CGEventType::KeyDown | CGEventType::KeyUp => {
+                    let code = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
+                    let down = matches!(event_type, CGEventType::KeyDown);
+                    RETURN_KEY_CODES.contains(&code).then(|| {
+                        if down {
+                            RawEvent::ReturnPress
+                        } else {
+                            RawEvent::ReturnRelease
+                        }
+                    })
+                }
+                _ => None,
+            };
+            if let Some(raw) = raw {
+                dispatch(raw);
+            }
+            // ListenOnly: the return value is ignored, and passing the event
+            // through unchanged is the only correct thing to express here.
+            None
+        },
+    )
+    .map_err(|_| {
+        "CGEventTapCreate returned null (Accessibility permission not granted)".to_string()
+    })?;
+
+    TAP_PORT.with(|p| p.set(tap.mach_port.as_concrete_TypeRef()));
+
+    let source = tap
+        .mach_port
+        .create_runloop_source(0)
+        .map_err(|_| "failed to create a run loop source for the event tap".to_string())?;
+
+    // Safety: adding a source to this thread's own run loop, with a mode
+    // constant owned by CoreFoundation.
+    unsafe {
+        CFRunLoop::get_current().add_source(&source, kCFRunLoopCommonModes);
+    }
+    tap.enable();
+
+    // Owns the thread from here on. The tap and its source stay alive with it.
+    CFRunLoop::run_current();
+    Err("the input hook run loop exited unexpectedly".to_string())
 }
 
 /// Check if the click landed on the excluded window (by HWND).
@@ -307,7 +510,19 @@ fn is_click_on_excluded_window(exclude_hwnd: Option<isize>) -> bool {
     }
 }
 
-#[cfg(not(windows))]
+/// Whether the click landed on the recorder's own window (macOS).
+///
+/// Compares the cursor against the region the window last reported. The HWND is
+/// meaningless here; the region is the whole input.
+#[cfg(target_os = "macos")]
+fn is_click_on_excluded_window(_exclude_hwnd: Option<isize>) -> bool {
+    let Some(cursor) = get_cursor_position() else {
+        return false;
+    };
+    point_is_in_region(cursor, *EXCLUDED_REGION.lock().unwrap())
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
 fn is_click_on_excluded_window(_exclude_hwnd: Option<isize>) -> bool {
     false
 }
@@ -398,6 +613,51 @@ mod tests {
             "a click at the previous recording's last position must not be suppressed",
         );
         end_session();
+    }
+
+    /// The bug: on macOS every click on the recorder's own bar became a step.
+    /// Stopping the recording therefore appended a bogus final step, and while
+    /// the bar needed two clicks to activate, it appended two.
+    #[test]
+    fn a_click_on_the_recorder_bar_is_inside_the_region() {
+        // The bar as anchored bottom-right: 240x34 at (1218, 840).
+        let bar = Some((1218, 840, 240, 34));
+        assert!(point_is_in_region((1408, 843), bar), "the Stop button");
+        assert!(point_is_in_region((1218, 840), bar), "top-left corner is in");
+    }
+
+    #[test]
+    fn a_click_outside_the_recorder_bar_is_a_real_step() {
+        let bar = Some((1218, 840, 240, 34));
+        assert!(!point_is_in_region((1217, 843), bar), "one pixel left of it");
+        assert!(!point_is_in_region((1408, 839), bar), "one pixel above it");
+        assert!(!point_is_in_region((829, 318), bar), "the far side of the screen");
+    }
+
+    /// The far edges are exclusive: a window at x..x+w does not own the pixel
+    /// at x+w, which belongs to whatever is next to it.
+    #[test]
+    fn the_far_edges_of_the_region_are_exclusive() {
+        let bar = Some((1218, 840, 240, 34));
+        assert!(!point_is_in_region((1218 + 240, 843), bar));
+        assert!(!point_is_in_region((1408, 840 + 34), bar));
+    }
+
+    /// No known region must never suppress: a missing step costs the recording,
+    /// a surplus one costs attention.
+    #[test]
+    fn an_unknown_region_suppresses_nothing() {
+        assert!(!point_is_in_region((1408, 843), None));
+    }
+
+    #[test]
+    fn ending_a_session_forgets_the_region() {
+        set_excluded_region(Some((1218, 840, 240, 34)));
+        end_session();
+        assert!(
+            !point_is_in_region((1408, 843), *EXCLUDED_REGION.lock().unwrap()),
+            "a stale region would suppress real clicks in the next recording",
+        );
     }
 
     #[test]
