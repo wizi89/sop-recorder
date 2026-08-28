@@ -6,7 +6,13 @@
   <string>CogniClone records your microphone to capture the spoken explanation that becomes the SOP narration.</string>
   <key>NSScreenCaptureUsageDescription</key>
   <string>CogniClone captures screenshots of the active window during recording to illustrate each step of the SOP.</string>
+  <!-- Apple Events are sent by the updater, which installs a downloaded update
+       via AppleScript. The key is required for that, not optional: without it
+       macOS terminates the process the moment the event is sent. It is NOT the
+       key for Accessibility, which is what detects clicks and key presses and
+       has no usage-description key at all -- that is explained in the app's
+       own first-run permission screen instead. -->
   <key>NSAppleEventsUsageDescription</key>
-  <string>CogniClone uses input events to detect clicks and key presses that mark step boundaries during recording.</string>
+  <string>CogniClone needs this to install a downloaded update.</string>
 </dict>
 </plist>
