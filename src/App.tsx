@@ -174,50 +174,64 @@ function MainApp() {
     }
   }, [recorder.status, auth.loggedIn]);
 
-  // Window mode switching
-  useEffect(() => {
+  /// Shrink to the recording bar, anchor it to the corner of the work area,
+  /// and tell the capture side where it landed.
+  ///
+  /// Awaited before the recording starts rather than reacted to afterwards.
+  /// The input hook goes live inside `start_recording`, so anchoring after it
+  /// left a window in which a click on the bar was still captured as a step --
+  /// the exact defect the region exists to prevent.
+  const enterCompactMode = useCallback(async () => {
     const appWindow = getCurrentWindow();
-    if (recorder.status === "recording") {
-      appWindow.setSize(COMPACT_SIZE);
-      appWindow.setAlwaysOnTop(true);
-      appWindow.setDecorations(false);
-      appWindow.setResizable(false);
-      // Position to bottom-right of work area (physical pixels).
-      // Small delay lets the resize settle before positioning.
-      const MARGIN = 12;
-      setTimeout(() => {
-        Promise.all([getWorkArea(), appWindow.scaleFactor(), appWindow.outerSize()])
-          .then(async ([area, scale, outerSize]) => {
-            const margin = Math.round(MARGIN * scale);
-            const x = area.x + area.width - outerSize.width - margin;
-            const y = area.y + area.height - outerSize.height - margin;
-            await appWindow.setPosition(new PhysicalPosition(x, y));
-            // Tell the capture side where the bar ended up, so clicking its
-            // own Stop button is not recorded as a step of the process. Sent
-            // after the move, in the logical points the input hook works in.
-            await setRecorderRegion([
-              Math.round(x / scale),
-              Math.round(y / scale),
-              Math.round(outerSize.width / scale),
-              Math.round(outerSize.height / scale),
-            ]);
-          })
-          .catch((e) => {
-            // Position unknown: leave the window where it is and report no
-            // region, so a stale one cannot swallow real clicks.
-            console.warn("Could not anchor the recording bar:", e);
-            void setRecorderRegion(null);
-          });
-      }, 50);
-    } else {
-      appWindow.setSize(IDLE_SIZE);
-      appWindow.setAlwaysOnTop(false);
-      appWindow.setDecorations(true);
-      appWindow.setResizable(false);
-      appWindow.center();
-      void setRecorderRegion(null);
+    await appWindow.setSize(COMPACT_SIZE);
+    await appWindow.setAlwaysOnTop(true);
+    await appWindow.setDecorations(false);
+    await appWindow.setResizable(false);
+
+    const MARGIN = 12;
+    try {
+      const [area, scale, outerSize] = await Promise.all([
+        getWorkArea(),
+        appWindow.scaleFactor(),
+        appWindow.outerSize(),
+      ]);
+      const margin = Math.round(MARGIN * scale);
+      const x = area.x + area.width - outerSize.width - margin;
+      const y = area.y + area.height - outerSize.height - margin;
+      await appWindow.setPosition(new PhysicalPosition(x, y));
+      // In the logical points the input hook reports cursor positions in.
+      await setRecorderRegion([
+        Math.round(x / scale),
+        Math.round(y / scale),
+        Math.round(outerSize.width / scale),
+        Math.round(outerSize.height / scale),
+      ]);
+    } catch (e) {
+      // Position unknown: leave the window where it is and report no region,
+      // so a stale one cannot swallow real clicks.
+      console.warn("Could not anchor the recording bar:", e);
+      await setRecorderRegion(null);
     }
-  }, [recorder.status]);
+  }, []);
+
+  const exitCompactMode = useCallback(async () => {
+    const appWindow = getCurrentWindow();
+    await setRecorderRegion(null);
+    await appWindow.setSize(IDLE_SIZE);
+    await appWindow.setAlwaysOnTop(false);
+    await appWindow.setDecorations(true);
+    await appWindow.setResizable(false);
+    await appWindow.center();
+  }, []);
+
+  // Restores the full window when a recording ends. Entering compact mode is
+  // done by the caller before starting, not here, so the bar is already in
+  // place and its region already reported when the input hook goes live.
+  useEffect(() => {
+    if (recorder.status !== "recording") {
+      void exitCompactMode();
+    }
+  }, [recorder.status, exitCompactMode]);
 
   const handleOpenSettings = useCallback(async () => {
     // Check if settings window already exists
@@ -257,7 +271,16 @@ function MainApp() {
         return;
       }
     }
-    await recorder.start();
+    // Anchor the bar and register its region BEFORE the hook starts, so the
+    // click that stops the recording can never be captured as a step.
+    await enterCompactMode();
+    try {
+      await recorder.start();
+    } catch (e) {
+      // Never leave the user stranded in a 240x34 window with no recording.
+      await exitCompactMode();
+      throw e;
+    }
   }, [recorder, auth.loggedIn, quotaHook]);
 
   const handleStop = useCallback(async () => {
