@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:desktop": "tauri build",
+    "build:windows": "tauri build --bundles nsis",
+    "build:mac": "tauri build --bundles app,dmg --target universal-apple-darwin",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",

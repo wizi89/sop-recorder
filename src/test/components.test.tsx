@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { emit, listen } from "@tauri-apps/api/event";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LoginScreen } from "../components/LoginScreen";
+import { RecordingBar } from "../components/RecordingBar";
 import { RecorderScreen } from "../components/RecorderScreen";
 import { StatusBar } from "../components/StatusBar";
 import tauriConf from "../../src-tauri/tauri.conf.json";
@@ -64,15 +66,12 @@ describe("RecorderScreen", () => {
     error: null,
     outputDir: null,
     onStart: vi.fn(),
-    onStop: vi.fn(),
-    onCancel: vi.fn(),
     onSignOut: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenFolder: vi.fn(),
     onRetry: vi.fn(),
     onDismissPii: vi.fn(),
     onDismissRateLimit: vi.fn(),
-    onUndoLastScreenshot: vi.fn(),
     onConfirmGeneration: vi.fn(),
     onCancelFromReview: vi.fn(),
     version: APP_VERSION,
@@ -86,12 +85,6 @@ describe("RecorderScreen", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows stop button in recording state", () => {
-    render(<RecorderScreen {...defaults} status="recording" />);
-    expect(
-      screen.getByRole("button", { name: /aufnahme stoppen/i }),
-    ).toBeInTheDocument();
-  });
 
   it("shows done message and open folder button", () => {
     render(<RecorderScreen {...defaults} status="done" />);
@@ -140,16 +133,6 @@ describe("RecorderScreen", () => {
       screen.getByRole("button", { name: /aufnahme starten/i }),
     );
     expect(onStart).toHaveBeenCalled();
-  });
-
-  it("calls onStop when stop button clicked", async () => {
-    const onStop = vi.fn();
-    render(<RecorderScreen {...defaults} status="recording" onStop={onStop} />);
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /aufnahme stoppen/i }),
-    );
-    expect(onStop).toHaveBeenCalled();
   });
 
   it("shows PII disabled chip when skipPiiCheck is true", () => {
@@ -203,5 +186,83 @@ describe("StatusBar", () => {
     render(<StatusBar message="Error occurred" busy={false} isError={true} />);
     const el = screen.getByText("Error occurred");
     expect(el.className).toContain("text-error");
+  });
+});
+
+// The recording bar lives in its own window and holds no recorder state, so
+// what it owes the rest of the app is exactly one thing: the right event.
+describe("RecordingBar", () => {
+  // The global afterEach calls clearAllMocks, which forgets calls but keeps
+  // implementations. Two tests here drive `listen` to fire a specific event,
+  // and without this that implementation would leak into every test after
+  // them and fire it there too.
+  afterEach(() => {
+    vi.mocked(listen).mockImplementation(
+      (async () => () => {}) as unknown as typeof listen,
+    );
+  });
+
+  it("emits bar:stop when the stop button is clicked", async () => {
+    render(<RecordingBar />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /aufnahme stoppen/i }),
+    );
+    expect(emit).toHaveBeenCalledWith("bar:stop");
+  });
+
+  it("emits bar:undo when the undo button is enabled and clicked", async () => {
+    // Undo is disabled at zero captures, which is the state a fresh bar is in;
+    // one captured step is what turns it on.
+    vi.mocked(listen).mockImplementation((async (event: string, handler: unknown) => {
+      if (event === "recording:step_captured") {
+        (handler as (e: { payload: number }) => void)({ payload: 1 });
+      }
+      return () => {};
+    }) as unknown as typeof listen);
+
+    render(<RecordingBar />);
+
+    const undo = await screen.findByRole("button", { name: /letzten schritt/i });
+    await userEvent.click(undo);
+    expect(emit).toHaveBeenCalledWith("bar:undo");
+  });
+  it("replaces the counter with a warning when the input goes silent", async () => {
+    // A denied microphone does not fail the stream on macOS, it yields zeroed
+    // samples -- so this warning is the only thing standing between the user
+    // and an SOP with no narration.
+    vi.mocked(listen).mockImplementation((async (event: string, handler: unknown) => {
+      if (event === "recording:audio_silent") {
+        (handler as (e: { payload: null }) => void)({ payload: null });
+      }
+      return () => {};
+    }) as unknown as typeof listen);
+
+    render(<RecordingBar />);
+
+    expect(await screen.findByText(/kein ton/i)).toBeInTheDocument();
+  });
+  it("clears the silence warning when the next recording starts", async () => {
+    // The bar's window is created once at startup and only hidden between
+    // recordings, so nothing here ever remounts. Without a session boundary
+    // the latch stayed lit for the rest of the process, reporting a fault that
+    // had already been fixed.
+    const handlers: Record<string, (e: { payload: unknown }) => void> = {};
+    vi.mocked(listen).mockImplementation((async (event: string, handler: unknown) => {
+      handlers[event] = handler as (e: { payload: unknown }) => void;
+      return () => {};
+    }) as unknown as typeof listen);
+
+    render(<RecordingBar />);
+
+    await act(async () => {
+      handlers["recording:audio_silent"]?.({ payload: null });
+    });
+    expect(screen.getByText(/kein ton/i)).toBeInTheDocument();
+
+    await act(async () => {
+      handlers["recording:started"]?.({ payload: null });
+    });
+    expect(screen.queryByText(/kein ton/i)).not.toBeInTheDocument();
   });
 });

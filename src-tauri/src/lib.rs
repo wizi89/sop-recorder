@@ -65,6 +65,12 @@ pub fn run() {
         .setup(|app| {
             network::auth::migrate_keyring();
             settings::AppSettings::initialize(app.handle());
+            // Built here, not on demand: the bar can only join another app's
+            // fullscreen Space if it is created under an accessory activation
+            // policy, and that is a property of the window from birth.
+            if let Err(e) = commands::window::create_recording_bar(app.handle()) {
+                log::error!("Could not build the recording bar: {}", e);
+            }
             Ok(())
         })
         .manage(state::AppState::default())
@@ -89,7 +95,13 @@ pub fn run() {
             pipelines::get_selected_pipeline,
             pipelines::set_selected_pipeline,
             permissions::get_microphone_permission_state,
+            permissions::get_screen_recording_permission_state,
+            permissions::get_accessibility_permission_state,
+            permissions::open_privacy_settings,
+            permissions::request_permission,
             window::set_display_affinity,
+            window::set_recorder_region,
+            window::restart_app,
             window::get_work_area,
         ])
         .run(tauri::generate_context!())

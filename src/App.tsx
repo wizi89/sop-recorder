@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LoginScreen } from "./components/LoginScreen";
+import { PermissionsScreen } from "./components/PermissionsScreen";
 import { RecorderScreen } from "./components/RecorderScreen";
 import { SettingsPage } from "./components/SettingsPage";
 import { useAuth } from "./hooks/useAuth";
@@ -13,18 +15,24 @@ import { useTranslation } from "./hooks/useTranslation";
 import { useQuota } from "./hooks/useQuota";
 import {
   getWorkArea,
+  setRecorderRegion,
   getSettings,
   deleteLastScreenshot,
   listSessionScreenshots,
   getMicrophonePermissionState,
+  getScreenRecordingPermissionState,
+  getAccessibilityPermissionState,
+  restartApp,
   type MicPermissionState,
+  type ScreenRecordingPermissionState,
+  type AccessibilityPermissionState,
 } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 const IS_DEV = import.meta.env.DEV;
 
-const IDLE_SIZE = new LogicalSize(460, 440);
-const COMPACT_SIZE = new LogicalSize(240, 34);
+// Must match the label `create_recording_bar` builds the window under.
+const BAR_LABEL = "bar";
 
 function App() {
   // If this window is the settings window, render settings page
@@ -40,6 +48,13 @@ function MainApp() {
   const [version, setVersion] = useState("");
   const [skipPiiCheck, setSkipPiiCheck] = useState(false);
   const [micPermission, setMicPermission] = useState<MicPermissionState>("unknown");
+  const [screenRecordingPermission, setScreenRecordingPermission] =
+    useState<ScreenRecordingPermissionState>("unknown");
+  const [accessibilityPermission, setAccessibilityPermission] =
+    useState<AccessibilityPermissionState>("unknown");
+  // The first-run screen is dismissed for this launch, not forever: the
+  // recorder's banner keeps carrying whatever is still missing.
+  const [permissionSetupSkipped, setPermissionSetupSkipped] = useState(false);
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
@@ -63,13 +78,59 @@ function MainApp() {
       .catch(() => {});
   }, []);
 
+  const refreshPermissions = useCallback(async () => {
+    const [mic, screen, accessibility] = await Promise.all([
+      getMicrophonePermissionState(),
+      getScreenRecordingPermissionState(),
+      getAccessibilityPermissionState(),
+    ]);
+    setMicPermission(mic);
+    setScreenRecordingPermission(screen);
+    setAccessibilityPermission(accessibility);
+    // Returned as well as stored: a caller that needs the answer now cannot
+    // read state it set in the same tick.
+    return { mic, screen, accessibility };
+  }, []);
+
   useEffect(() => {
     getVersion().then(setVersion);
     loadSettings();
-    // Query microphone permission state on launch so we can surface a
-    // warning chip before the user attempts to record.
-    getMicrophonePermissionState().then(setMicPermission);
-  }, [loadSettings]);
+    // Probe permission states up-front so the UI can surface the setup screen
+    // before the user attempts to record. On macOS without these the recorder
+    // either fails (mic), silently captures the wallpaper (screen recording),
+    // or runs a recording that captures no steps whatsoever (accessibility,
+    // which is what the global input hook needs).
+    void refreshPermissions();
+  }, [loadSettings, refreshPermissions]);
+
+  // Screen Recording and Accessibility are granted in System Settings, not in
+  // the dialog, so the app is not told when it happens. Poll while the setup
+  // screen is up, and only while it is up, so returning from System Settings
+  // updates the rows instead of leaving them stale. Stops as soon as
+  // everything is granted, or the screen is dismissed.
+  const permissionsAllGranted =
+    micPermission === "granted" &&
+    screenRecordingPermission === "granted" &&
+    accessibilityPermission === "granted";
+  const permissionSetupVisible = !permissionsAllGranted && !permissionSetupSkipped;
+
+  useEffect(() => {
+    if (!permissionSetupVisible) return;
+    const id = setInterval(() => void refreshPermissions(), 1500);
+    return () => clearInterval(id);
+  }, [permissionSetupVisible, refreshPermissions]);
+
+  // Reopen the permission setup rather than firing prompts from here.
+  //
+  // The banner used to call a batch request, which could not help in the one
+  // state it was ever shown in: macOS raises a permission dialog only while a
+  // permission is undetermined, and a banner about a *denied* permission is by
+  // definition past that. Worse, firing three prompts at once meant only one
+  // dialog could be presented and the rest were auto-denied. The setup screen
+  // carries the per-permission action that does work.
+  const handleOpenPermissionSetup = useCallback(() => {
+    setPermissionSetupSkipped(false);
+  }, []);
 
   // Reload settings + quota when main window gains focus (e.g. after settings
   // window closes, or after the admin tops up the user's quota externally).
@@ -111,37 +172,70 @@ function MainApp() {
     }
   }, [recorder.status, auth.loggedIn]);
 
-  // Window mode switching
-  useEffect(() => {
+  /// Show the recording bar, anchor it to the corner of the work area, hide
+  /// the main window, and tell the capture side where the bar landed.
+  ///
+  /// Awaited before the recording starts rather than reacted to afterwards.
+  /// The input hook goes live inside `start_recording`, so anchoring after it
+  /// left a window in which a click on the bar was still captured as a step --
+  /// the exact defect the region exists to prevent.
+  const enterCompactMode = useCallback(async () => {
     const appWindow = getCurrentWindow();
-    if (recorder.status === "recording") {
-      appWindow.setSize(COMPACT_SIZE);
-      appWindow.setAlwaysOnTop(true);
-      appWindow.setDecorations(false);
-      appWindow.setResizable(false);
-      // Position to bottom-right of work area (physical pixels).
-      // Small delay lets the resize settle before positioning.
-      const MARGIN = 12;
-      setTimeout(() => {
-        Promise.all([getWorkArea(), appWindow.scaleFactor(), appWindow.outerSize()])
-          .then(([area, scale, outerSize]) => {
-            const margin = Math.round(MARGIN * scale);
-            const x = area.x + area.width - outerSize.width - margin;
-            const y = area.y + area.height - outerSize.height - margin;
-            appWindow.setPosition(new PhysicalPosition(x, y));
-          })
-          .catch(() => {
-            // Fallback: keep current position
-          });
-      }, 50);
-    } else {
-      appWindow.setSize(IDLE_SIZE);
-      appWindow.setAlwaysOnTop(false);
-      appWindow.setDecorations(true);
-      appWindow.setResizable(false);
-      appWindow.center();
+    const bar = await WebviewWindow.getByLabel(BAR_LABEL);
+    if (!bar) {
+      // Without the bar there is no way to stop a recording, so this is fatal
+      // rather than a degraded mode worth limping along in.
+      throw new Error("The recording bar window is missing");
     }
-  }, [recorder.status]);
+
+    const MARGIN = 12;
+    try {
+      const [area, scale, outerSize] = await Promise.all([
+        getWorkArea(),
+        bar.scaleFactor(),
+        bar.outerSize(),
+      ]);
+      const margin = Math.round(MARGIN * scale);
+      const x = area.x + area.width - outerSize.width - margin;
+      const y = area.y + area.height - outerSize.height - margin;
+      await bar.setPosition(new PhysicalPosition(x, y));
+      // In the logical points the input hook reports cursor positions in.
+      await setRecorderRegion([
+        Math.round(x / scale),
+        Math.round(y / scale),
+        Math.round(outerSize.width / scale),
+        Math.round(outerSize.height / scale),
+      ]);
+    } catch (e) {
+      // Position unknown: leave the bar where it is and report no region, so a
+      // stale one cannot swallow real clicks.
+      console.warn("Could not anchor the recording bar:", e);
+      await setRecorderRegion(null);
+    }
+
+    await bar.show();
+    // Hidden, not closed: this window keeps running the recording and owns
+    // every decision the bar's buttons ask for.
+    await appWindow.hide();
+  }, []);
+
+  const exitCompactMode = useCallback(async () => {
+    const appWindow = getCurrentWindow();
+    await setRecorderRegion(null);
+    const bar = await WebviewWindow.getByLabel(BAR_LABEL);
+    await bar?.hide();
+    await appWindow.show();
+    await appWindow.setFocus();
+  }, []);
+
+  // Restores the full window when a recording ends. Entering compact mode is
+  // done by the caller before starting, not here, so the bar is already in
+  // place and its region already reported when the input hook goes live.
+  useEffect(() => {
+    if (recorder.status !== "recording") {
+      void exitCompactMode();
+    }
+  }, [recorder.status, exitCompactMode]);
 
   const handleOpenSettings = useCallback(async () => {
     // Check if settings window already exists
@@ -181,8 +275,52 @@ function MainApp() {
         return;
       }
     }
-    await recorder.start();
-  }, [recorder, auth.loggedIn, quotaHook]);
+    // Nothing between app start and here re-reads the permissions, so one
+    // revoked mid-session was invisible until the audio gave it away five
+    // seconds in -- and a revoked Screen Recording gave nothing away at all,
+    // it just filled the guide with pictures of the desktop wallpaper.
+    const perms = await refreshPermissions();
+
+    // Screen Recording and Accessibility are refused outright: without either
+    // the recording cannot produce anything worth keeping. Missing screen
+    // capture yields wallpaper screenshots; missing accessibility captures no
+    // steps at all, while the timer runs as though it were working.
+    const blocking: string[] = [];
+    if (perms.screen !== "granted") blocking.push(t("permissions.screen_title"));
+    if (perms.accessibility !== "granted") {
+      blocking.push(t("permissions.accessibility_title"));
+    }
+    if (blocking.length > 0) {
+      recorder.setError(
+        t("permissions.blocked_start", { names: blocking.join(", ") }),
+      );
+      return;
+    }
+
+    // The microphone only degrades the result -- the steps and screenshots are
+    // still captured -- and recording without narration is a legitimate thing
+    // to want. So it asks rather than refuses.
+    if (perms.mic !== "granted") {
+      const proceed = await ask(t("permissions.no_mic_confirm"), {
+        title: t("permissions.no_mic_title"),
+        kind: "warning",
+        okLabel: t("permissions.no_mic_continue"),
+        cancelLabel: t("status.cancel"),
+      });
+      if (!proceed) return;
+    }
+
+    // Anchor the bar and register its region BEFORE the hook starts, so the
+    // click that stops the recording can never be captured as a step.
+    await enterCompactMode();
+    try {
+      await recorder.start();
+    } catch (e) {
+      // Never leave the user stranded in a 240x34 window with no recording.
+      await exitCompactMode();
+      throw e;
+    }
+  }, [recorder, auth.loggedIn, quotaHook, refreshPermissions, t]);
 
   const handleStop = useCallback(async () => {
     await recorder.stop();
@@ -199,6 +337,23 @@ function MainApp() {
       console.warn("Undo failed:", e);
     }
   }, []);
+
+  // The bar's three controls, arriving from the other window.
+  //
+  // The bar deliberately holds no recording state: it emits, and this window --
+  // hidden but still running -- performs the same actions it always did. One
+  // owner of the recorder means the two webviews cannot disagree about what is
+  // happening, and the bar stays a remote control rather than a second brain.
+  useEffect(() => {
+    const unlisten = Promise.all([
+      listen("bar:stop", () => void handleStop()),
+      listen("bar:cancel", () => void recorder.cancel()),
+      listen("bar:undo", () => void handleUndoLastScreenshot()),
+    ]);
+    return () => {
+      void unlisten.then((fns) => fns.forEach((fn) => fn()));
+    };
+  }, [handleStop, handleUndoLastScreenshot, recorder]);
 
   const handleOpenFolder = useCallback(async () => {
     if (recorder.outputDir) {
@@ -325,6 +480,25 @@ function MainApp() {
     );
   }
 
+  // Logged in, but the OS has not granted what a recording needs -> set that
+  // up first, in one sitting, rather than interrupting the first recording.
+  if (permissionSetupVisible) {
+    return (
+      <div className="flex flex-col h-full">
+        {updateBanner}
+        <div className="flex-1 min-h-0">
+          <PermissionsScreen
+            micPermission={micPermission}
+            screenRecordingPermission={screenRecordingPermission}
+            accessibilityPermission={accessibilityPermission}
+            onRestart={() => void restartApp()}
+            onSkip={() => setPermissionSetupSkipped(true)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // Logged in -> show recorder
   return (
     <div className="flex flex-col h-full">
@@ -341,19 +515,19 @@ function MainApp() {
           outputDir={recorder.outputDir}
           skipPiiCheck={skipPiiCheck}
           onStart={handleStart}
-          onStop={handleStop}
-          onCancel={recorder.cancel}
           onSignOut={auth.logout}
           onOpenSettings={handleOpenSettings}
           onOpenFolder={handleOpenFolder}
           onRetry={handleRetry}
           onDismissPii={() => recorder.setError(t("network.pii_blocked"))}
           onDismissRateLimit={recorder.dismissRateLimit}
-          onUndoLastScreenshot={handleUndoLastScreenshot}
           onConfirmGeneration={recorder.confirmGeneration}
           onCancelFromReview={recorder.cancelFromReview}
           onGenerateFromFolder={handleGenerateFromFolder}
           micPermission={micPermission}
+          screenRecordingPermission={screenRecordingPermission}
+          accessibilityPermission={accessibilityPermission}
+          onRequestPermissions={handleOpenPermissionSetup}
           version={version}
         />
       </div>

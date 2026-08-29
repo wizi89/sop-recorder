@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use tauri::{Emitter, Manager, State};
+#[cfg(windows)]
+use tauri::Manager;
+use tauri::{Emitter, State};
 use tauri_plugin_store::StoreExt;
 
 use crate::capture::audio::AudioHandle;
@@ -82,6 +84,11 @@ pub async fn start_recording(
     // them prematurely.
     state.capture_stop_flag.store(false, Ordering::SeqCst);
 
+    // Long enough that a pause before the user starts speaking is not mistaken
+    // for a dead microphone, short enough that they are told while the
+    // recording is still worth restarting.
+    const SILENCE_WARNING_AFTER_SECS: u32 = 5;
+
     // Spawn the audio-level poller: at ~10 Hz, read the latest peak level
     // from the shared atomic and emit a Tauri event so the frontend can
     // render a live VU meter. Exits when the capture stop flag is set.
@@ -90,6 +97,16 @@ pub async fn start_recording(
     let vu_app = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+
+        // A microphone the user denied does not make the stream fail: macOS
+        // vends silent samples, so the recording completes and the SOP is
+        // generated with an empty narration and no warning anywhere. Exact
+        // zeroes are what distinguishes that from a quiet room -- a live input
+        // always carries some noise floor, however small.
+        let mut silent_ticks: u32 = 0;
+        let mut silence_reported = false;
+        const SILENCE_TICKS_BEFORE_WARNING: u32 = SILENCE_WARNING_AFTER_SECS * 10;
+
         loop {
             interval.tick().await;
             if vu_stop_flag.load(Ordering::SeqCst) {
@@ -98,6 +115,24 @@ pub async fn start_recording(
             let bits = audio_level_atomic.load(Ordering::Relaxed);
             let level = f32::from_bits(bits);
             let _ = vu_app.emit("recording:audio_level", level);
+
+            if level == 0.0 {
+                silent_ticks += 1;
+                if silent_ticks >= SILENCE_TICKS_BEFORE_WARNING && !silence_reported {
+                    silence_reported = true;
+                    log::warn!(
+                        "Audio has been exactly silent for {}s -- the microphone is most \
+                         likely denied, and this recording will have no narration",
+                        SILENCE_WARNING_AFTER_SECS
+                    );
+                    let _ = vu_app.emit("recording:audio_silent", ());
+                }
+            } else {
+                // One real sample is enough to settle the question for good:
+                // a granted microphone that happens to go quiet later is not
+                // the failure this warns about.
+                silent_ticks = 0;
+            }
         }
     });
 
@@ -108,11 +143,20 @@ pub async fn start_recording(
     // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
 
-    // Get recorder window HWND so clicks on it are ignored (works even if moved)
+    // Get recorder window HWND so clicks on it are ignored (Windows only).
+    //
+    // The bar, not the main window: the bar is what is on screen while a
+    // recording runs, so it is the window the user's Stop click lands on. This
+    // read "main" until the bar became a window of its own, and pointing it at
+    // the wrong window silently turns every press of Stop into a captured step.
+    #[cfg(windows)]
     let exclude_hwnd = app
-        .get_webview_window("main")
+        .get_webview_window(crate::commands::window::BAR_LABEL)
         .and_then(|w| w.hwnd().ok())
         .map(|h| h.0 as isize);
+
+    #[cfg(not(windows))]
+    let exclude_hwnd = None;
 
     // Start input hooks -- screenshots are captured immediately in the callback
     let counter_clone = step_counter.clone();
@@ -191,6 +235,7 @@ pub async fn start_recording(
     *state.current_session.lock().unwrap() = Some(session);
     *status = RecordingStatus::Recording;
 
+    let _ = app.emit("recording:started", ());
     log::info!("Recording started: {}", output_dir.display());
     Ok(())
 }
@@ -232,7 +277,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
     }; // MutexGuard dropped here
 
     // Restore window visibility
-    let _ = crate::commands::window::set_display_affinity(app, false);
+    let _ = crate::commands::window::set_display_affinity(app.clone(), false);
 
     // Stop audio immediately
     if let Some(audio) = audio {
@@ -273,6 +318,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
         .map_err(|e| format!("Failed to write pending marker: {}", e))?;
 
     let output_dir = output_dir_path.to_string_lossy().to_string();
+    let _ = app.emit("recording:stopped", ());
     log::info!("Recording stopped. Output: {}", output_dir);
 
     Ok(output_dir)

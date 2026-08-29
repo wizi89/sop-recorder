@@ -1,8 +1,14 @@
 name: CI
 
 on:
+  workflow_dispatch:
+    inputs:
+      build_installers:
+        description: "Also build the Windows and macOS installers"
+        type: boolean
+        default: true
   push:
-    branches: [main]
+    branches: [main, "feature/**"]
   pull_request:
     branches: [main]
 
@@ -15,10 +21,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -44,22 +50,51 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+  # Tests run on every push; the installers do not. A macOS bundle takes about
+  # ten minutes, which is a long time to wait on a branch where most commits
+  # cannot affect packaging at all.
+  #
+  # Installers are built when the result is actually wanted: on main, on a
+  # manual run, or on any commit whose message says so with [build]. Release
+  # tags go through release.yml, which is untouched by this.
   build:
     needs: test
-    runs-on: windows-latest
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_installers) ||
+      contains(github.event.head_commit.message, '[build]')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact-name: windows-installer
+            artifact-path: src-tauri/target/release/bundle/nsis/*.exe
+            build-command: npx tauri build --bundles nsis
+          - os: macos-latest
+            artifact-name: macos-installer
+            artifact-path: |
+              src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+              src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
+            build-command: npx tauri build --bundles app,dmg --target universal-apple-darwin
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install macOS Rust targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
@@ -69,15 +104,68 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # Tauri can import a .p12 itself, but it resolves the identity with
+      # `security find-identity -v -p codesigning`, and `-v` means *valid*: a
+      # self-signed certificate is not valid until it is trusted for code
+      # signing. That import therefore succeeds ("1 identity imported") and the
+      # build then fails with "failed to resolve signing identity". Doing the
+      # keychain work here leaves somewhere to add that trust.
+      - name: Import the macOS signing certificate
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERTIFICATE}" ]; then
+            echo "No signing certificate configured; the build stays ad-hoc."
+            exit 0
+          fi
+
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -A -T /usr/bin/codesign
+          # Without this codesign blocks on a UI prompt for the private key.
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+          # The trust that makes the identity "valid". System domain, because
+          # the user domain wants a UI confirmation that a runner cannot give.
+          openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -clcerts -nokeys \
+            -passin "pass:$APPLE_CERTIFICATE_PASSWORD" -out "$RUNNER_TEMP/cert.pem"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
+
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/cert.pem"
+          echo "Identities now resolvable:"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
       - name: Build Tauri app
-        run: npx tauri build
+        run: ${{ matrix.build-command }}
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Signs macOS builds with one stable certificate instead of ad-hoc.
+          # Without a certificate the app's code identity is its binary hash,
+          # so every update looks like a different program: users re-grant
+          # Screen Recording, Accessibility and the microphone each time, and
+          # are asked for their Keychain password again. See
+          # scripts/macos-release-cert.sh.
+          #
+          # Absent secrets leave these empty and the build falls back to the
+          # ad-hoc identity in tauri.conf.json, so forks still build.
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: windows-installer
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
           retention-days: 7

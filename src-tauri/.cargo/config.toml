@@ -1,0 +1,10 @@
+# Sign local macOS dev builds with one stable identity so the Keychain does not
+# re-prompt on every rebuild. See scripts/macos-dev-cert.sh for the full why.
+#
+# The runner degrades to a plain exec when the dev identity is absent, so this
+# is inert on CI and on machines that have not run the setup script.
+[target.aarch64-apple-darwin]
+runner = "../scripts/macos-dev-sign-run.sh"
+
+[target.x86_64-apple-darwin]
+runner = "../scripts/macos-dev-sign-run.sh"

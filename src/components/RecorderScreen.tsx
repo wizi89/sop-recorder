@@ -1,16 +1,18 @@
-import { ask } from "@tauri-apps/plugin-dialog";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "../hooks/useTranslation";
 import { StatusBar } from "./StatusBar";
 import { PiiBlockedModal } from "./PiiBlockedModal";
 import { RateLimitModal } from "./RateLimitModal";
 import { ReviewScreen } from "./ReviewScreen";
 import { useCaptureCount } from "../hooks/useCaptureCount";
-import { useElapsedTime, formatElapsed } from "../hooks/useElapsedTime";
-import { useAudioLevel } from "../hooks/useAudioLevel";
+import { useElapsedTime } from "../hooks/useElapsedTime";
 import type { RecorderStatus } from "../hooks/useRecorder";
 import type { RateLimitInfo } from "../lib/serverErrors";
-import type { Quota, MicPermissionState } from "../lib/tauri";
+import type {
+  Quota,
+  MicPermissionState,
+  ScreenRecordingPermissionState,
+  AccessibilityPermissionState,
+} from "../lib/tauri";
 
 interface RecorderScreenProps {
   email: string | null;
@@ -23,16 +25,16 @@ interface RecorderScreenProps {
   outputDir: string | null;
   skipPiiCheck?: boolean;
   micPermission?: MicPermissionState;
+  screenRecordingPermission?: ScreenRecordingPermissionState;
+  accessibilityPermission?: AccessibilityPermissionState;
+  onRequestPermissions?: () => void;
   onStart: () => void;
-  onStop: () => void;
-  onCancel: () => void;
   onSignOut: () => void;
   onOpenSettings: () => void;
   onOpenFolder: () => void;
   onRetry: () => void;
   onDismissPii: () => void;
   onDismissRateLimit: () => void;
-  onUndoLastScreenshot: () => void;
   onConfirmGeneration: () => void;
   onCancelFromReview: () => void;
   onUpgradeQuota?: () => void;
@@ -53,16 +55,16 @@ export function RecorderScreen({
   outputDir,
   skipPiiCheck,
   micPermission,
+  screenRecordingPermission,
+  accessibilityPermission,
+  onRequestPermissions,
   onStart,
-  onStop,
-  onCancel,
   onSignOut,
   onOpenSettings,
   onOpenFolder,
   onRetry,
   onDismissPii,
   onDismissRateLimit,
-  onUndoLastScreenshot,
   onConfirmGeneration,
   onCancelFromReview,
   onUpgradeQuota,
@@ -73,110 +75,17 @@ export function RecorderScreen({
   const isRecording = status === "recording";
   const captureCount = useCaptureCount(isRecording);
   const elapsedSec = useElapsedTime(isRecording);
-  const audioLevel = useAudioLevel();
 
-  // Compact recording mode
+  // Recording: the controls live in the bar window, and this window is hidden
+  // for the duration. It still needs an honest state for the moments it is
+  // not -- falling through to the idle screen would offer a Start button for a
+  // recording that is already running.
   if (status === "recording") {
-    const handleCancel = async () => {
-      const appWindow = getCurrentWindow();
-      await appWindow.setAlwaysOnTop(false);
-      const confirmed = await ask(t("status.cancel_message"), {
-        title: t("status.cancel_title"),
-        kind: "warning",
-        okLabel: t("status.cancel_confirm"),
-        cancelLabel: t("status.cancel"),
-      });
-      if (confirmed) {
-        onCancel();
-      } else {
-        await appWindow.setAlwaysOnTop(true);
-      }
-    };
-
-    // Live telemetry strings for the compact bar.
-    // VU meter: render a small fixed-width bar whose fill width is the peak
-    // level clamped to [0..1]. Green below ~0.8, amber toward clipping.
-    const vuFillPct = Math.round(Math.min(1, Math.max(0, audioLevel)) * 100);
-    const vuColor = audioLevel > 0.8 ? "#FBBF24" : "#34D399";
-    const undoDisabled = captureCount === 0;
-
     return (
-      <div data-tauri-drag-region className="flex items-center h-full bg-surface overflow-hidden select-none">
-        <button
-          onClick={handleCancel}
-          className="h-full border-none cursor-pointer font-semibold"
-          style={{
-            fontSize: "0.6rem",
-            width: "32%",
-            backgroundColor: "var(--color-error)",
-            color: "#fff",
-          }}
-        >
-          {t("status.cancel")}
-        </button>
-        <button
-          onClick={onUndoLastScreenshot}
-          disabled={undoDisabled}
-          title={t("status.undo_last")}
-          aria-label={t("status.undo_last")}
-          className="h-full border-none font-semibold"
-          style={{
-            width: "13%",
-            backgroundColor: "var(--color-surface-container-highest)",
-            color: "#fff",
-            cursor: undoDisabled ? "not-allowed" : "pointer",
-            opacity: undoDisabled ? 0.35 : 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {/* Undo arrow icon */}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7v6h6" />
-            <path d="M21 17a9 9 0 00-15-6.7L3 13" />
-          </svg>
-        </button>
-        <div
-          className="h-full flex flex-col items-center justify-center pointer-events-none"
-          style={{ width: "22%", color: "#fff" }}
-        >
-          <span style={{ fontSize: "0.55rem", fontWeight: 600, lineHeight: 1.1 }}>
-            {captureCount} · {formatElapsed(elapsedSec)}
-          </span>
-          <div
-            aria-label="audio level"
-            style={{
-              width: "80%",
-              height: "3px",
-              marginTop: "3px",
-              borderRadius: "2px",
-              background: "rgba(255,255,255,0.12)",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                width: `${vuFillPct}%`,
-                height: "100%",
-                background: vuColor,
-                transition: "width 60ms linear",
-              }}
-            />
-          </div>
-        </div>
-        <button
-          onClick={onStop}
-          className="h-full border-none cursor-pointer font-semibold"
-          style={{
-            fontSize: "0.6rem",
-            width: "33%",
-            backgroundColor: "var(--color-primary)",
-            color: "#fff",
-          }}
-        >
-          {t("status.stop")}
-        </button>
+      <div className="flex items-center justify-center h-full p-6 text-center bg-surface">
+        <p className="text-sm text-on-surface-variant">
+          {t("status.recording_in_progress")}
+        </p>
       </div>
     );
   }
@@ -205,6 +114,19 @@ export function RecorderScreen({
     return t("status.ready");
   })();
   const isReady = status === "idle" && !error && !statusMessage;
+  // Every permission the recorder is missing, one line each. A fused
+  // sentence per combination needed a new string for every pair and did not
+  // survive a third permission being added.
+  const deniedPermissions = [
+    micPermission === "denied" ? t("mic.permission_denied") : null,
+    screenRecordingPermission === "denied"
+      ? t("permissions.screen_recording_denied")
+      : null,
+    accessibilityPermission === "denied"
+      ? t("permissions.accessibility_denied")
+      : null,
+  ].filter((m): m is string => m !== null);
+  const permissionsBlocked = deniedPermissions.length > 0;
 
   // Quota chip: shown on idle/done/error/pii_blocked/rate_limited screens.
   // The compact recording mode returns early above, so by the time we reach
@@ -261,22 +183,42 @@ export function RecorderScreen({
         </button>
       </div>
 
-      {/* Microphone permission warning chip (shown only when denied) */}
-      {micPermission === "denied" && (
+      {/* Permission banner: shown when any recording permission is missing.
+          Single CTA triggers the OS prompts via the Rust bootstrap command,
+          so the user grants everything in one sitting instead of being
+          interrupted by a fresh prompt at every recording start. */}
+      {permissionsBlocked && (
         <div className="flex justify-center pt-2 px-4">
           <div
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 border"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 border w-full"
             style={{
-              fontSize: "0.625rem",
-              background: "rgba(220, 60, 60, 0.12)",
+              fontSize: "0.7rem",
+              background: "rgba(220, 60, 60, 0.10)",
               borderColor: "rgba(220, 60, 60, 0.35)",
-              color: "rgba(255, 130, 130, 0.95)",
+              color: "rgba(255, 180, 180, 0.95)",
             }}
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
-            {t("mic.permission_denied")}
+            <div className="flex-1 leading-tight">
+              {deniedPermissions.map((message) => (
+                <div key={message}>{message}</div>
+              ))}
+            </div>
+            {onRequestPermissions && (
+              <button
+                onClick={onRequestPermissions}
+                className="rounded px-2 py-1 border-none cursor-pointer font-medium"
+                style={{
+                  fontSize: "0.65rem",
+                  background: "rgba(255, 180, 180, 0.18)",
+                  color: "rgba(255, 220, 220, 0.95)",
+                }}
+              >
+                {t("permissions.grant")}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -332,8 +274,14 @@ export function RecorderScreen({
           {(status === "idle" || status === "done" || status === "error" || status === "pii_blocked" || status === "rate_limited") && (
             <button
               onClick={onStart}
+              disabled={permissionsBlocked}
+              title={permissionsBlocked ? t("permissions.grant_to_start") : undefined}
               className="btn-primary w-56 py-3 text-sm"
-              style={{ animation: isReady ? "cta-breathe 3s ease-in-out infinite" : "none" }}
+              style={{
+                animation: isReady && !permissionsBlocked ? "cta-breathe 3s ease-in-out infinite" : "none",
+                opacity: permissionsBlocked ? 0.5 : 1,
+                cursor: permissionsBlocked ? "not-allowed" : "pointer",
+              }}
             >
               {t("status.start")}
             </button>

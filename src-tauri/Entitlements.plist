@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required to reach the microphone at all under the hardened runtime,
+	     which Tauri enables for release bundles. Without it macOS refuses the
+	     request outright: no dialog is shown, the completion handler fires
+	     immediately with false, and the status goes straight to denied. The
+	     old cpal probe could not see this because reading device metadata
+	     needs no permission, so it reported a granted microphone on builds
+	     that could never have recorded a sound. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+
+	<!-- The updater installs through osakit, which sends Apple Events.
+	     NSAppleEventsUsageDescription in Info.plist covers the prompt; under
+	     the hardened runtime the entitlement is what permits the send. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>

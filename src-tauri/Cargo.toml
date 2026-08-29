@@ -15,6 +15,14 @@ edition = "2021"
 name = "sop_recorder_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# Release binaries ship without their symbol table. Cargo's default keeps it,
+# which cost about a quarter of the binary -- 27 MB per architecture, and macOS
+# ships two of them in one universal bundle. Nothing reads those symbols: a
+# crash report from a released build is symbolicated against the build's own
+# artifacts, not the shipped binary.
+[profile.release]
+strip = true
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -32,8 +40,7 @@ log = "0.4"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["multipart", "stream", "json"] }
 reqwest-eventsource = "0.6"
-keyring = { version = "3", features = ["windows-native"] }
-xcap = "0.0.14"
+xcap = "0.9.4"
 cpal = "0.15"
 hound = "3.5"
 rdev = "0.5"
@@ -49,9 +56,39 @@ dirs-next = "2"
 toml = "0.8"
 
 [target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
 windows = { version = "0.58", features = [
   "Win32_Graphics_Gdi",
   "Win32_UI_HiDpi",
   "Win32_UI_WindowsAndMessaging",
   "Win32_Foundation",
 ] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.24"
+# The run loop that drives the input event tap (see capture::input_hooks).
+# Held at the version core-graphics 0.24 re-exports its types from, so the
+# CFMachPort the tap returns is the type this crate's CFRunLoop accepts.
+core-foundation = "0.10"
+# Already in the tree via tao; declared so `set_display_affinity` can reach
+# NSWindow directly rather than leaning on a transitive dependency.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = [
+    "NSWindow",
+    "NSResponder",
+    "NSScreen",
+    # The recording bar has to be built while the app is momentarily an
+    # accessory app; see `create_recording_bar`.
+    "NSApplication",
+    "NSRunningApplication",
+] }
+# The real microphone TCC state and prompt. cpal can only tell us a device
+# exists -- reading its metadata needs no permission at all, so it reported
+# "granted" on a machine that had never granted anything.
+objc2-av-foundation = { version = "0.3", features = [
+    "AVCaptureDevice",
+    "AVMediaFormat",
+    "block2",
+] }
+block2 = "0.6"
+keyring = { version = "3", features = ["apple-native"] }
