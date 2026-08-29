@@ -116,11 +116,12 @@ function PermissionRow({
             {t("permissions.needs_restart")}
           </div>
         )}
-        {/* macOS lists an app here only after it has asked for capture, and is
-            documented to refuse that for an app it does not consider properly
-            signed -- which an ad-hoc build is not. Rather than leave the user
-            at a pane with no CogniClone row and nothing to click, name the way
-            in that always works. */}
+        {/* Measured on macOS 26, with a properly signed build: CogniClone does
+            not appear in that pane by itself. CGRequestScreenCaptureAccess
+            returns, the pane opens, and there is no row. Signing was the
+            leading suspect and has been ruled out -- a certificate changed
+            nothing here. So this is the normal path rather than a fallback,
+            and the wording says so. */}
         {!granted && mayNeedManualAdd && (
           <div style={{ fontSize: "0.62rem", color: "#8C979D", marginTop: 2 }}>
             {t("permissions.add_manually")}

@@ -185,7 +185,7 @@ const de = {
   "permissions.no_mic_continue": "Trotzdem aufnehmen",
   "permissions.grant_one": "Erteilen",
   "permissions.add_manually":
-    "Steht CogniClone nicht in der Liste: unten mit + aus dem Programme-Ordner hinzufügen.",
+    "CogniClone steht dort meist nicht von selbst in der Liste -- dann unten mit + aus dem Programme-Ordner hinzufügen.",
   "permissions.needs_restart":
     "Diese Berechtigung erkennt CogniClone erst nach einem Neustart der App.",
   "permissions.restart_now": "App neu starten",
