@@ -44,6 +44,7 @@ function PermissionRow({
   pane,
   grantableInDialog,
   needsRestart = false,
+  mayNeedManualAdd = false,
   onAsk,
   busy,
 }: {
@@ -55,6 +56,8 @@ function PermissionRow({
   grantableInDialog: boolean;
   /** Whether the OS only reports this grant to a freshly started process. */
   needsRestart?: boolean;
+  /** Whether macOS may fail to list the app in its pane, leaving only `+`. */
+  mayNeedManualAdd?: boolean;
   onAsk: (pane: PrivacyPane) => void;
   busy: boolean;
 }) {
@@ -111,6 +114,16 @@ function PermissionRow({
         {!granted && needsRestart && (
           <div style={{ fontSize: "0.62rem", color: "#8C979D", marginTop: 2 }}>
             {t("permissions.needs_restart")}
+          </div>
+        )}
+        {/* macOS lists an app here only after it has asked for capture, and is
+            documented to refuse that for an app it does not consider properly
+            signed -- which an ad-hoc build is not. Rather than leave the user
+            at a pane with no CogniClone row and nothing to click, name the way
+            in that always works. */}
+        {!granted && mayNeedManualAdd && (
+          <div style={{ fontSize: "0.62rem", color: "#8C979D", marginTop: 2 }}>
+            {t("permissions.add_manually")}
           </div>
         )}
       </div>
@@ -205,6 +218,7 @@ export function PermissionsScreen({
             pane="screen"
             grantableInDialog={false}
             needsRestart
+            mayNeedManualAdd
             onAsk={askOne}
             busy={askingPane === "screen"}
           />

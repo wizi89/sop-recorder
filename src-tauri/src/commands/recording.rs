@@ -235,6 +235,7 @@ pub async fn start_recording(
     *state.current_session.lock().unwrap() = Some(session);
     *status = RecordingStatus::Recording;
 
+    let _ = app.emit("recording:started", ());
     log::info!("Recording started: {}", output_dir.display());
     Ok(())
 }
@@ -276,7 +277,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
     }; // MutexGuard dropped here
 
     // Restore window visibility
-    let _ = crate::commands::window::set_display_affinity(app, false);
+    let _ = crate::commands::window::set_display_affinity(app.clone(), false);
 
     // Stop audio immediately
     if let Some(audio) = audio {
@@ -317,6 +318,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
         .map_err(|e| format!("Failed to write pending marker: {}", e))?;
 
     let output_dir = output_dir_path.to_string_lossy().to_string();
+    let _ = app.emit("recording:stopped", ());
     log::info!("Recording stopped. Output: {}", output_dir);
 
     Ok(output_dir)

@@ -109,6 +109,18 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Signs macOS builds with one stable certificate instead of ad-hoc.
+          # Without a certificate the app's code identity is its binary hash,
+          # so every update looks like a different program: users re-grant
+          # Screen Recording, Accessibility and the microphone each time, and
+          # are asked for their Keychain password again. See
+          # scripts/macos-release-cert.sh.
+          #
+          # Absent secrets leave these empty and the build falls back to the
+          # ad-hoc identity in tauri.conf.json, so forks still build.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v7

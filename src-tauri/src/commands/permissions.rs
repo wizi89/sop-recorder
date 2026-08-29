@@ -253,9 +253,21 @@ pub fn open_privacy_settings(pane: String) -> Result<(), String> {
             "screen" => {
                 // An app that has never asked for screen capture is not listed
                 // in that pane at all, so opening it would show the user a
-                // switch that does not exist yet. This call is what puts it in
-                // the list; it also raises the dialog while the state is still
-                // undetermined, and is a no-op once decided.
+                // switch that does not exist yet.
+                //
+                // This is the call that is supposed to put it there, and on
+                // macOS 26 it does not reliably do so -- measured: it returns,
+                // the pane opens, and no CogniClone row appears. Attempting a
+                // capture instead was tried and does not help either, because
+                // the capture path goes through CGWindowListCreateImage, which
+                // has been deprecated since macOS 14 and returns wallpaper
+                // without engaging the privacy layer at all.
+                //
+                // Apple documents that an app it does not consider properly
+                // signed may simply be refused a place in this list, which an
+                // ad-hoc build is. Until the app is signed with a real
+                // certificate the honest answer is the one the row gives: add
+                // it by hand with the + button.
                 unsafe { CGRequestScreenCaptureAccess() };
                 "Privacy_ScreenCapture"
             }

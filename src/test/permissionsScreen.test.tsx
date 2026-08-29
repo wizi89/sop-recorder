@@ -174,5 +174,8 @@ describe("PermissionsScreen", () => {
     );
 
     expect(screen.getAllByText(/erst nach einem Neustart/i)).toHaveLength(1);
+    // Same row, same reason it is a special case: macOS may refuse to list an
+    // ad-hoc signed app at all, leaving the + button as the only way in.
+    expect(screen.getAllByText(/mit \+ aus dem Programme-Ordner/i)).toHaveLength(1);
   });
 });

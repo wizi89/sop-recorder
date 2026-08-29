@@ -5,6 +5,7 @@ import { useCaptureCount } from "../hooks/useCaptureCount";
 import { useElapsedTime, formatElapsed } from "../hooks/useElapsedTime";
 import { useAudioLevel } from "../hooks/useAudioLevel";
 import { useAudioSilent } from "../hooks/useAudioSilent";
+import { useRecordingActive } from "../hooks/useRecordingActive";
 
 /**
  * The compact recording bar, which lives in a window of its own.
@@ -24,10 +25,14 @@ import { useAudioSilent } from "../hooks/useAudioSilent";
  */
 export function RecordingBar() {
   const { t } = useTranslation();
-  const captureCount = useCaptureCount(true);
-  const elapsedSec = useElapsedTime(true);
+  // Not a constant `true`: this window outlives every recording it shows, so
+  // the hooks need the session boundary or they carry one recording's state
+  // into the next.
+  const recording = useRecordingActive();
+  const captureCount = useCaptureCount(recording);
+  const elapsedSec = useElapsedTime(recording);
   const audioLevel = useAudioLevel();
-  const audioSilent = useAudioSilent();
+  const audioSilent = useAudioSilent(recording);
 
   const handleCancel = async () => {
     const confirmed = await ask(t("status.cancel_message"), {

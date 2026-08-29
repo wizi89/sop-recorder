@@ -184,6 +184,8 @@ const de = {
     "Die Mikrofon-Berechtigung fehlt. Die Schritte werden aufgezeichnet, aber ohne gesprochene Erklärung fällt die Beschreibung deutlich knapper aus.",
   "permissions.no_mic_continue": "Trotzdem aufnehmen",
   "permissions.grant_one": "Erteilen",
+  "permissions.add_manually":
+    "Steht CogniClone nicht in der Liste: unten mit + aus dem Programme-Ordner hinzufügen.",
   "permissions.needs_restart":
     "Diese Berechtigung erkennt CogniClone erst nach einem Neustart der App.",
   "permissions.restart_now": "App neu starten",

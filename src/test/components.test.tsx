@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { emit, listen } from "@tauri-apps/api/event";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LoginScreen } from "../components/LoginScreen";
 import { RecordingBar } from "../components/RecordingBar";
@@ -241,5 +241,28 @@ describe("RecordingBar", () => {
     render(<RecordingBar />);
 
     expect(await screen.findByText(/kein ton/i)).toBeInTheDocument();
+  });
+  it("clears the silence warning when the next recording starts", async () => {
+    // The bar's window is created once at startup and only hidden between
+    // recordings, so nothing here ever remounts. Without a session boundary
+    // the latch stayed lit for the rest of the process, reporting a fault that
+    // had already been fixed.
+    const handlers: Record<string, (e: { payload: unknown }) => void> = {};
+    vi.mocked(listen).mockImplementation((async (event: string, handler: unknown) => {
+      handlers[event] = handler as (e: { payload: unknown }) => void;
+      return () => {};
+    }) as unknown as typeof listen);
+
+    render(<RecordingBar />);
+
+    await act(async () => {
+      handlers["recording:audio_silent"]?.({ payload: null });
+    });
+    expect(screen.getByText(/kein ton/i)).toBeInTheDocument();
+
+    await act(async () => {
+      handlers["recording:started"]?.({ payload: null });
+    });
+    expect(screen.queryByText(/kein ton/i)).not.toBeInTheDocument();
   });
 });
