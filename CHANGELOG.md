@@ -5,9 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.15.0] - 2026-08-29
 
-The recorder works on macOS. Every defect below was invisible on Windows, where the two coordinate spaces coincide, the Keychain has no analogue, and the input hook needs no permission.
+The recorder works on macOS. Every defect below was invisible on Windows, where the two coordinate spaces coincide, the Keychain has no analogue, and the input hook needs no permission. The last entry is the exception: a regression the macOS work introduced on Windows.
 
 ### Fixed
 
@@ -28,6 +28,7 @@ The recorder works on macOS. Every defect below was invisible on Windows, where 
 - The microphone permission was reported as granted whenever a microphone was attached, on a machine that had never granted anything. The check asked cpal for the default input device and its configuration, and both are CoreAudio property queries that need no permission at all. Two consequences: the setup screen showed a tick next to a permission nobody had given, and the bundled prompt never included the microphone, so that dialog interrupted the first recording instead. macOS is now asked the question through `AVCaptureDevice`, which is the layer that knows the answer. Windows keeps the device check, having no privacy layer to consult.
 - A refused permission left the setup screen showing a button that could not work. macOS presents a permission dialog only while the status is undetermined; after a refusal the request call is a silent no-op. Since both states were reported as "denied", the screen offered to ask, nothing happened, and it never dismissed. The two are now distinguished, and a refused permission gets a link straight to its System Settings pane instead of an offer to ask again.
 - Stopping a recording took two clicks again once the bar became its own window: `acceptFirstMouse` is set in the window configuration, which applies only to the main window and not to one built at runtime.
+- Every screenshot on a DPI-scaled Windows display was resampled up and then thrown away again. The shared canvas the Retina fix introduced sizes each monitor by multiplying its reported geometry by its DPI scale. That is right on macOS, where `Monitor` reports `CGDisplayBounds` in points, and wrong on Windows, where it reports `dmPelsWidth`, already in physical pixels. A 2560x1440 capture at 150% was Lanczos-resampled up to 3839x2160 and straight back down to 1920x1080, costing sharpness, three times the canvas memory, and roughly a second on every step. The canvas density is now measured from the captures themselves rather than read from the DPI scale, so it comes out 1.0 on Windows whatever the display setting, 2.0 on a Retina Mac, and the resample is skipped outright on any desktop whose displays agree.
 - The Accessibility permission was never checked. Without it the event tap is refused outright, so the recorder showed a running timer and captured nothing at all, and the user only discovered it once the recording was over. It is now probed at startup, prompted for alongside the microphone and screen-recording prompts, and reported in the permission banner.
 
 ### Added
@@ -442,7 +443,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/wizi89/sop-recorder/compare/v0.14.0...v0.15.0
 [0.13.1]: https://github.com/wizi89/sop-recorder/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/wizi89/sop-recorder/compare/v0.12.6...v0.13.0
 [0.10.0]: https://github.com/wizi89/sop-recorder/compare/v0.9.0...v0.10.0

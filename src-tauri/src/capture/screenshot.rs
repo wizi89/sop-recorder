@@ -7,18 +7,18 @@ use xcap::Monitor;
 
 /// The desktop a capture was composited against.
 ///
-/// Two coordinate spaces meet in this module and they are not the same one on
-/// every platform. `Monitor`'s geometry and the OS's cursor position are in
-/// *logical* units; `Monitor::capture_image` hands back *physical* pixels. On
-/// Windows the two coincide, so the difference stayed invisible; on a Retina
-/// Mac there are two pixels per logical unit and conflating them cost the
-/// screenshot three quarters of the screen.
+/// Two coordinate spaces meet in this module. Monitor geometry and the OS's
+/// cursor position share one of them; `Monitor::capture_image` hands back
+/// physical pixels, which on a Retina Mac are not the same thing. What that
+/// first space *is* differs by platform -- points on macOS, physical pixels on
+/// Windows -- so nothing here names it, and the ratio between the two is
+/// measured rather than assumed. See `canvas_scale`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VirtualScreen {
-    /// Top-left of the virtual desktop, in logical units -- the space a click
-    /// position arrives in, so it is what gets subtracted from one.
+    /// Top-left of the virtual desktop, in the units monitor geometry and
+    /// cursor positions arrive in, so it is what gets subtracted from a click.
     origin: (i32, i32),
-    /// Canvas pixels per logical unit.
+    /// Canvas pixels per unit of that space.
     scale: f64,
 }
 
@@ -32,6 +32,41 @@ impl VirtualScreen {
     }
 }
 
+/// One monitor's capture, paired with the geometry it was reported at.
+struct Shot {
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+    img: RgbaImage,
+}
+
+/// Canvas pixels per unit of the space monitor geometry is reported in, given
+/// `(geometry_width, captured_width)` for each monitor.
+///
+/// Measured from the captures rather than read from `Monitor::scale_factor`,
+/// because a DPI scale only means something next to geometry whose units you
+/// know, and xcap's units differ by platform: `CGDisplayBounds` on macOS, which
+/// is points, and `dmPelsWidth` on Windows, which is already physical pixels.
+/// Multiplying Windows' physical geometry by its DPI scale upscaled every
+/// capture by that factor, only for the final resize to throw the added pixels
+/// away again: softer screenshots, several times the memory, and about a second
+/// added to every step.
+///
+/// The ratio answers the question directly and needs no per-platform branch. A
+/// 2560px Windows monitor reports 2560 and captures 2560, giving 1.0 whatever
+/// its DPI scale is; a Retina Mac reports 1512 points and captures 3024 pixels,
+/// giving 2.0. The densest monitor wins, so no display is composited below its
+/// native resolution, and a desktop whose displays agree needs no resample at
+/// all.
+fn canvas_scale(monitors: &[(u32, u32)]) -> f64 {
+    monitors
+        .iter()
+        .filter(|(geometry_w, _)| *geometry_w > 0)
+        .map(|(geometry_w, captured_w)| *captured_w as f64 / *geometry_w as f64)
+        .fold(1.0f64, f64::max)
+}
+
 /// Capture the full virtual screen across all monitors.
 /// Returns the composited image and the geometry it was composited against.
 pub fn capture_full_screen() -> Result<(RgbaImage, VirtualScreen), String> {
@@ -41,40 +76,38 @@ pub fn capture_full_screen() -> Result<(RgbaImage, VirtualScreen), String> {
         return Err("No monitors found".into());
     }
 
-    // Virtual screen bounds, in logical units.
-    let mut min_x = i32::MAX;
-    let mut min_y = i32::MAX;
-    let mut max_x = i32::MIN;
-    let mut max_y = i32::MIN;
-
+    // Every monitor is captured before any of it is composited: the canvas
+    // scale is measured from the captures, so they all have to be in hand
+    // before the canvas can be sized.
+    let mut shots = Vec::with_capacity(monitors.len());
     for m in &monitors {
-        let x = m
-            .x()
-            .map_err(|e| format!("Failed to read monitor x position: {}", e))?;
-        let y = m
-            .y()
-            .map_err(|e| format!("Failed to read monitor y position: {}", e))?;
-        let w = m
-            .width()
-            .map_err(|e| format!("Failed to read monitor width: {}", e))? as i32;
-        let h = m
-            .height()
-            .map_err(|e| format!("Failed to read monitor height: {}", e))? as i32;
-        min_x = min_x.min(x);
-        min_y = min_y.min(y);
-        max_x = max_x.max(x + w);
-        max_y = max_y.max(y + h);
+        shots.push(Shot {
+            x: m.x()
+                .map_err(|e| format!("Failed to read monitor x position: {}", e))?,
+            y: m.y()
+                .map_err(|e| format!("Failed to read monitor y position: {}", e))?,
+            w: m.width()
+                .map_err(|e| format!("Failed to read monitor width: {}", e))?,
+            h: m.height()
+                .map_err(|e| format!("Failed to read monitor height: {}", e))?,
+            img: m
+                .capture_image()
+                .map_err(|e| format!("Capture failed for monitor: {}", e))?,
+        });
     }
 
-    // One canvas scale for the whole desktop, taken from the densest monitor so
-    // no display is composited below its native resolution. A less dense one is
-    // scaled up to match, which is the only way a mixed-DPI desktop can share a
-    // single canvas at all.
-    let scale = monitors
-        .iter()
-        .filter_map(|m| m.scale_factor().ok())
-        .filter(|s| *s > 0.0)
-        .fold(1.0f64, |acc, s| acc.max(s as f64));
+    // Virtual screen bounds, in the units monitor geometry is reported in.
+    let min_x = shots.iter().map(|s| s.x).min().unwrap_or(0);
+    let min_y = shots.iter().map(|s| s.y).min().unwrap_or(0);
+    let max_x = shots.iter().map(|s| s.x + s.w as i32).max().unwrap_or(0);
+    let max_y = shots.iter().map(|s| s.y + s.h as i32).max().unwrap_or(0);
+
+    let scale = canvas_scale(
+        &shots
+            .iter()
+            .map(|s| (s.w, s.img.width()))
+            .collect::<Vec<_>>(),
+    );
 
     let total_w = (((max_x - min_x) as f64) * scale).round() as u32;
     let total_h = (((max_y - min_y) as f64) * scale).round() as u32;
@@ -84,47 +117,28 @@ pub fn capture_full_screen() -> Result<(RgbaImage, VirtualScreen), String> {
     };
     let mut canvas = RgbaImage::new(total_w, total_h);
 
-    // Capture each monitor and composite onto the canvas
-    for m in &monitors {
-        let img = m
-            .capture_image()
-            .map_err(|e| format!("Capture failed for monitor: {}", e))?;
-
-        let x = m
-            .x()
-            .map_err(|e| format!("Failed to read monitor x position: {}", e))?;
-        let y = m
-            .y()
-            .map_err(|e| format!("Failed to read monitor y position: {}", e))?;
-        let logical_w = m
-            .width()
-            .map_err(|e| format!("Failed to read monitor width: {}", e))?;
-        let logical_h = m
-            .height()
-            .map_err(|e| format!("Failed to read monitor height: {}", e))?;
-
-        // What this monitor must occupy on the canvas. The captured image is
-        // already this size whenever the monitor is the one that set the scale,
-        // so the resize is skipped on the overwhelmingly common single-monitor
-        // desktop rather than paying for a no-op resample.
-        let target_w = ((logical_w as f64) * scale).round() as u32;
-        let target_h = ((logical_h as f64) * scale).round() as u32;
-        let img = if img.width() == target_w && img.height() == target_h {
-            img
+    for shot in shots {
+        // What this monitor must occupy on the canvas. Equal to what was
+        // captured unless a denser monitor set the scale, so the resample is
+        // skipped outright on any desktop whose displays agree.
+        let target_w = ((shot.w as f64) * scale).round() as u32;
+        let target_h = ((shot.h as f64) * scale).round() as u32;
+        let img = if shot.img.width() == target_w && shot.img.height() == target_h {
+            shot.img
         } else {
             log::info!(
                 "Rescaling monitor capture from {}x{} to {}x{} for the shared canvas",
-                img.width(),
-                img.height(),
+                shot.img.width(),
+                shot.img.height(),
                 target_w,
                 target_h,
             );
-            DynamicImage::ImageRgba8(img)
+            DynamicImage::ImageRgba8(shot.img)
                 .resize_exact(target_w, target_h, image::imageops::FilterType::Lanczos3)
                 .to_rgba8()
         };
 
-        let (offset_x, offset_y) = screen.to_canvas(x, y);
+        let (offset_x, offset_y) = screen.to_canvas(shot.x, shot.y);
         let (offset_x, offset_y) = (offset_x.max(0) as u32, offset_y.max(0) as u32);
 
         for (px, py, pixel) in img.enumerate_pixels() {
@@ -281,6 +295,65 @@ mod tests {
 
     fn screen(origin: (i32, i32), scale: f64) -> VirtualScreen {
         VirtualScreen { origin, scale }
+    }
+
+    /// The regression this function exists for. A Windows monitor reports
+    /// `dmPelsWidth`, which is already the number of pixels the capture
+    /// contains, so its DPI scale must not enter the canvas maths at all. The
+    /// previous version multiplied by it and upscaled every capture by 1.5 on a
+    /// 150% display, only to resize it back down again on the way to the PNG.
+    #[test]
+    fn a_windows_monitor_never_rescales_whatever_its_dpi_scale() {
+        assert_eq!(canvas_scale(&[(2560, 2560)]), 1.0);
+        assert_eq!(canvas_scale(&[(1920, 1920)]), 1.0);
+    }
+
+    /// A Retina Mac reports `CGDisplayBounds` in points, half its pixels, and
+    /// the canvas must be built at the pixels or three quarters of the desktop
+    /// is composited below native resolution.
+    #[test]
+    fn a_retina_monitor_composites_at_its_own_density() {
+        assert_eq!(canvas_scale(&[(1512, 3024)]), 2.0);
+    }
+
+    /// A shared canvas can only hold one density, so it takes the highest and
+    /// scales the sparser displays up to meet it.
+    #[test]
+    fn the_densest_monitor_sets_the_scale() {
+        assert_eq!(canvas_scale(&[(1512, 3024), (1920, 1920)]), 2.0);
+        assert_eq!(canvas_scale(&[(1920, 1920), (1512, 3024)]), 2.0);
+    }
+
+    /// Windows reports every monitor in physical pixels, so even a mixed-DPI
+    /// desktop is already one uniform pixel space and needs no resample.
+    #[test]
+    fn a_mixed_dpi_windows_desktop_still_needs_no_resample() {
+        assert_eq!(canvas_scale(&[(2560, 2560), (1920, 1920)]), 1.0);
+    }
+
+    /// Never below native: a monitor that somehow reports more geometry than it
+    /// captured must not drag the whole canvas down with it.
+    #[test]
+    fn the_canvas_is_never_scaled_below_native() {
+        assert_eq!(canvas_scale(&[(3840, 1920)]), 1.0);
+        assert_eq!(canvas_scale(&[(0, 2560)]), 1.0);
+    }
+
+    /// What the caller actually depends on: on a single-monitor desktop the
+    /// target size equals the captured size, so `capture_full_screen` skips the
+    /// Lanczos pass entirely. This is the assertion the old code failed on
+    /// Windows while its comment claimed otherwise.
+    #[test]
+    fn a_single_monitor_desktop_is_composited_without_a_resample() {
+        for (geometry_w, captured_w) in [(2560u32, 2560u32), (1512, 3024), (1920, 1920)] {
+            let scale = canvas_scale(&[(geometry_w, captured_w)]);
+            let target = ((geometry_w as f64) * scale).round() as u32;
+            assert_eq!(
+                target, captured_w,
+                "geometry {} capturing {} must need no resize",
+                geometry_w, captured_w
+            );
+        }
     }
 
     /// The Retina defect this module was rebuilt around. `Monitor` reports
