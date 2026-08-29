@@ -25,9 +25,11 @@ switches in System Settings, and the app links straight to each pane.
 
 **CogniClone will probably not be in the Screen Recording list**, so add it by
 hand: click **+** at the bottom of that list and choose CogniClone in your
-Applications folder. macOS lists an app there only after it has requested screen
-capture, and on macOS 26 that request does not put it in the list -- measured,
-with a properly signed build, so this is not a signing problem. Screen Recording is also the one permission macOS reports only
+Applications folder. macOS 15 and later require an Apple-issued Developer ID
+certificate -- one carrying a Team ID -- before screen capture permission
+registers properly, and neither an ad-hoc build nor a self-signed certificate
+qualifies. Permission still works once added by hand; only the automatic
+listing is affected. Screen Recording is also the one permission macOS reports only
 to a freshly started process, so the app keeps showing it as missing until you
 use **App neu starten** -- the button is on the permission screen for exactly
 this.

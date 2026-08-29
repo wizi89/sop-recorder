@@ -116,12 +116,14 @@ function PermissionRow({
             {t("permissions.needs_restart")}
           </div>
         )}
-        {/* Measured on macOS 26, with a properly signed build: CogniClone does
-            not appear in that pane by itself. CGRequestScreenCaptureAccess
-            returns, the pane opens, and there is no row. Signing was the
-            leading suspect and has been ruled out -- a certificate changed
-            nothing here. So this is the normal path rather than a fallback,
-            and the wording says so. */}
+        {/* macOS 15 and later require a binary signed with an Apple-issued
+            Developer ID -- specifically one carrying a Team ID -- before
+            screen capture permission registers properly. Ad-hoc bundles do not
+            qualify and neither does a self-signed certificate, since only
+            Apple can issue a Team ID. Measured both ways: the request returns,
+            the pane opens, and there is no CogniClone row either time.
+            Adding it by hand is the only way in until the Developer Program
+            enrollment completes, so this is the normal path, not a fallback. */}
         {!granted && mayNeedManualAdd && (
           <div style={{ fontSize: "0.62rem", color: "#8C979D", marginTop: 2 }}>
             {t("permissions.add_manually")}
