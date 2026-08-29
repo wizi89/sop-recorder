@@ -142,31 +142,7 @@ export async function getAccessibilityPermissionState(): Promise<AccessibilityPe
   }
 }
 
-export interface PermissionsState {
-  microphone: MicPermissionState;
-  screen_recording: ScreenRecordingPermissionState;
-  accessibility: AccessibilityPermissionState;
-}
 
-/**
- * Trigger the macOS TCC prompts for mic, screen recording and accessibility in
- * one batch. No-op on Windows (returns `granted` for all three).
- *
- * Accessibility reports `denied` on the run that first prompts: macOS opens
- * System Settings for it rather than deciding in the dialog.
- */
-export async function requestAllPermissions(): Promise<PermissionsState> {
-  const raw = await invoke<{
-    microphone: string;
-    screen_recording: string;
-    accessibility: string;
-  }>("request_all_permissions");
-  return {
-    microphone: normalizePermission<MicPermissionState>(raw.microphone),
-    screen_recording: normalizePermission<ScreenRecordingPermissionState>(raw.screen_recording),
-    accessibility: normalizePermission<AccessibilityPermissionState>(raw.accessibility),
-  };
-}
 
 /**
  * Relaunch the app so newly granted macOS permissions take effect.
@@ -290,4 +266,20 @@ export async function openPrivacySettings(
   pane: "microphone" | "screen" | "accessibility",
 ): Promise<void> {
   return invoke("open_privacy_settings", { pane });
+}
+
+export type PermissionName = "microphone" | "screen" | "accessibility";
+
+/**
+ * Raise the OS prompt for one permission and return where it stands after.
+ *
+ * Per permission rather than all at once, because macOS shows a dialog only
+ * while a permission is undetermined. A single "grant everything" button could
+ * not keep that promise once one had been refused: it did nothing for that one
+ * and gave no hint why.
+ */
+export async function requestPermission(
+  which: PermissionName,
+): Promise<string> {
+  return invoke<string>("request_permission", { which });
 }

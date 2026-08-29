@@ -22,14 +22,13 @@ import {
   getMicrophonePermissionState,
   getScreenRecordingPermissionState,
   getAccessibilityPermissionState,
-  requestAllPermissions,
   restartApp,
   type MicPermissionState,
   type ScreenRecordingPermissionState,
   type AccessibilityPermissionState,
 } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 const IS_DEV = import.meta.env.DEV;
 
 // Must match the label `create_recording_bar` builds the window under.
@@ -56,7 +55,6 @@ function MainApp() {
   // The first-run screen is dismissed for this launch, not forever: the
   // recorder's banner keeps carrying whatever is still missing.
   const [permissionSetupSkipped, setPermissionSetupSkipped] = useState(false);
-  const [requestingPermissions, setRequestingPermissions] = useState(false);
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
@@ -89,6 +87,9 @@ function MainApp() {
     setMicPermission(mic);
     setScreenRecordingPermission(screen);
     setAccessibilityPermission(accessibility);
+    // Returned as well as stored: a caller that needs the answer now cannot
+    // read state it set in the same tick.
+    return { mic, screen, accessibility };
   }, []);
 
   useEffect(() => {
@@ -119,20 +120,16 @@ function MainApp() {
     return () => clearInterval(id);
   }, [permissionSetupVisible, refreshPermissions]);
 
-  // Fire all macOS TCC prompts in one batch from a single user gesture,
-  // then re-read state so the banner clears without a relaunch.
-  const handleRequestPermissions = useCallback(async () => {
-    setRequestingPermissions(true);
-    try {
-      const next = await requestAllPermissions();
-      setMicPermission(next.microphone);
-      setScreenRecordingPermission(next.screen_recording);
-      setAccessibilityPermission(next.accessibility);
-    } catch (e) {
-      console.warn("Permission bootstrap failed:", e);
-    } finally {
-      setRequestingPermissions(false);
-    }
+  // Reopen the permission setup rather than firing prompts from here.
+  //
+  // The banner used to call a batch request, which could not help in the one
+  // state it was ever shown in: macOS raises a permission dialog only while a
+  // permission is undetermined, and a banner about a *denied* permission is by
+  // definition past that. Worse, firing three prompts at once meant only one
+  // dialog could be presented and the rest were auto-denied. The setup screen
+  // carries the per-permission action that does work.
+  const handleOpenPermissionSetup = useCallback(() => {
+    setPermissionSetupSkipped(false);
   }, []);
 
   // Reload settings + quota when main window gains focus (e.g. after settings
@@ -278,6 +275,41 @@ function MainApp() {
         return;
       }
     }
+    // Nothing between app start and here re-reads the permissions, so one
+    // revoked mid-session was invisible until the audio gave it away five
+    // seconds in -- and a revoked Screen Recording gave nothing away at all,
+    // it just filled the guide with pictures of the desktop wallpaper.
+    const perms = await refreshPermissions();
+
+    // Screen Recording and Accessibility are refused outright: without either
+    // the recording cannot produce anything worth keeping. Missing screen
+    // capture yields wallpaper screenshots; missing accessibility captures no
+    // steps at all, while the timer runs as though it were working.
+    const blocking: string[] = [];
+    if (perms.screen !== "granted") blocking.push(t("permissions.screen_title"));
+    if (perms.accessibility !== "granted") {
+      blocking.push(t("permissions.accessibility_title"));
+    }
+    if (blocking.length > 0) {
+      recorder.setError(
+        t("permissions.blocked_start", { names: blocking.join(", ") }),
+      );
+      return;
+    }
+
+    // The microphone only degrades the result -- the steps and screenshots are
+    // still captured -- and recording without narration is a legitimate thing
+    // to want. So it asks rather than refuses.
+    if (perms.mic !== "granted") {
+      const proceed = await ask(t("permissions.no_mic_confirm"), {
+        title: t("permissions.no_mic_title"),
+        kind: "warning",
+        okLabel: t("permissions.no_mic_continue"),
+        cancelLabel: t("status.cancel"),
+      });
+      if (!proceed) return;
+    }
+
     // Anchor the bar and register its region BEFORE the hook starts, so the
     // click that stops the recording can never be captured as a step.
     await enterCompactMode();
@@ -288,7 +320,7 @@ function MainApp() {
       await exitCompactMode();
       throw e;
     }
-  }, [recorder, auth.loggedIn, quotaHook]);
+  }, [recorder, auth.loggedIn, quotaHook, refreshPermissions, t]);
 
   const handleStop = useCallback(async () => {
     await recorder.stop();
@@ -459,10 +491,8 @@ function MainApp() {
             micPermission={micPermission}
             screenRecordingPermission={screenRecordingPermission}
             accessibilityPermission={accessibilityPermission}
-            onRequestPermissions={handleRequestPermissions}
             onRestart={() => void restartApp()}
             onSkip={() => setPermissionSetupSkipped(true)}
-            requesting={requestingPermissions}
           />
         </div>
       </div>
@@ -497,7 +527,7 @@ function MainApp() {
           micPermission={micPermission}
           screenRecordingPermission={screenRecordingPermission}
           accessibilityPermission={accessibilityPermission}
-          onRequestPermissions={handleRequestPermissions}
+          onRequestPermissions={handleOpenPermissionSetup}
           version={version}
         />
       </div>

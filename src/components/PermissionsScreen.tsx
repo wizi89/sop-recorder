@@ -1,5 +1,6 @@
+import { useCallback, useState } from "react";
 import { useTranslation } from "../hooks/useTranslation";
-import { openPrivacySettings } from "../lib/tauri";
+import { openPrivacySettings, requestPermission } from "../lib/tauri";
 import type {
   MicPermissionState,
   ScreenRecordingPermissionState,
@@ -30,12 +31,9 @@ interface PermissionsScreenProps {
   micPermission: MicPermissionState;
   screenRecordingPermission: ScreenRecordingPermissionState;
   accessibilityPermission: AccessibilityPermissionState;
-  /** Fires every OS prompt in one batch. */
-  onRequestPermissions: () => void;
   onRestart: () => void;
   /** Dismiss to the recorder, which keeps its own banner for what is missing. */
   onSkip: () => void;
-  requesting?: boolean;
 }
 
 /// One permission's row: what it is, why the recorder needs it, where it stands.
@@ -44,11 +42,21 @@ function PermissionRow({
   why,
   state,
   pane,
+  grantableInDialog,
+  needsRestart = false,
+  onAsk,
+  busy,
 }: {
   title: string;
   why: string;
   state: PermissionState;
   pane: PrivacyPane;
+  /** Whether an OS dialog can grant this outright, or only System Settings can. */
+  grantableInDialog: boolean;
+  /** Whether the OS only reports this grant to a freshly started process. */
+  needsRestart?: boolean;
+  onAsk: (pane: PrivacyPane) => void;
+  busy: boolean;
 }) {
   const { t } = useTranslation();
   const granted = state === "granted";
@@ -59,10 +67,16 @@ function PermissionRow({
       : state === "undetermined"
         ? t("permissions.state_undetermined")
         : t("permissions.state_unknown");
-  // Only a refusal needs its own way out. While a permission is merely
-  // undetermined the grant-all button still raises a real dialog, and a second
-  // route to the same place would just be noise.
-  const needsSettings = state === "denied";
+  // Every row that is not granted carries its own action, because a single
+  // button at the bottom could only ever describe one of them.
+  //
+  // "Erteilen" is offered only where a dialog can actually hand over the
+  // grant, which is the microphone alone: Screen Recording and Accessibility
+  // are switches in System Settings, and their prompts do no more than open
+  // that pane. Sending the user straight there is the same journey with one
+  // fewer dialog in the way -- and, for a microphone already refused, the only
+  // journey that exists.
+  const canAsk = grantableInDialog && (state === "undetermined" || state === "unknown");
 
   return (
     <div className="flex gap-3 items-start">
@@ -94,16 +108,32 @@ function PermissionRow({
           </span>
         </div>
         <div style={{ fontSize: "0.68rem", color: "#A8B2B8" }}>{why}</div>
-        {needsSettings && (
-          <button
-            onClick={() => void showPrivacySettings(pane)}
-            className="mt-1 border-none cursor-pointer bg-transparent p-0 underline"
-            style={{ fontSize: "0.64rem", color: "#2CB5C0" }}
-          >
-            {t("permissions.open_settings")}
-          </button>
+        {!granted && needsRestart && (
+          <div style={{ fontSize: "0.62rem", color: "#8C979D", marginTop: 2 }}>
+            {t("permissions.needs_restart")}
+          </div>
         )}
       </div>
+      {!granted && (
+        <button
+          onClick={() =>
+            canAsk ? void onAsk(pane) : void showPrivacySettings(pane)
+          }
+          disabled={busy}
+          className="rounded-md border-none font-semibold self-center shrink-0"
+          style={{
+            fontSize: "0.62rem",
+            padding: "4px 8px",
+            whiteSpace: "nowrap",
+            background: canAsk ? "#2CB5C0" : "rgba(255,255,255,0.10)",
+            color: canAsk ? "#0B1416" : "#D6DEE2",
+            opacity: busy ? 0.6 : 1,
+            cursor: busy ? "wait" : "pointer",
+          }}
+        >
+          {canAsk ? t("permissions.grant_one") : t("permissions.open_settings")}
+        </button>
+      )}
     </div>
   );
 }
@@ -121,10 +151,8 @@ export function PermissionsScreen({
   micPermission,
   screenRecordingPermission,
   accessibilityPermission,
-  onRequestPermissions,
   onRestart,
   onSkip,
-  requesting = false,
 }: PermissionsScreenProps) {
   const { t } = useTranslation();
 
@@ -133,10 +161,17 @@ export function PermissionsScreen({
     screenRecordingPermission === "granted" &&
     accessibilityPermission === "granted";
 
-  const anyDenied =
-    micPermission === "denied" ||
-    screenRecordingPermission === "denied" ||
-    accessibilityPermission === "denied";
+  const [askingPane, setAskingPane] = useState<PrivacyPane | null>(null);
+  const askOne = useCallback(async (pane: PrivacyPane) => {
+    setAskingPane(pane);
+    try {
+      await requestPermission(pane);
+    } catch (e) {
+      console.warn("Permission request failed:", e);
+    } finally {
+      setAskingPane(null);
+    }
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-surface overflow-y-auto">
@@ -159,18 +194,28 @@ export function PermissionsScreen({
             why={t("permissions.mic_why")}
             state={micPermission}
             pane="microphone"
+            grantableInDialog
+            onAsk={askOne}
+            busy={askingPane === "microphone"}
           />
           <PermissionRow
             title={t("permissions.screen_title")}
             why={t("permissions.screen_why")}
             state={screenRecordingPermission}
             pane="screen"
+            grantableInDialog={false}
+            needsRestart
+            onAsk={askOne}
+            busy={askingPane === "screen"}
           />
           <PermissionRow
             title={t("permissions.accessibility_title")}
             why={t("permissions.accessibility_why")}
             state={accessibilityPermission}
             pane="accessibility"
+            grantableInDialog={false}
+            onAsk={askOne}
+            busy={askingPane === "accessibility"}
           />
         </div>
 
@@ -194,11 +239,7 @@ export function PermissionsScreen({
             className="leading-snug"
             style={{ fontSize: "0.65rem", color: "#A8B2B8" }}
           >
-            {/* A refusal is the case where the button above cannot help, so
-                say why rather than let it look broken. */}
-            {anyDenied
-              ? t("permissions.denied_hint")
-              : t("permissions.settings_hint")}
+            {t("permissions.settings_hint")}
           </div>
         )}
 
@@ -212,19 +253,22 @@ export function PermissionsScreen({
               {t("permissions.restart")}
             </button>
           ) : (
+            // Always reachable, not only once everything is green. macOS
+            // reports a Screen Recording grant to a fresh process only, so
+            // after granting it in System Settings the row stays red and the
+            // user has no way to make the app look again -- which is exactly
+            // where this screen used to strand them.
             <button
-              onClick={onRequestPermissions}
-              disabled={requesting}
-              className="rounded-lg border-none font-semibold py-2"
+              onClick={onRestart}
+              className="rounded-lg cursor-pointer font-semibold py-2"
               style={{
-                fontSize: "0.75rem",
-                background: "#2CB5C0",
-                color: "#0B1416",
-                opacity: requesting ? 0.6 : 1,
-                cursor: requesting ? "wait" : "pointer",
+                fontSize: "0.72rem",
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.18)",
+                color: "#D6DEE2",
               }}
             >
-              {t("permissions.grant_all")}
+              {t("permissions.restart_now")}
             </button>
           )}
           <button

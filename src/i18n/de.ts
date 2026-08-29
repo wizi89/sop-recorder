@@ -74,7 +74,7 @@ const de = {
     "Bildschirmaufnahme und Bedienungshilfen werden erst nach einem Neustart der App wirksam -- das verlangt macOS.",
   "permissions.restart": "App neu starten",
   "permissions.settings_hint":
-    "Erteilst du eine Berechtigung in den Systemeinstellungen, erkennt CogniClone das automatisch.",
+    "Mikrofon und Bedienungshilfen erkennt CogniClone sofort. Die Bildschirmaufnahme prüft macOS nur beim Start, dafür ist ein Neustart nötig.",
   "permissions.skip": "Später erteilen",
   "permissions.all_granted": "Alle Berechtigungen sind erteilt.",
   "permissions.grant_to_start":
@@ -177,6 +177,18 @@ const de = {
   "tray.hide": "Ausblenden",
   "status.recording_in_progress":
     "Aufnahme läuft -- die Steuerleiste liegt unten rechts auf dem Bildschirm.",
+  "permissions.blocked_start":
+    "Aufnahme nicht möglich: {names} fehlt. Ohne diese Berechtigung entsteht keine brauchbare Anleitung.",
+  "permissions.no_mic_title": "Ohne Mikrofon aufnehmen?",
+  "permissions.no_mic_confirm":
+    "Die Mikrofon-Berechtigung fehlt. Die Schritte werden aufgezeichnet, aber ohne gesprochene Erklärung fällt die Beschreibung deutlich knapper aus.",
+  "permissions.no_mic_continue": "Trotzdem aufnehmen",
+  "permissions.grant_one": "Erteilen",
+  "permissions.needs_restart":
+    "Diese Berechtigung erkennt CogniClone erst nach einem Neustart der App.",
+  "permissions.restart_now": "App neu starten",
+  "permissions.remaining_hint":
+    "Diese Berechtigungen hat macOS bereits einmal abgefragt. Sie lassen sich nur noch in den Systemeinstellungen ändern.",
   "permissions.state_undetermined": "Noch nicht erteilt",
   "permissions.open_settings": "In Systemeinstellungen öffnen",
   "permissions.denied_hint":

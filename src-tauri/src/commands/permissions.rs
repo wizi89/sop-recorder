@@ -234,63 +234,6 @@ fn request_microphone_access() {
     }
 }
 
-/// Trigger the macOS TCC prompts for mic + screen recording up-front, so
-/// the user grants everything in one sitting instead of being interrupted
-/// by a fresh prompt at every recording start. Returns the post-prompt
-/// state for both so the UI can immediately re-render without polling.
-#[tauri::command]
-pub fn request_all_permissions() -> PermissionsState {
-    #[cfg(target_os = "macos")]
-    {
-        // Mic: this is the call that shows the dialog, and it is a no-op once
-        // the user has decided. It returns immediately rather than blocking
-        // for the answer, so the state read below is the state *before* the
-        // user replies -- the UI polls, and picks the grant up within a
-        // second or two. That is the same deal the Accessibility prompt makes.
-        request_microphone_access();
-        let mic = get_microphone_permission_state();
-
-        // Screen recording: this call shows the system dialog if the state
-        // is undetermined and is a no-op if the user has already decided.
-        // The return value reflects the *current* (still synchronous) state,
-        // which after a fresh decision will be `true` only if the user
-        // accepted within the dialog before this returns.
-        let screen_granted = unsafe { CGRequestScreenCaptureAccess() };
-        let screen = if screen_granted { "granted".to_string() } else { "denied".to_string() };
-
-        // Accessibility is granted in System Settings rather than in the
-        // dialog, so this reads `denied` on the run that first prompts. The
-        // banner stays up until the user comes back, which is the honest
-        // report: the hook genuinely cannot be installed until they do.
-        let accessibility_granted = accessibility_trusted(true);
-        let accessibility = if accessibility_granted {
-            "granted".to_string()
-        } else {
-            "denied".to_string()
-        };
-
-        log::info!(
-            "Permission bootstrap (macOS): mic={}, screen_recording={}, accessibility={}",
-            mic, screen, accessibility,
-        );
-        return PermissionsState { microphone: mic, screen_recording: screen, accessibility };
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        PermissionsState {
-            microphone: get_microphone_permission_state(),
-            screen_recording: "granted".to_string(),
-            accessibility: "granted".to_string(),
-        }
-    }
-}
-
-#[derive(serde::Serialize)]
-pub struct PermissionsState {
-    pub microphone: String,
-    pub screen_recording: String,
-    pub accessibility: String,
-}
 
 /// Open the System Settings pane where a refused permission can be restored.
 ///
@@ -307,7 +250,15 @@ pub fn open_privacy_settings(pane: String) -> Result<(), String> {
     {
         let anchor = match pane.as_str() {
             "microphone" => "Privacy_Microphone",
-            "screen" => "Privacy_ScreenCapture",
+            "screen" => {
+                // An app that has never asked for screen capture is not listed
+                // in that pane at all, so opening it would show the user a
+                // switch that does not exist yet. This call is what puts it in
+                // the list; it also raises the dialog while the state is still
+                // undetermined, and is a no-op once decided.
+                unsafe { CGRequestScreenCaptureAccess() };
+                "Privacy_ScreenCapture"
+            }
             "accessibility" => "Privacy_Accessibility",
             other => return Err(format!("Unknown privacy pane: {}", other)),
         };
@@ -341,5 +292,59 @@ mod privacy_pane_tests {
         // URL scope, so it is the part worth pinning.
         assert!(open_privacy_settings("../../etc".into()).is_err());
         assert!(open_privacy_settings("Privacy_Camera".into()).is_err());
+    }
+}
+
+/// Raise the prompt for one permission, and report where it stands afterwards.
+///
+/// Split out from `request_all_permissions` because the setup screen now asks
+/// per row. One button that fires all three could only ever be described as
+/// "grant everything", which is a promise it cannot keep: macOS shows a dialog
+/// only while a permission is undetermined, so with one already refused the
+/// button did nothing for it and said nothing about why.
+#[tauri::command]
+pub fn request_permission(which: String) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        match which.as_str() {
+            "microphone" => {
+                request_microphone_access();
+                Ok(get_microphone_permission_state())
+            }
+            // Shows the system dialog when undetermined, no-op once decided.
+            "screen" => {
+                let granted = unsafe { CGRequestScreenCaptureAccess() };
+                Ok(if granted { "granted".into() } else { "denied".into() })
+            }
+            // Granted in System Settings rather than in the dialog, so this
+            // reads denied on the run that first prompts. That is the honest
+            // report: the hook cannot be installed until the user comes back.
+            "accessibility" => {
+                let granted = accessibility_trusted(true);
+                Ok(if granted { "granted".into() } else { "denied".into() })
+            }
+            other => Err(format!("Unknown permission: {}", other)),
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        match which.as_str() {
+            "microphone" => Ok(get_microphone_permission_state()),
+            // No privacy layer to prompt against on Windows.
+            "screen" | "accessibility" => Ok("granted".to_string()),
+            other => Err(format!("Unknown permission: {}", other)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod request_permission_tests {
+    use super::request_permission;
+
+    #[test]
+    fn an_unknown_permission_is_refused_rather_than_guessed_at() {
+        assert!(request_permission("camera".into()).is_err());
+        assert!(request_permission("".into()).is_err());
     }
 }
