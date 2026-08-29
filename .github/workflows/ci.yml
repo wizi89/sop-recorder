@@ -104,6 +104,49 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # Tauri can import a .p12 itself, but it resolves the identity with
+      # `security find-identity -v -p codesigning`, and `-v` means *valid*: a
+      # self-signed certificate is not valid until it is trusted for code
+      # signing. That import therefore succeeds ("1 identity imported") and the
+      # build then fails with "failed to resolve signing identity". Doing the
+      # keychain work here leaves somewhere to add that trust.
+      - name: Import the macOS signing certificate
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_CERTIFICATE}" ]; then
+            echo "No signing certificate configured; the build stays ad-hoc."
+            exit 0
+          fi
+
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -A -T /usr/bin/codesign
+          # Without this codesign blocks on a UI prompt for the private key.
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+          # The trust that makes the identity "valid". System domain, because
+          # the user domain wants a UI confirmation that a runner cannot give.
+          openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -clcerts -nokeys \
+            -passin "pass:$APPLE_CERTIFICATE_PASSWORD" -out "$RUNNER_TEMP/cert.pem"
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
+            -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
+
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/cert.pem"
+          echo "Identities now resolvable:"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
       - name: Build Tauri app
         run: ${{ matrix.build-command }}
         env:
@@ -118,8 +161,6 @@ jobs:
           #
           # Absent secrets leave these empty and the build falls back to the
           # ad-hoc identity in tauri.conf.json, so forks still build.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
       - name: Upload installer artifact
