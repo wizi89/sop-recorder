@@ -119,6 +119,9 @@ fn main_thread_work_area(mtm: objc2::MainThreadMarker) -> Result<WorkArea, Strin
 }
 
 /// Toggle the SetWindowDisplayAffinity to hide/show the recorder from screenshots.
+///
+/// Targets the recording bar, which is the only window on screen while a
+/// recording runs -- the main window is hidden for the duration.
 #[tauri::command]
 pub fn set_display_affinity(app: tauri::AppHandle, hide: bool) -> Result<(), String> {
     #[cfg(windows)]
@@ -129,8 +132,8 @@ pub fn set_display_affinity(app: tauri::AppHandle, hide: bool) -> Result<(), Str
         use windows::Win32::UI::WindowsAndMessaging::{WDA_EXCLUDEFROMCAPTURE, WDA_NONE};
 
         let window = app
-            .get_webview_window("main")
-            .ok_or("Main window not found")?;
+            .get_webview_window(BAR_LABEL)
+            .ok_or("Recording bar not found")?;
 
         // Get the native HWND
         let hwnd = window.hwnd().map_err(|e| e.to_string())?;
@@ -157,12 +160,12 @@ pub fn set_display_affinity(app: tauri::AppHandle, hide: bool) -> Result<(), Str
         use tauri::Manager;
 
         let window = app
-            .get_webview_window("main")
-            .ok_or("Main window not found")?;
+            .get_webview_window(BAR_LABEL)
+            .ok_or("Recording bar not found")?;
 
         let ns_window = window.ns_window().map_err(|e| e.to_string())?;
         if ns_window.is_null() {
-            return Err("Main window has no NSWindow".into());
+            return Err("Recording bar has no NSWindow".into());
         }
 
         // AppKit is main-thread-only and traps the process on violation
@@ -219,4 +222,149 @@ pub fn set_recorder_region(region: Option<(i32, i32, i32, i32)>) {
 pub fn restart_app(app: tauri::AppHandle) {
     log::info!("Restarting to pick up newly granted permissions");
     app.restart();
+}
+
+/// Label of the window that carries the compact recording bar.
+///
+/// The bar is a window of its own rather than the main window resized, for a
+/// reason that is entirely macOS's: whether a window may appear inside another
+/// app's fullscreen Space is decided when the window is *created*, from the
+/// application's activation policy at that instant. It cannot be changed
+/// afterwards. Measured, on macOS 26:
+///
+///   level 25 or 101, regular app, existing window ......... not in the Space
+///   collectionBehavior re-asserted after the fact ......... not in the Space
+///   window hidden and re-shown after the fact ............. not in the Space
+///   nonactivatingPanel style bit on a plain NSWindow ...... not in the Space
+///   window created while the app is an accessory app ...... visible
+///
+/// So the bar is built once, at startup, inside a momentary dip to accessory
+/// policy -- and the main window, created by Tauri before this runs, keeps the
+/// ordinary behaviour a document window should have.
+pub const BAR_LABEL: &str = "bar";
+
+/// The collection-behavior flags that make a window an overlay.
+///
+/// CanJoinAllSpaces    -- show on every Space, fullscreen ones included.
+/// FullScreenAuxiliary -- may share a Space with a fullscreen window rather
+///                        than being suppressed by it.
+/// Stationary          -- do not slide during the Space-switch animation.
+///
+/// Merged into whatever the window already carries rather than assigned, so
+/// nothing Tauri set for its own purposes is silently dropped.
+#[cfg(target_os = "macos")]
+fn overlay_behavior(
+    current: objc2_app_kit::NSWindowCollectionBehavior,
+) -> objc2_app_kit::NSWindowCollectionBehavior {
+    use objc2_app_kit::NSWindowCollectionBehavior as B;
+    current.union(B::CanJoinAllSpaces | B::FullScreenAuxiliary | B::Stationary)
+}
+
+/// Build the recording bar's window during a momentary dip to accessory policy.
+///
+/// Runs from `setup`, which Tauri calls on the main thread -- the only thread
+/// AppKit tolerates. The policy is restored before returning, so the app keeps
+/// its Dock icon and menu bar for its whole life; the dip is measured in
+/// microseconds and is not observable.
+pub fn create_recording_bar(app: &tauri::AppHandle) -> Result<(), String> {
+    let builder = tauri::WebviewWindowBuilder::new(
+        app,
+        BAR_LABEL,
+        tauri::WebviewUrl::App("index.html".into()),
+    )
+    .title("CogniClone Recording")
+    .inner_size(240.0, 34.0)
+    .decorations(false)
+    .resizable(false)
+    .shadow(false)
+    // `tauri.conf.json` sets this for the main window and it does not reach a
+    // window built here. Without it the webview starts light and shows a white
+    // flash in the instant the bar appears over whatever is being recorded.
+    .theme(Some(tauri::Theme::Dark))
+    // The bar is never the key window -- it is an overlay the user reaches
+    // over whatever they are actually working in. Without this macOS spends
+    // the first click activating the window and only the second one reaches
+    // Stop, which reads as the button being broken. `tauri.conf.json` sets
+    // this for the main window, and that setting does not reach a window
+    // built here.
+    .accept_first_mouse(true)
+    // Shown when a recording starts, not before.
+    .visible(false)
+    // Windows keeps its taskbar button: before the bar was its own window the
+    // main window shrank into this role and stayed in the taskbar, and that is
+    // the only way back to a bar the user has lost behind something. macOS has
+    // no equivalent -- the Dock shows the app, not the window -- so the flag
+    // would only add a stray entry there.
+    .skip_taskbar(cfg!(target_os = "macos"));
+
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_app_kit::{
+            NSApplication, NSApplicationActivationPolicy, NSPopUpMenuWindowLevel, NSWindow,
+        };
+
+        let mtm = objc2::MainThreadMarker::new()
+            .ok_or("create_recording_bar must run on the main thread")?;
+        let ns_app = NSApplication::sharedApplication(mtm);
+
+        ns_app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+        let built = builder.build().map_err(|e| e.to_string());
+        ns_app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
+        let window = built?;
+
+        let ns_window = window.ns_window().map_err(|e| e.to_string())?;
+        if ns_window.is_null() {
+            return Err("Recording bar has no NSWindow".into());
+        }
+        let ns_window: &NSWindow = unsafe { &*(ns_window as *const NSWindow) };
+
+        ns_window.setCollectionBehavior(overlay_behavior(ns_window.collectionBehavior()));
+        // Above the fullscreen chrome apps draw for themselves: Chromium puts
+        // its fullscreen menu bar at layer 26, one above NSStatusWindowLevel,
+        // so status level would leave the bar underneath Brave's own toolbar.
+        ns_window.setLevel(NSPopUpMenuWindowLevel);
+
+        // Read back rather than log what we asked for: AppKit drops
+        // collection-behavior flags that conflict, silently.
+        log::info!(
+            "Recording bar built: behavior={:#010x} level={}",
+            ns_window.collectionBehavior().0,
+            ns_window.level()
+        );
+    }
+
+    // Windows has no Spaces, so a topmost window is already on whatever the
+    // user is looking at, fullscreen included. always_on_top is the whole fix
+    // there, and it is what the main window used to do in this role.
+    #[cfg(not(target_os = "macos"))]
+    {
+        builder
+            .always_on_top(true)
+            .build()
+            .map_err(|e| e.to_string())?;
+        log::info!("Recording bar built (always on top)");
+    }
+
+    Ok(())
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod overlay_tests {
+    use super::overlay_behavior;
+    use objc2_app_kit::NSWindowCollectionBehavior as B;
+
+    #[test]
+    fn the_three_overlay_flags_are_added() {
+        let got = overlay_behavior(B::empty());
+        assert!(got.contains(B::CanJoinAllSpaces));
+        assert!(got.contains(B::FullScreenAuxiliary));
+        assert!(got.contains(B::Stationary));
+    }
+
+    #[test]
+    fn flags_the_window_already_had_survive() {
+        let got = overlay_behavior(B::FullScreenPrimary);
+        assert!(got.contains(B::FullScreenPrimary));
+        assert!(got.contains(B::CanJoinAllSpaces));
+    }
 }

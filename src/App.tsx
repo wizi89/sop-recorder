@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LoginScreen } from "./components/LoginScreen";
@@ -31,8 +32,8 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { open } from "@tauri-apps/plugin-dialog";
 const IS_DEV = import.meta.env.DEV;
 
-const IDLE_SIZE = new LogicalSize(460, 440);
-const COMPACT_SIZE = new LogicalSize(240, 34);
+// Must match the label `create_recording_bar` builds the window under.
+const BAR_LABEL = "bar";
 
 function App() {
   // If this window is the settings window, render settings page
@@ -174,8 +175,8 @@ function MainApp() {
     }
   }, [recorder.status, auth.loggedIn]);
 
-  /// Shrink to the recording bar, anchor it to the corner of the work area,
-  /// and tell the capture side where it landed.
+  /// Show the recording bar, anchor it to the corner of the work area, hide
+  /// the main window, and tell the capture side where the bar landed.
   ///
   /// Awaited before the recording starts rather than reacted to afterwards.
   /// The input hook goes live inside `start_recording`, so anchoring after it
@@ -183,22 +184,24 @@ function MainApp() {
   /// the exact defect the region exists to prevent.
   const enterCompactMode = useCallback(async () => {
     const appWindow = getCurrentWindow();
-    await appWindow.setSize(COMPACT_SIZE);
-    await appWindow.setAlwaysOnTop(true);
-    await appWindow.setDecorations(false);
-    await appWindow.setResizable(false);
+    const bar = await WebviewWindow.getByLabel(BAR_LABEL);
+    if (!bar) {
+      // Without the bar there is no way to stop a recording, so this is fatal
+      // rather than a degraded mode worth limping along in.
+      throw new Error("The recording bar window is missing");
+    }
 
     const MARGIN = 12;
     try {
       const [area, scale, outerSize] = await Promise.all([
         getWorkArea(),
-        appWindow.scaleFactor(),
-        appWindow.outerSize(),
+        bar.scaleFactor(),
+        bar.outerSize(),
       ]);
       const margin = Math.round(MARGIN * scale);
       const x = area.x + area.width - outerSize.width - margin;
       const y = area.y + area.height - outerSize.height - margin;
-      await appWindow.setPosition(new PhysicalPosition(x, y));
+      await bar.setPosition(new PhysicalPosition(x, y));
       // In the logical points the input hook reports cursor positions in.
       await setRecorderRegion([
         Math.round(x / scale),
@@ -207,21 +210,25 @@ function MainApp() {
         Math.round(outerSize.height / scale),
       ]);
     } catch (e) {
-      // Position unknown: leave the window where it is and report no region,
-      // so a stale one cannot swallow real clicks.
+      // Position unknown: leave the bar where it is and report no region, so a
+      // stale one cannot swallow real clicks.
       console.warn("Could not anchor the recording bar:", e);
       await setRecorderRegion(null);
     }
+
+    await bar.show();
+    // Hidden, not closed: this window keeps running the recording and owns
+    // every decision the bar's buttons ask for.
+    await appWindow.hide();
   }, []);
 
   const exitCompactMode = useCallback(async () => {
     const appWindow = getCurrentWindow();
     await setRecorderRegion(null);
-    await appWindow.setSize(IDLE_SIZE);
-    await appWindow.setAlwaysOnTop(false);
-    await appWindow.setDecorations(true);
-    await appWindow.setResizable(false);
-    await appWindow.center();
+    const bar = await WebviewWindow.getByLabel(BAR_LABEL);
+    await bar?.hide();
+    await appWindow.show();
+    await appWindow.setFocus();
   }, []);
 
   // Restores the full window when a recording ends. Entering compact mode is
@@ -298,6 +305,23 @@ function MainApp() {
       console.warn("Undo failed:", e);
     }
   }, []);
+
+  // The bar's three controls, arriving from the other window.
+  //
+  // The bar deliberately holds no recording state: it emits, and this window --
+  // hidden but still running -- performs the same actions it always did. One
+  // owner of the recorder means the two webviews cannot disagree about what is
+  // happening, and the bar stays a remote control rather than a second brain.
+  useEffect(() => {
+    const unlisten = Promise.all([
+      listen("bar:stop", () => void handleStop()),
+      listen("bar:cancel", () => void recorder.cancel()),
+      listen("bar:undo", () => void handleUndoLastScreenshot()),
+    ]);
+    return () => {
+      void unlisten.then((fns) => fns.forEach((fn) => fn()));
+    };
+  }, [handleStop, handleUndoLastScreenshot, recorder]);
 
   const handleOpenFolder = useCallback(async () => {
     if (recorder.outputDir) {
@@ -461,15 +485,12 @@ function MainApp() {
           outputDir={recorder.outputDir}
           skipPiiCheck={skipPiiCheck}
           onStart={handleStart}
-          onStop={handleStop}
-          onCancel={recorder.cancel}
           onSignOut={auth.logout}
           onOpenSettings={handleOpenSettings}
           onOpenFolder={handleOpenFolder}
           onRetry={handleRetry}
           onDismissPii={() => recorder.setError(t("network.pii_blocked"))}
           onDismissRateLimit={recorder.dismissRateLimit}
-          onUndoLastScreenshot={handleUndoLastScreenshot}
           onConfirmGeneration={recorder.confirmGeneration}
           onCancelFromReview={recorder.cancelFromReview}
           onGenerateFromFolder={handleGenerateFromFolder}

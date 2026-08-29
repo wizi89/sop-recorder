@@ -175,6 +175,15 @@ const de = {
   // Tray
   "tray.show": "Anzeigen",
   "tray.hide": "Ausblenden",
+  "status.recording_in_progress":
+    "Aufnahme läuft -- die Steuerleiste liegt unten rechts auf dem Bildschirm.",
+  "permissions.state_undetermined": "Noch nicht erteilt",
+  "permissions.open_settings": "In Systemeinstellungen öffnen",
+  "permissions.denied_hint":
+    "Einmal verweigerte Berechtigungen fragt macOS nicht erneut ab -- sie müssen in den Systemeinstellungen erteilt werden.",
+  "status.no_audio": "Kein Ton",
+  "status.no_audio_hint":
+    "Es kommt kein Ton an. Vermutlich fehlt die Mikrofon-Berechtigung -- diese Aufnahme bekommt keine Sprachbeschreibung.",
   "tray.start_recording": "Aufnahme starten",
   "tray.stop_recording": "Aufnahme stoppen",
   "tray.settings": "Einstellungen",

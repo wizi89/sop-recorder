@@ -1,13 +1,10 @@
-import { ask } from "@tauri-apps/plugin-dialog";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTranslation } from "../hooks/useTranslation";
 import { StatusBar } from "./StatusBar";
 import { PiiBlockedModal } from "./PiiBlockedModal";
 import { RateLimitModal } from "./RateLimitModal";
 import { ReviewScreen } from "./ReviewScreen";
 import { useCaptureCount } from "../hooks/useCaptureCount";
-import { useElapsedTime, formatElapsed } from "../hooks/useElapsedTime";
-import { useAudioLevel } from "../hooks/useAudioLevel";
+import { useElapsedTime } from "../hooks/useElapsedTime";
 import type { RecorderStatus } from "../hooks/useRecorder";
 import type { RateLimitInfo } from "../lib/serverErrors";
 import type {
@@ -32,15 +29,12 @@ interface RecorderScreenProps {
   accessibilityPermission?: AccessibilityPermissionState;
   onRequestPermissions?: () => void;
   onStart: () => void;
-  onStop: () => void;
-  onCancel: () => void;
   onSignOut: () => void;
   onOpenSettings: () => void;
   onOpenFolder: () => void;
   onRetry: () => void;
   onDismissPii: () => void;
   onDismissRateLimit: () => void;
-  onUndoLastScreenshot: () => void;
   onConfirmGeneration: () => void;
   onCancelFromReview: () => void;
   onUpgradeQuota?: () => void;
@@ -65,15 +59,12 @@ export function RecorderScreen({
   accessibilityPermission,
   onRequestPermissions,
   onStart,
-  onStop,
-  onCancel,
   onSignOut,
   onOpenSettings,
   onOpenFolder,
   onRetry,
   onDismissPii,
   onDismissRateLimit,
-  onUndoLastScreenshot,
   onConfirmGeneration,
   onCancelFromReview,
   onUpgradeQuota,
@@ -84,114 +75,17 @@ export function RecorderScreen({
   const isRecording = status === "recording";
   const captureCount = useCaptureCount(isRecording);
   const elapsedSec = useElapsedTime(isRecording);
-  const audioLevel = useAudioLevel();
 
-  // Compact recording mode
+  // Recording: the controls live in the bar window, and this window is hidden
+  // for the duration. It still needs an honest state for the moments it is
+  // not -- falling through to the idle screen would offer a Start button for a
+  // recording that is already running.
   if (status === "recording") {
-    const handleCancel = async () => {
-      const appWindow = getCurrentWindow();
-      await appWindow.setAlwaysOnTop(false);
-      const confirmed = await ask(t("status.cancel_message"), {
-        title: t("status.cancel_title"),
-        kind: "warning",
-        okLabel: t("status.cancel_confirm"),
-        cancelLabel: t("status.cancel"),
-      });
-      if (confirmed) {
-        onCancel();
-      } else {
-        await appWindow.setAlwaysOnTop(true);
-      }
-    };
-
-    // Live telemetry strings for the compact bar.
-    // VU meter: render a small fixed-width bar whose fill width is the peak
-    // level clamped to [0..1]. Green below ~0.8, amber toward clipping.
-    const vuFillPct = Math.round(Math.min(1, Math.max(0, audioLevel)) * 100);
-    const vuColor = audioLevel > 0.8 ? "#FBBF24" : "#34D399";
-    const undoDisabled = captureCount === 0;
-
-    // The bar is deliberately NOT a drag region. It anchors itself to the
-    // corner of the work area for the whole recording; making it draggable
-    // invited the user to move it mid-recording, and the press that started
-    // the drag was captured as the recording's first step.
     return (
-      <div className="flex items-center h-full bg-surface overflow-hidden select-none">
-        <button
-          onClick={handleCancel}
-          className="h-full border-none cursor-pointer font-semibold"
-          style={{
-            fontSize: "0.6rem",
-            width: "32%",
-            backgroundColor: "var(--color-error)",
-            color: "#fff",
-          }}
-        >
-          {t("status.cancel")}
-        </button>
-        <button
-          onClick={onUndoLastScreenshot}
-          disabled={undoDisabled}
-          title={t("status.undo_last")}
-          aria-label={t("status.undo_last")}
-          className="h-full border-none font-semibold"
-          style={{
-            width: "13%",
-            backgroundColor: "var(--color-surface-container-highest)",
-            color: "#fff",
-            cursor: undoDisabled ? "not-allowed" : "pointer",
-            opacity: undoDisabled ? 0.35 : 1,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {/* Undo arrow icon */}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7v6h6" />
-            <path d="M21 17a9 9 0 00-15-6.7L3 13" />
-          </svg>
-        </button>
-        <div
-          className="h-full flex flex-col items-center justify-center pointer-events-none"
-          style={{ width: "22%", color: "#fff" }}
-        >
-          <span style={{ fontSize: "0.55rem", fontWeight: 600, lineHeight: 1.1 }}>
-            {captureCount} · {formatElapsed(elapsedSec)}
-          </span>
-          <div
-            aria-label="audio level"
-            style={{
-              width: "80%",
-              height: "3px",
-              marginTop: "3px",
-              borderRadius: "2px",
-              background: "rgba(255,255,255,0.12)",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                width: `${vuFillPct}%`,
-                height: "100%",
-                background: vuColor,
-                transition: "width 60ms linear",
-              }}
-            />
-          </div>
-        </div>
-        <button
-          onClick={onStop}
-          className="h-full border-none cursor-pointer font-semibold"
-          style={{
-            fontSize: "0.6rem",
-            width: "33%",
-            backgroundColor: "var(--color-primary)",
-            color: "#fff",
-          }}
-        >
-          {t("status.stop")}
-        </button>
+      <div className="flex items-center justify-center h-full p-6 text-center bg-surface">
+        <p className="text-sm text-on-surface-variant">
+          {t("status.recording_in_progress")}
+        </p>
       </div>
     );
   }

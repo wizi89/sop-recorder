@@ -79,7 +79,23 @@ export async function readScreenshotBytes(path: string): Promise<Uint8Array> {
   return new Uint8Array(bytes);
 }
 
-export type MicPermissionState = "granted" | "denied" | "unknown";
+/**
+ * `undetermined` means the OS has never asked. It is worth keeping apart from
+ * `denied`, because only `undetermined` can be resolved by prompting: macOS
+ * shows the dialog once and, after a refusal, the request call does nothing at
+ * all. A screen that treats the two alike offers a button that cannot work.
+ */
+export type MicPermissionState =
+  | "granted"
+  | "denied"
+  | "undetermined"
+  | "unknown";
+/**
+ * No `undetermined` here: `CGPreflightScreenCaptureAccess` answers yes or no
+ * and macOS exposes nothing finer, so a refusal is indistinguishable from a
+ * question never asked. Both are handled the same way -- send the user to
+ * System Settings, which is where this grant is made either way.
+ */
 export type ScreenRecordingPermissionState = "granted" | "denied" | "unknown";
 /**
  * Whether the global input hook can be installed. macOS only: without the
@@ -87,8 +103,12 @@ export type ScreenRecordingPermissionState = "granted" | "denied" | "unknown";
  */
 export type AccessibilityPermissionState = "granted" | "denied" | "unknown";
 
-function normalizePermission<T extends "granted" | "denied" | "unknown">(state: string): T {
-  if (state === "granted" || state === "denied") return state as T;
+function normalizePermission<
+  T extends "granted" | "denied" | "undetermined" | "unknown",
+>(state: string): T {
+  if (state === "granted" || state === "denied" || state === "undetermined") {
+    return state as T;
+  }
   return "unknown" as T;
 }
 
@@ -239,4 +259,35 @@ export async function setRecorderRegion(
   region: [number, number, number, number] | null,
 ): Promise<void> {
   return invoke("set_recorder_region", { region });
+}
+
+/**
+ * Keep the compact recording bar visible above everything, including apps in
+ * native fullscreen, or hand the window back its ordinary behaviour.
+ *
+ * Replaces `setAlwaysOnTop` for the recording lifecycle. Always-on-top only
+ * changes the window's level, which orders it within one Space; a fullscreen
+ * app gets a Space of its own, so the bar disappeared exactly when the user
+ * still needed to reach Stop. Screenshot exclusion is unaffected -- that is
+ * `setDisplayAffinity`, a separate property.
+ *
+ * Scoped to the recording: the idle window must not float over everything.
+ */
+export async function setOverlayMode(enabled: boolean): Promise<void> {
+  return invoke("set_overlay_mode", { enabled });
+}
+
+/**
+ * Open the System Settings pane for a refused permission.
+ *
+ * Goes through a command rather than the opener plugin: that plugin's default
+ * scope is `http`, `https`, `mailto` and `tel`, so the
+ * `x-apple.systempreferences:` URL was rejected before reaching the OS and the
+ * link silently did nothing. The Rust side matches `pane` against a fixed
+ * allowlist.
+ */
+export async function openPrivacySettings(
+  pane: "microphone" | "screen" | "accessibility",
+): Promise<void> {
+  return invoke("open_privacy_settings", { pane });
 }

@@ -73,5 +73,22 @@ core-foundation = "0.10"
 # Already in the tree via tao; declared so `set_display_affinity` can reach
 # NSWindow directly rather than leaning on a transitive dependency.
 objc2 = "0.6"
-objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSResponder", "NSScreen"] }
+objc2-app-kit = { version = "0.3", features = [
+    "NSWindow",
+    "NSResponder",
+    "NSScreen",
+    # The recording bar has to be built while the app is momentarily an
+    # accessory app; see `create_recording_bar`.
+    "NSApplication",
+    "NSRunningApplication",
+] }
+# The real microphone TCC state and prompt. cpal can only tell us a device
+# exists -- reading its metadata needs no permission at all, so it reported
+# "granted" on a machine that had never granted anything.
+objc2-av-foundation = { version = "0.3", features = [
+    "AVCaptureDevice",
+    "AVMediaFormat",
+    "block2",
+] }
+block2 = "0.6"
 keyring = { version = "3", features = ["apple-native"] }

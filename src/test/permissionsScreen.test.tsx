@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { invoke } from "@tauri-apps/api/core";
 import { PermissionsScreen } from "../components/PermissionsScreen";
 
 const defaults = {
@@ -81,5 +82,42 @@ describe("PermissionsScreen", () => {
     expect(button).toBeDisabled();
     await userEvent.click(button);
     expect(onRequestPermissions).not.toHaveBeenCalled();
+  });
+  it("routes a refused permission to its System Settings pane", async () => {
+    // macOS shows a permission dialog only while the status is undetermined.
+    // After a refusal the request call is a silent no-op, so without this the
+    // screen offers a button that cannot work and never dismisses.
+    render(
+      <PermissionsScreen
+        {...defaults}
+        micPermission="denied"
+        screenRecordingPermission="granted"
+        accessibilityPermission="granted"
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /systemeinstellungen/i }),
+    );
+    expect(invoke).toHaveBeenCalledWith("open_privacy_settings", {
+      pane: "microphone",
+    });
+  });
+
+  it("does not offer a settings detour for a permission that can still be asked for", () => {
+    // Undetermined is the case the grant-all button handles, so a second route
+    // to the same grant would only be noise.
+    render(
+      <PermissionsScreen
+        {...defaults}
+        micPermission="undetermined"
+        screenRecordingPermission="granted"
+        accessibilityPermission="granted"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: /systemeinstellungen/i }),
+    ).not.toBeInTheDocument();
   });
 });

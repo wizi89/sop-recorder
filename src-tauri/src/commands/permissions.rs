@@ -22,6 +22,9 @@
 //! with `AXIsProcessTrusted`, prompted with `AXIsProcessTrustedWithOptions`.
 //! Windows reports `granted`: its `WH_MOUSE_LL` hook needs no such grant.
 
+// Only the non-macOS microphone check uses cpal now; macOS asks AVFoundation,
+// which is the layer that actually knows the answer.
+#[cfg(not(target_os = "macos"))]
 use cpal::traits::{DeviceTrait, HostTrait};
 
 #[cfg(target_os = "macos")]
@@ -127,8 +130,50 @@ pub fn get_accessibility_permission_state() -> String {
     }
 }
 
+/// The microphone's real TCC state, from the API that actually knows it.
+///
+/// This used to probe cpal: `default_input_device()` plus
+/// `default_input_config()`. Both are CoreAudio *property* queries and need no
+/// permission whatsoever, so the probe answered "granted" on any machine with
+/// a microphone attached -- including a fresh install that had never been
+/// granted anything. The permission screen showed a tick next to a permission
+/// nobody had given, and `request_all_permissions` never prompted for the mic
+/// because nothing there opened a stream.
+///
+/// Getting this wrong is not cosmetic. macOS does not fail a denied capture;
+/// it vends silent samples. The recording completes, the SOP generates, and
+/// the narration is simply empty.
+#[cfg(target_os = "macos")]
 #[tauri::command]
 pub fn get_microphone_permission_state() -> String {
+    use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
+
+    let Some(media_type) = (unsafe { AVMediaTypeAudio }) else {
+        log::warn!("Mic permission: AVMediaTypeAudio unavailable");
+        return "denied".to_string();
+    };
+    let status = unsafe { AVCaptureDevice::authorizationStatusForMediaType(media_type) };
+
+    // "undetermined" is reported separately from "denied" because only one of
+    // them can be fixed by asking. macOS shows the permission dialog when the
+    // status is NotDetermined and never again: once the user has refused,
+    // `requestAccessForMediaType` is a silent no-op. Collapsing the two left
+    // the setup screen offering a button that could not work and would not
+    // say so.
+    let state = match status {
+        AVAuthorizationStatus::Authorized => "granted",
+        AVAuthorizationStatus::NotDetermined => "undetermined",
+        _ => "denied",
+    };
+    log::info!("Mic permission: {} (status {})", state, status.0);
+    state.to_string()
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn get_microphone_permission_state() -> String {
+    // Windows has no TCC layer to consult; a usable default input device is
+    // the whole of the question there.
     let host = cpal::default_host();
 
     let device = match host.default_input_device() {
@@ -165,6 +210,30 @@ pub fn get_screen_recording_permission_state() -> String {
     }
 }
 
+/// Show the microphone permission dialog, if the user has not decided yet.
+///
+/// Deliberately not awaited. AVFoundation calls the completion handler on an
+/// arbitrary queue whenever the user gets around to answering, and blocking a
+/// command on a dialog the user may leave open indefinitely buys nothing --
+/// the permission screen already polls.
+#[cfg(target_os = "macos")]
+fn request_microphone_access() {
+    use block2::RcBlock;
+    use objc2::runtime::Bool;
+    use objc2_av_foundation::{AVCaptureDevice, AVMediaTypeAudio};
+
+    let Some(media_type) = (unsafe { AVMediaTypeAudio }) else {
+        log::warn!("Mic prompt: AVMediaTypeAudio unavailable");
+        return;
+    };
+    let handler = RcBlock::new(|granted: Bool| {
+        log::info!("Mic permission dialog answered: granted={}", granted.as_bool());
+    });
+    unsafe {
+        AVCaptureDevice::requestAccessForMediaType_completionHandler(media_type, &handler);
+    }
+}
+
 /// Trigger the macOS TCC prompts for mic + screen recording up-front, so
 /// the user grants everything in one sitting instead of being interrupted
 /// by a fresh prompt at every recording start. Returns the post-prompt
@@ -173,10 +242,12 @@ pub fn get_screen_recording_permission_state() -> String {
 pub fn request_all_permissions() -> PermissionsState {
     #[cfg(target_os = "macos")]
     {
-        // Mic: opening an input stream once is what actually triggers the
-        // TCC dialog on macOS. The cpal probe in get_microphone_permission_state
-        // is enough -- calling it here serves the dual purpose of priming
-        // the prompt and reading back the post-decision state.
+        // Mic: this is the call that shows the dialog, and it is a no-op once
+        // the user has decided. It returns immediately rather than blocking
+        // for the answer, so the state read below is the state *before* the
+        // user replies -- the UI polls, and picks the grant up within a
+        // second or two. That is the same deal the Accessibility prompt makes.
+        request_microphone_access();
         let mic = get_microphone_permission_state();
 
         // Screen recording: this call shows the system dialog if the state
@@ -219,4 +290,56 @@ pub struct PermissionsState {
     pub microphone: String,
     pub screen_recording: String,
     pub accessibility: String,
+}
+
+/// Open the System Settings pane where a refused permission can be restored.
+///
+/// A command rather than the opener plugin for two reasons. The plugin's
+/// default scope covers `http`, `https`, `mailto` and `tel` only, so the
+/// `x-apple.systempreferences:` URL was rejected before it ever reached the
+/// OS -- the link did nothing at all. And widening that scope would let the
+/// frontend hand arbitrary URLs to LaunchServices, when all that is wanted is
+/// three fixed destinations. The pane is matched against an allowlist here, so
+/// nothing else is reachable through it.
+#[tauri::command]
+pub fn open_privacy_settings(pane: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let anchor = match pane.as_str() {
+            "microphone" => "Privacy_Microphone",
+            "screen" => "Privacy_ScreenCapture",
+            "accessibility" => "Privacy_Accessibility",
+            other => return Err(format!("Unknown privacy pane: {}", other)),
+        };
+        let url = format!(
+            "x-apple.systempreferences:com.apple.preference.security?{}",
+            anchor
+        );
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Could not open System Settings: {}", e))?;
+        log::info!("Opened System Settings at {}", anchor);
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // Windows has no equivalent per-permission pane to send anyone to.
+        let _ = pane;
+        Err("Privacy panes are a macOS concept".into())
+    }
+}
+
+#[cfg(test)]
+mod privacy_pane_tests {
+    use super::open_privacy_settings;
+
+    #[test]
+    fn an_unknown_pane_is_refused_rather_than_guessed_at() {
+        // The allowlist is the reason this command exists instead of a wider
+        // URL scope, so it is the part worth pinning.
+        assert!(open_privacy_settings("../../etc".into()).is_err());
+        assert!(open_privacy_settings("Privacy_Camera".into()).is_err());
+    }
 }

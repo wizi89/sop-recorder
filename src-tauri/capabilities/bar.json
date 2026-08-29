@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "recording-bar",
+  "description": "What the recording bar window is allowed to do. Deliberately narrow: the bar owns no recorder state and performs no actions of its own -- it listens for the telemetry the Rust side broadcasts, asks for confirmation before a cancel, and emits three events that the main window turns into the actions it already performed.",
+  "windows": ["bar"],
+  "permissions": ["core:event:default", "dialog:allow-ask"]
+}

@@ -65,6 +65,12 @@ pub fn run() {
         .setup(|app| {
             network::auth::migrate_keyring();
             settings::AppSettings::initialize(app.handle());
+            // Built here, not on demand: the bar can only join another app's
+            // fullscreen Space if it is created under an accessory activation
+            // policy, and that is a property of the window from birth.
+            if let Err(e) = commands::window::create_recording_bar(app.handle()) {
+                log::error!("Could not build the recording bar: {}", e);
+            }
             Ok(())
         })
         .manage(state::AppState::default())
@@ -92,6 +98,7 @@ pub fn run() {
             permissions::get_screen_recording_permission_state,
             permissions::get_accessibility_permission_state,
             permissions::request_all_permissions,
+            permissions::open_privacy_settings,
             window::set_display_affinity,
             window::set_recorder_region,
             window::restart_app,

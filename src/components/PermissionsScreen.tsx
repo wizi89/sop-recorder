@@ -1,11 +1,30 @@
 import { useTranslation } from "../hooks/useTranslation";
+import { openPrivacySettings } from "../lib/tauri";
 import type {
   MicPermissionState,
   ScreenRecordingPermissionState,
   AccessibilityPermissionState,
 } from "../lib/tauri";
 
-type PermissionState = "granted" | "denied" | "unknown";
+type PermissionState = "granted" | "denied" | "undetermined" | "unknown";
+
+/**
+ * The permission panes a refused grant can be restored from.
+ *
+ * Needed because "ask the user" stops working the moment they have said no
+ * once: macOS shows a permission dialog only while the status is
+ * undetermined, so for a refused permission the only honest thing the app can
+ * do is take them to the switch.
+ */
+type PrivacyPane = "microphone" | "screen" | "accessibility";
+
+async function showPrivacySettings(pane: PrivacyPane) {
+  try {
+    await openPrivacySettings(pane);
+  } catch (e) {
+    console.warn("Could not open System Settings:", e);
+  }
+}
 
 interface PermissionsScreenProps {
   micPermission: MicPermissionState;
@@ -24,10 +43,12 @@ function PermissionRow({
   title,
   why,
   state,
+  pane,
 }: {
   title: string;
   why: string;
   state: PermissionState;
+  pane: PrivacyPane;
 }) {
   const { t } = useTranslation();
   const granted = state === "granted";
@@ -35,7 +56,13 @@ function PermissionRow({
     ? t("permissions.state_granted")
     : state === "denied"
       ? t("permissions.state_denied")
-      : t("permissions.state_unknown");
+      : state === "undetermined"
+        ? t("permissions.state_undetermined")
+        : t("permissions.state_unknown");
+  // Only a refusal needs its own way out. While a permission is merely
+  // undetermined the grant-all button still raises a real dialog, and a second
+  // route to the same place would just be noise.
+  const needsSettings = state === "denied";
 
   return (
     <div className="flex gap-3 items-start">
@@ -67,6 +94,15 @@ function PermissionRow({
           </span>
         </div>
         <div style={{ fontSize: "0.68rem", color: "#A8B2B8" }}>{why}</div>
+        {needsSettings && (
+          <button
+            onClick={() => void showPrivacySettings(pane)}
+            className="mt-1 border-none cursor-pointer bg-transparent p-0 underline"
+            style={{ fontSize: "0.64rem", color: "#2CB5C0" }}
+          >
+            {t("permissions.open_settings")}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -97,6 +133,11 @@ export function PermissionsScreen({
     screenRecordingPermission === "granted" &&
     accessibilityPermission === "granted";
 
+  const anyDenied =
+    micPermission === "denied" ||
+    screenRecordingPermission === "denied" ||
+    accessibilityPermission === "denied";
+
   return (
     <div className="flex flex-col h-full bg-surface overflow-y-auto">
       <div className="flex-1 flex flex-col justify-center gap-4 px-6 py-5">
@@ -117,16 +158,19 @@ export function PermissionsScreen({
             title={t("permissions.mic_title")}
             why={t("permissions.mic_why")}
             state={micPermission}
+            pane="microphone"
           />
           <PermissionRow
             title={t("permissions.screen_title")}
             why={t("permissions.screen_why")}
             state={screenRecordingPermission}
+            pane="screen"
           />
           <PermissionRow
             title={t("permissions.accessibility_title")}
             why={t("permissions.accessibility_why")}
             state={accessibilityPermission}
+            pane="accessibility"
           />
         </div>
 
@@ -150,7 +194,11 @@ export function PermissionsScreen({
             className="leading-snug"
             style={{ fontSize: "0.65rem", color: "#A8B2B8" }}
           >
-            {t("permissions.settings_hint")}
+            {/* A refusal is the case where the button above cannot help, so
+                say why rather than let it look broken. */}
+            {anyDenied
+              ? t("permissions.denied_hint")
+              : t("permissions.settings_hint")}
           </div>
         )}
 
