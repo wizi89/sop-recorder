@@ -18,6 +18,11 @@ pub struct AppSettings {
     pub pipeline_version: u8,
     #[serde(default = "default_generation_model")]
     pub generation_model: String,
+    /// `ask`, `always` or `never` (design D1). Defaults to `ask`, so a
+    /// settings file written by an older build loads as "ask before sending"
+    /// rather than as a mode the user never chose.
+    #[serde(default = "default_error_reports")]
+    pub error_reports: String,
 }
 
 fn default_pipeline_version() -> u8 {
@@ -26,6 +31,10 @@ fn default_pipeline_version() -> u8 {
 
 fn default_generation_model() -> String {
     "azure/gpt-4.1".to_string()
+}
+
+fn default_error_reports() -> String {
+    crate::error_reports::ReportMode::Ask.as_str().to_string()
 }
 
 impl AppSettings {
@@ -57,6 +66,7 @@ impl AppSettings {
         store.set("skip_pii_check", serde_json::json!(defaults.skip_pii_check));
         store.set("pipeline_version", serde_json::json!(defaults.pipeline_version));
         store.set("generation_model", serde_json::json!(defaults.generation_model));
+        store.set("error_reports", serde_json::json!(defaults.error_reports));
     }
 
     pub fn defaults(app: &tauri::AppHandle) -> Self {
@@ -81,8 +91,29 @@ impl AppSettings {
             skip_pii_check: false,
             pipeline_version: 1,
             generation_model: default_generation_model(),
+            error_reports: default_error_reports(),
         }
     }
+}
+
+/// Push the current settings into `crate::error_reports`, which holds them in
+/// lock-free globals so the panic hook can read them without touching the
+/// store (design D5).
+pub fn publish_error_report_context(settings: &AppSettings) {
+    crate::error_reports::set_mode(crate::error_reports::resolve_mode(
+        Some(settings.error_reports.as_str()),
+        crate::runtime_config::runtime().error_reports_forced_off(),
+    ));
+    crate::error_reports::set_context(crate::error_reports::ReportContext {
+        settings: crate::error_reports::ReportSettings {
+            upload_target: settings.upload_target.clone(),
+            pipeline_version: settings.pipeline_version,
+            generation_model: settings.generation_model.clone(),
+            hide_from_screenshots: settings.hide_from_screenshots,
+            skip_pii_check: settings.skip_pii_check,
+        },
+        output_dir: Some(settings.output_dir.clone()),
+    });
 }
 
 #[tauri::command]
@@ -124,6 +155,12 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         .and_then(|v| v.as_str().map(String::from))
         .unwrap_or_else(default_generation_model);
 
+    let error_reports = store
+        .get("error_reports")
+        .and_then(|v| v.as_str().map(String::from))
+        .filter(|mode| matches!(mode.as_str(), "ask" | "always" | "never"))
+        .unwrap_or_else(default_error_reports);
+
     // API key is stored in keyring, not in the store
     let api_key = crate::network::auth::keyring_load("openai-key").ok().flatten();
 
@@ -136,6 +173,7 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         skip_pii_check,
         pipeline_version,
         generation_model,
+        error_reports,
     })
 }
 
@@ -163,6 +201,14 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     store.set("skip_pii_check", serde_json::json!(settings.skip_pii_check));
     store.set("pipeline_version", serde_json::json!(settings.pipeline_version));
     store.set("generation_model", serde_json::json!(settings.generation_model));
+    if matches!(settings.error_reports.as_str(), "ask" | "always" | "never") {
+        store.set("error_reports", serde_json::json!(settings.error_reports));
+    }
+
+    // The mode and the settings subset a report carries have both just
+    // changed, and the panic hook reads them from memory rather than from the
+    // store, so the copy it reads has to be refreshed here.
+    publish_error_report_context(&settings);
 
     // API key goes to keyring
     if let Some(key) = &settings.api_key {
@@ -191,9 +237,56 @@ pub async fn get_webapp_url(app: tauri::AppHandle) -> Result<String, String> {
     Ok(crate::config::webapp_url_for_target(target.as_deref()).to_string())
 }
 
+/// Whether the installation has switched error reports off (design D1). The
+/// settings page disables its control and shows a note when this is true.
+#[tauri::command]
+pub async fn are_error_reports_forced_off() -> bool {
+    crate::runtime_config::runtime().error_reports_forced_off()
+}
+
 #[tauri::command]
 pub async fn is_updater_enabled() -> bool {
     crate::runtime_config::runtime()
         .updater_enabled
         .unwrap_or(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A settings file written before this change has no `error_reports` key.
+    /// It has to load as "ask" -- the default the user would have been given
+    /// -- rather than failing to parse or silently arriving at `never`.
+    #[test]
+    fn settings_from_an_older_build_default_to_ask() {
+        let stored = serde_json::json!({
+            "output_dir": "/Users/anna/Documents/cogniclone Workflows",
+            "logs_dir": "/Users/anna/Library/Logs/com.cogniclone.recorder",
+            "hide_from_screenshots": true,
+            "api_key": null
+        });
+
+        let settings: AppSettings = serde_json::from_value(stored).unwrap();
+        assert_eq!(settings.error_reports, "ask");
+        assert_eq!(
+            crate::error_reports::resolve_mode(Some(&settings.error_reports), false),
+            crate::error_reports::ReportMode::Ask
+        );
+    }
+
+    #[test]
+    fn a_saved_mode_survives_the_round_trip() {
+        for mode in ["ask", "always", "never"] {
+            let stored = serde_json::json!({
+                "output_dir": "",
+                "logs_dir": "",
+                "hide_from_screenshots": true,
+                "api_key": null,
+                "error_reports": mode
+            });
+            let settings: AppSettings = serde_json::from_value(stored).unwrap();
+            assert_eq!(settings.error_reports, mode);
+        }
+    }
 }

@@ -2,7 +2,7 @@
 //!
 //! Precedence (highest first):
 //!   1. Environment variables: COGNICLONE_API_URL, COGNICLONE_WEBAPP_URL,
-//!      COGNICLONE_UPDATER_ENABLED
+//!      COGNICLONE_UPDATER_ENABLED, COGNICLONE_ERROR_REPORTS_ENABLED
 //!   2. Config file at the OS user config dir. On Windows that resolves to
 //!      `%APPDATA%\CogniClone\config.toml`. Example contents:
 //!
@@ -12,6 +12,9 @@
 //!      webapp_url = "https://sop.gebit.local"
 //!
 //!      [updater]
+//!      enabled = false
+//!
+//!      [error_reports]
 //!      enabled = false
 //!      ```
 //!
@@ -33,11 +36,18 @@ struct FileUpdater {
 }
 
 #[derive(Debug, Default, Deserialize)]
+struct FileErrorReports {
+    enabled: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize)]
 struct FileConfig {
     #[serde(default)]
     endpoints: FileEndpoints,
     #[serde(default)]
     updater: FileUpdater,
+    #[serde(default)]
+    error_reports: FileErrorReports,
 }
 
 #[derive(Debug, Default)]
@@ -45,6 +55,19 @@ pub struct RuntimeOverride {
     pub api_url: Option<String>,
     pub webapp_url: Option<String>,
     pub updater_enabled: Option<bool>,
+    /// `Some(false)` forces error reports off for the whole installation
+    /// (design D1). Nothing else can switch them on again: the settings page
+    /// shows the control disabled, and every code path treats the mode as
+    /// `never`. `Some(true)` is not an override -- it restores the user's own
+    /// choice, which is the default anyway.
+    pub error_reports_enabled: Option<bool>,
+}
+
+impl RuntimeOverride {
+    /// Whether the installation has switched error reports off.
+    pub fn error_reports_forced_off(&self) -> bool {
+        self.error_reports_enabled == Some(false)
+    }
 }
 
 static RUNTIME: OnceLock<RuntimeOverride> = OnceLock::new();
@@ -72,6 +95,7 @@ where
                     out.api_url = cfg.endpoints.api_url;
                     out.webapp_url = cfg.endpoints.webapp_url;
                     out.updater_enabled = cfg.updater.enabled;
+                    out.error_reports_enabled = cfg.error_reports.enabled;
                 }
                 Err(err) => {
                     log::warn!(
@@ -91,14 +115,21 @@ where
         out.webapp_url = Some(v);
     }
     if let Some(v) = env_get("COGNICLONE_UPDATER_ENABLED") {
-        out.updater_enabled = match v.to_ascii_lowercase().as_str() {
-            "1" | "true" | "yes" | "on" => Some(true),
-            "0" | "false" | "no" | "off" => Some(false),
-            _ => out.updater_enabled,
-        };
+        out.updater_enabled = parse_bool(&v).or(out.updater_enabled);
+    }
+    if let Some(v) = env_get("COGNICLONE_ERROR_REPORTS_ENABLED") {
+        out.error_reports_enabled = parse_bool(&v).or(out.error_reports_enabled);
     }
 
     out
+}
+
+fn parse_bool(value: &str) -> Option<bool> {
+    match value.to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -121,6 +152,8 @@ mod tests {
         assert!(out.api_url.is_none());
         assert!(out.webapp_url.is_none());
         assert!(out.updater_enabled.is_none());
+        assert!(out.error_reports_enabled.is_none());
+        assert!(!out.error_reports_forced_off());
     }
 
     #[test]
@@ -198,5 +231,81 @@ api_url = "https://file.example"
         let path = dir.path().join("does-not-exist.toml");
         let out = load_from(Some(&path), env_from(&[]));
         assert!(out.api_url.is_none());
+    }
+
+    #[test]
+    fn error_reports_switched_off_by_the_config_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[error_reports]
+enabled = false
+"#,
+        )
+        .unwrap();
+
+        let out = load_from(Some(&path), env_from(&[]));
+        assert_eq!(out.error_reports_enabled, Some(false));
+        assert!(out.error_reports_forced_off());
+    }
+
+    #[test]
+    fn error_reports_switched_off_by_the_environment() {
+        let out = load_from(
+            None,
+            env_from(&[("COGNICLONE_ERROR_REPORTS_ENABLED", "off")]),
+        );
+        assert!(out.error_reports_forced_off());
+    }
+
+    #[test]
+    fn error_reports_env_overrides_the_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[error_reports]
+enabled = false
+"#,
+        )
+        .unwrap();
+
+        let out = load_from(
+            Some(&path),
+            env_from(&[("COGNICLONE_ERROR_REPORTS_ENABLED", "true")]),
+        );
+        assert_eq!(out.error_reports_enabled, Some(true));
+        assert!(!out.error_reports_forced_off());
+    }
+
+    #[test]
+    fn a_malformed_error_reports_value_leaves_the_file_value_standing() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(
+            &path,
+            r#"
+[error_reports]
+enabled = false
+"#,
+        )
+        .unwrap();
+
+        let out = load_from(
+            Some(&path),
+            env_from(&[("COGNICLONE_ERROR_REPORTS_ENABLED", "vielleicht")]),
+        );
+        assert_eq!(out.error_reports_enabled, Some(false));
+
+        // And with nothing in the file, a malformed value is simply ignored.
+        let out = load_from(
+            None,
+            env_from(&[("COGNICLONE_ERROR_REPORTS_ENABLED", "vielleicht")]),
+        );
+        assert!(out.error_reports_enabled.is_none());
+        assert!(!out.error_reports_forced_off());
     }
 }

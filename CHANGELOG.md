@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- CogniClone can now send a report when something goes wrong, and asks first. A crash, a step that fails with an error the app cannot explain, or a fault in its own interface each offer to send a report -- a crash that ended the app asks the next time you start it. The dialog lists in plain words what the report contains before you decide, and shows you the exact text that would be sent if you want to read it. You can add a sentence about what you were doing, and the report gets a short number to quote if you write to us about it.
+- A report contains the error message, where in the program it happened, the app version, your operating system and language, the last few hundred lines of the app's own log with file names, paths and addresses removed, and the settings that decide how a recording is processed. It never contains screenshots, sound, transcripts, the content of your guides, your e-mail address, your password or keys, or the name of your guides folder. Nothing is sent unless you agree to it, and closing the dialog means no.
+- Reports go to the CogniClone server you are already signed in to, and to nothing else. If a report is created while you are signed out -- when the sign-in itself is what failed -- it waits on your machine and goes out after your next sign-in; the dialog offers to show you the file so you can send it by mail instead. A report that never gets sent is deleted after 30 days.
+- Under Einstellungen, "Fehlerberichte" chooses between asking every time, sending automatically, and not collecting anything at all. Asking is the default. The dialog carries the same choice as a checkbox. An organisation can switch reports off for a whole installation, and the setting then says so.
+
 ## [0.15.0] - 2026-08-29
 
 The recorder works on macOS. Every defect below was invisible on Windows, where the two coordinate spaces coincide, the Keychain has no analogue, and the input hook needs no permission. The last entry is the exception: a regression the macOS work introduced on Windows.

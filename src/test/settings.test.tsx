@@ -11,7 +11,10 @@ const mockSettings = {
   api_key: null,
   upload_target: null,
   skip_pii_check: false,
+  error_reports: "ask",
 };
+
+let mockErrorReportsForcedOff = false;
 
 const mockQuotaBasic = {
   count: 0,
@@ -30,10 +33,12 @@ let mockQuota = mockQuotaBasic;
 
 beforeEach(() => {
   mockQuota = mockQuotaBasic;
+  mockErrorReportsForcedOff = false;
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     if (cmd === "get_settings") return { ...mockSettings };
     if (cmd === "save_settings") return;
     if (cmd === "get_quota") return mockQuota;
+    if (cmd === "are_error_reports_forced_off") return mockErrorReportsForcedOff;
     return;
   });
 });
@@ -209,5 +214,39 @@ describe("SettingsPage", () => {
     expect(screen.queryByRole("option", { name: "Local" })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Staging" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Production" })).toBeInTheDocument();
+  });
+});
+
+describe("SettingsPage error reports (design D1)", () => {
+  it("saves the chosen mode", async () => {
+    render(<SettingsPage isDev={false} />);
+    const user = userEvent.setup();
+
+    const select = await screen.findByLabelText("Fehlerberichte");
+    expect(select).toHaveValue("ask");
+
+    await user.selectOptions(select, "always");
+    await user.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "save_settings",
+        expect.objectContaining({
+          settings: expect.objectContaining({ error_reports: "always" }),
+        }),
+      );
+    });
+  });
+
+  it("renders disabled with the organisation note under the override", async () => {
+    mockErrorReportsForcedOff = true;
+    render(<SettingsPage isDev={false} />);
+
+    const select = await screen.findByLabelText("Fehlerberichte");
+    await waitFor(() => expect(select).toBeDisabled());
+    expect(select).toHaveValue("never");
+    expect(
+      screen.getByText("Von Ihrer Organisation deaktiviert"),
+    ).toBeInTheDocument();
   });
 });

@@ -5,7 +5,11 @@ import {
   runGeneration,
 } from "../lib/tauri";
 import { t } from "../i18n";
-import { parseRateLimit, type RateLimitInfo } from "../lib/serverErrors";
+import {
+  parseRateLimit,
+  isReportable,
+  type RateLimitInfo,
+} from "../lib/serverErrors";
 
 export type RecorderStatus =
   | "idle"
@@ -283,8 +287,25 @@ export function useRecorder() {
     }));
   }, []);
 
+  /**
+   * The current error, when it is one worth offering a report for (design
+   * D6). Null for every outcome the product presents as normal -- the quota,
+   * a PII block, a recording with no clicks, an expired session, a stop with
+   * nothing running, a cancelled dialog -- so the offer never appears on a
+   * screen that is already explaining itself.
+   *
+   * The exclusion list itself lives in `lib/serverErrors.ts`, beside
+   * `parseRateLimit`, which is one of the exclusions and which this reuses;
+   * that keeps the whole list testable without rendering a hook.
+   */
+  const reportableError =
+    state.status === "error" && state.error && isReportable(state.error)
+      ? state.error
+      : null;
+
   return {
     ...state,
+    reportableError,
     start,
     stop,
     confirmGeneration,

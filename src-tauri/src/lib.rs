@@ -1,11 +1,30 @@
 pub mod capture;
 pub mod commands;
 pub mod config;
+pub mod error_reports;
 pub mod network;
 pub mod output;
 pub mod runtime_config;
 pub mod state;
 use commands::{auth, generate, permissions, pipelines, quota, recording, settings, window};
+
+/// The saved `error_reports` mode, read straight from the settings file.
+///
+/// The panic hook is installed before the Tauri builder runs (design D5), so
+/// the store plugin is not up yet and `get_settings` cannot be called. This
+/// reads the same JSON document the store writes. A file that is missing or
+/// unreadable yields `None`, which resolves to the default, `ask`.
+fn stored_error_report_mode() -> Option<String> {
+    let path = dirs_next::data_dir()?
+        .join("com.cogniclone.recorder")
+        .join("settings.json");
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str::<serde_json::Value>(&text)
+        .ok()?
+        .get("error_reports")?
+        .as_str()
+        .map(str::to_string)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -35,6 +54,11 @@ pub fn run() {
         .level_for("reqwest::retry", log::LevelFilter::Warn)
         .level_for("tao", log::LevelFilter::Warn)
         .level_for("tauri_plugin_updater", log::LevelFilter::Warn);
+    // The ring buffer an error report's `log_tail` is read from (design D4).
+    // `target()` appends to the plugin's defaults, so the release build keeps
+    // writing its log file to the platform log directory; the dev path below
+    // calls `targets()`, which replaces them, and so has to list it again.
+    log_builder = log_builder.target(error_reports::ring_log_target());
     if cfg!(debug_assertions) {
         let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let log_dir = manifest_dir
@@ -50,10 +74,25 @@ pub fn run() {
                         tauri_plugin_log::Target::new(
                             tauri_plugin_log::TargetKind::Folder { path: dir, file_name: Some("recorder".into()) },
                         ),
+                        error_reports::ring_log_target(),
                     ]);
             }
         }
     }
+
+    // Before the builder, so a panic during startup is reported too (design
+    // D5). Nothing here touches the store or the network: the hook writes a
+    // file and calls the previous hook, and everything else happens later,
+    // from the webview, off the back of that file.
+    if let Some(dir) = error_reports::reports_dir() {
+        error_reports::set_active_reports_dir(dir);
+    }
+    error_reports::set_mode(error_reports::resolve_mode(
+        stored_error_report_mode().as_deref(),
+        runtime_config::runtime().error_reports_forced_off(),
+    ));
+    error_reports::set_phase(error_reports::Phase::Startup);
+    error_reports::install_panic_hook();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -63,8 +102,21 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            error_reports::set_app_handle(app.handle().clone());
             network::auth::migrate_keyring();
             settings::AppSettings::initialize(app.handle());
+            // The settings subset a report carries, and the output directory
+            // the log scrubber needs, held where the panic hook can read them
+            // without a lock on the store.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(current) = settings::get_settings(handle).await {
+                        settings::publish_error_report_context(&current);
+                    }
+                });
+            }
+            error_reports::set_phase(error_reports::Phase::Idle);
             // Built here, not on demand: the bar can only join another app's
             // fullscreen Space if it is created under an accessory activation
             // policy, and that is a property of the window from birth.
@@ -84,6 +136,13 @@ pub fn run() {
             settings::save_settings,
             settings::get_webapp_url,
             settings::is_updater_enabled,
+            settings::are_error_reports_forced_off,
+            commands::error_reports::list_error_reports,
+            commands::error_reports::read_error_report,
+            commands::error_reports::create_error_report,
+            commands::error_reports::decide_error_report,
+            commands::error_reports::error_report_path,
+            commands::error_reports::submit_error_reports,
             recording::start_recording,
             recording::stop_recording,
             recording::delete_last_screenshot,

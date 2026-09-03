@@ -7,8 +7,10 @@ import { LoginScreen } from "./components/LoginScreen";
 import { PermissionsScreen } from "./components/PermissionsScreen";
 import { RecorderScreen } from "./components/RecorderScreen";
 import { SettingsPage } from "./components/SettingsPage";
+import { ErrorReportModal } from "./components/ErrorReportModal";
 import { useAuth } from "./hooks/useAuth";
 import { useRecorder } from "./hooks/useRecorder";
+import { useErrorReports } from "./hooks/useErrorReports";
 import { useSSE } from "./hooks/useSSE";
 import { useUpdater } from "./hooks/useUpdater";
 import { useTranslation } from "./hooks/useTranslation";
@@ -23,6 +25,8 @@ import {
   getScreenRecordingPermissionState,
   getAccessibilityPermissionState,
   restartApp,
+  saveSettings,
+  type ErrorReportMode,
   type MicPermissionState,
   type ScreenRecordingPermissionState,
   type AccessibilityPermissionState,
@@ -47,6 +51,8 @@ function App() {
 function MainApp() {
   const [version, setVersion] = useState("");
   const [skipPiiCheck, setSkipPiiCheck] = useState(false);
+  const [errorReportMode, setErrorReportMode] = useState<ErrorReportMode>("ask");
+  const [errorReportNotice, setErrorReportNotice] = useState<string | null>(null);
   const [micPermission, setMicPermission] = useState<MicPermissionState>("unknown");
   const [screenRecordingPermission, setScreenRecordingPermission] =
     useState<ScreenRecordingPermissionState>("unknown");
@@ -59,6 +65,18 @@ function MainApp() {
   const auth = useAuth();
   const recorder = useRecorder();
   const updater = useUpdater();
+  // Error reports (design D1, D5, D7). The hook owns the queue; this window
+  // owns what is on screen. Under mode `always` no dialog opens and the number
+  // goes into the status bar instead.
+  const handleAutoSent = useCallback(
+    (number: string) => setErrorReportNotice(t("report.auto_sent", { number })),
+    [t],
+  );
+  const errorReports = useErrorReports({
+    loggedIn: auth.loggedIn,
+    mode: errorReportMode,
+    onAutoSent: handleAutoSent,
+  });
   // Quota hook is gated on login: only fetches once the user is authenticated.
   const quotaHook = useQuota(auth.loggedIn);
 
@@ -74,7 +92,10 @@ function MainApp() {
 
   const loadSettings = useCallback(() => {
     getSettings()
-      .then((s) => setSkipPiiCheck(s.skip_pii_check))
+      .then((s) => {
+        setSkipPiiCheck(s.skip_pii_check);
+        setErrorReportMode(s.error_reports);
+      })
       .catch(() => {});
   }, []);
 
@@ -131,6 +152,12 @@ function MainApp() {
   const handleOpenPermissionSetup = useCallback(() => {
     setPermissionSetupSkipped(false);
   }, []);
+
+  useEffect(() => {
+    if (!errorReportNotice) return;
+    const id = setTimeout(() => setErrorReportNotice(null), 6000);
+    return () => clearTimeout(id);
+  }, [errorReportNotice]);
 
   // Reload settings + quota when main window gains focus (e.g. after settings
   // window closes, or after the admin tops up the user's quota externally).
@@ -355,6 +382,44 @@ function MainApp() {
     };
   }, [handleStop, handleUndoLastScreenshot, recorder]);
 
+  // The error state carries a button, not a modal: the user is already looking
+  // at an error and choosing what to do next, and a modal on top of it would be
+  // the second interruption in a second (design D6).
+  const handleSendErrorReport = useCallback(async () => {
+    if (!recorder.reportableError) return;
+    await errorReports.create(
+      "command_error",
+      recorder.status === "processing" ? "processing" : "idle",
+      recorder.reportableError,
+    );
+  }, [errorReports, recorder.reportableError, recorder.status]);
+
+  const handleGrantReport = useCallback(
+    async (comment: string | null, alwaysSend: boolean) => {
+      const report = errorReports.current;
+      if (!report) return;
+      if (alwaysSend) {
+        // The checkbox is a settings change, so it survives the session and
+        // the settings page shows it.
+        try {
+          const current = await getSettings();
+          await saveSettings({ ...current, error_reports: "always" });
+          setErrorReportMode("always");
+        } catch (e) {
+          console.warn("Modus für Fehlerberichte konnte nicht gespeichert werden:", e);
+        }
+      }
+      await errorReports.grant(report, comment);
+    },
+    [errorReports],
+  );
+
+  const handleDeclineReport = useCallback(async () => {
+    const report = errorReports.current;
+    if (!report) return;
+    await errorReports.decline(report);
+  }, [errorReports]);
+
   const handleOpenFolder = useCallback(async () => {
     if (recorder.outputDir) {
       try {
@@ -463,6 +528,22 @@ function MainApp() {
       </div>
     ) : null;
 
+  // Mounted outside every screen below, so a report found at launch is asked
+  // about even on the login screen -- a failed sign-in is the first error most
+  // testers meet, and it is the one that cannot be reported from inside a
+  // session (design D7).
+  const errorReportModal =
+    errorReports.current || errorReports.sent ? (
+      <ErrorReportModal
+        report={errorReports.current}
+        loggedIn={auth.loggedIn}
+        sent={errorReports.sent}
+        onGrant={handleGrantReport}
+        onDecline={handleDeclineReport}
+        onClose={errorReports.dismissSent}
+      />
+    ) : null;
+
   // Not logged in -> show login
   if (!auth.loggedIn) {
     return (
@@ -476,6 +557,7 @@ function MainApp() {
             version={version}
           />
         </div>
+        {errorReportModal}
       </div>
     );
   }
@@ -495,6 +577,7 @@ function MainApp() {
             onSkip={() => setPermissionSetupSkipped(true)}
           />
         </div>
+        {errorReportModal}
       </div>
     );
   }
@@ -528,9 +611,23 @@ function MainApp() {
           screenRecordingPermission={screenRecordingPermission}
           accessibilityPermission={accessibilityPermission}
           onRequestPermissions={handleOpenPermissionSetup}
+          onSendErrorReport={
+            recorder.reportableError ? () => void handleSendErrorReport() : undefined
+          }
           version={version}
         />
       </div>
+      {/* Mode `always`: no dialog, a line in the status bar with the number
+          the tracker can be searched by (design D1). */}
+      {errorReportNotice && (
+        <div
+          className="px-4 pb-2 text-center"
+          style={{ fontSize: "0.625rem", color: "#6B7780" }}
+        >
+          {errorReportNotice}
+        </div>
+      )}
+      {errorReportModal}
     </div>
   );
 }

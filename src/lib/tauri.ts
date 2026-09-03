@@ -5,6 +5,10 @@ export interface SessionState {
   email: string | null;
 }
 
+/** How the recorder handles error reports. `ask` shows the dialog for every
+ *  report, `always` sends without one, `never` collects nothing at all. */
+export type ErrorReportMode = "ask" | "always" | "never";
+
 export interface AppSettings {
   output_dir: string;
   logs_dir: string;
@@ -14,6 +18,7 @@ export interface AppSettings {
   skip_pii_check: boolean;
   pipeline_version: number;
   generation_model: string;
+  error_reports: ErrorReportMode;
 }
 
 export async function login(
@@ -282,4 +287,109 @@ export async function requestPermission(
   which: PermissionName,
 ): Promise<string> {
   return invoke<string>("request_permission", { which });
+}
+
+// -- Error reports --
+
+/** What a report may contain. Mirrors `ErrorReport` in `error_reports.rs`;
+ *  the fields it lacks are the guarantee -- there is no screenshot, audio,
+ *  transcript, guide, email, token or output path field anywhere in it. */
+export interface ErrorReport {
+  schema_version: number;
+  report_id: string;
+  kind: "panic" | "command_error" | "ui_error";
+  occurred_at: string;
+  app_version: string;
+  os: string;
+  os_version: string;
+  arch: string;
+  locale: string;
+  phase: string;
+  message: string;
+  location: string | null;
+  log_tail: string[];
+  settings: {
+    upload_target: string | null;
+    pipeline_version: number;
+    generation_model: string;
+    hide_from_screenshots: boolean;
+    skip_pii_check: boolean;
+  } | null;
+  job_id: string | null;
+  comment: string | null;
+  consent: "pending" | "granted";
+}
+
+export interface SubmittedReport {
+  report_id: string;
+  number: string;
+}
+
+/** The event the Rust side emits when a report appears, carrying its id. A
+ *  panic on a thread other than the main one leaves the process running, so
+ *  the dialog should not wait for a relaunch that may never come. */
+export const ERROR_REPORT_CREATED = "error_report:created";
+
+/** Every report still waiting on disk, oldest first. Empty when reports are
+ *  switched off. */
+export async function listErrorReports(): Promise<ErrorReport[]> {
+  return invoke("list_error_reports");
+}
+
+export async function readErrorReport(
+  reportId: string,
+): Promise<ErrorReport | null> {
+  return invoke("read_error_report", { reportId });
+}
+
+/** Create a report for a failure the webview saw. Answers null when reports
+ *  are switched off, which is not an error. */
+export async function createErrorReport(
+  kind: "command_error" | "ui_error",
+  phase: string,
+  message: string,
+  jobId?: string | null,
+): Promise<ErrorReport | null> {
+  return invoke("create_error_report", {
+    kind,
+    phase,
+    message,
+    jobId: jobId ?? null,
+  });
+}
+
+/** Record the user's answer. Declining deletes the file; nothing has been
+ *  transmitted at that point, and nothing will be. */
+export async function decideErrorReport(
+  reportId: string,
+  grant: boolean,
+  comment?: string | null,
+): Promise<ErrorReport | null> {
+  return invoke("decide_error_report", {
+    reportId,
+    grant,
+    comment: comment ?? null,
+  });
+}
+
+/** The absolute path of a report's file, for revealing it in the file
+ *  manager. The webview cannot build this itself -- the reports directory is
+ *  resolved on the Rust side and differs per platform. */
+export async function errorReportPath(reportId: string): Promise<string> {
+  return invoke("error_report_path", { reportId });
+}
+
+/** Send every granted report the current session can carry. A report created
+ *  while signed out waits for this to run after the next sign-in. */
+export async function submitErrorReports(): Promise<SubmittedReport[]> {
+  return invoke("submit_error_reports");
+}
+
+/** Whether the installation has switched error reports off. */
+export async function areErrorReportsForcedOff(): Promise<boolean> {
+  try {
+    return await invoke<boolean>("are_error_reports_forced_off");
+  } catch {
+    return false;
+  }
 }

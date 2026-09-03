@@ -9,7 +9,9 @@ import {
   saveSettings,
   getQuota,
   logout,
+  areErrorReportsForcedOff,
   type AppSettings,
+  type ErrorReportMode,
   type GenerationSettings,
 } from "../lib/tauri";
 
@@ -42,8 +44,13 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     skip_pii_check: false,
     pipeline_version: 1,
     generation_model: "azure/gpt-4.1",
+    error_reports: "ask",
   });
   const [showPiiConfirm, setShowPiiConfirm] = useState(false);
+  // An installation can switch error reports off for everyone (design D1).
+  // The control then shows the chosen mode but cannot be changed, and says
+  // who decided -- a disabled control with no explanation reads as a bug.
+  const [errorReportsForcedOff, setErrorReportsForcedOff] = useState(false);
   const [advancedSettings, setAdvancedSettings] = useState(false);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(
     FALLBACK_GENERATION_SETTINGS,
@@ -60,6 +67,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
         setInitialUploadTarget(s.upload_target);
       })
       .catch(() => {});
+    areErrorReportsForcedOff().then(setErrorReportsForcedOff).catch(() => {});
     getQuota()
       .then((q) => {
         setAdvancedSettings(q.features?.advanced_settings ?? false);
@@ -221,6 +229,44 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             </select>
           </div>
         )}
+
+        {/* Error reports (design D1). Three modes, and a note when the
+            installation has taken the choice away. */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="label-sm" htmlFor="error-reports-mode">
+              {t("settings.error_reports")}
+            </label>
+            <select
+              id="error-reports-mode"
+              value={errorReportsForcedOff ? "never" : settings.error_reports}
+              disabled={errorReportsForcedOff}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  error_reports: e.target.value as ErrorReportMode,
+                }))
+              }
+              className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
+              style={{
+                opacity: errorReportsForcedOff ? 0.5 : 1,
+                cursor: errorReportsForcedOff ? "not-allowed" : "pointer",
+              }}
+            >
+              <option value="ask">{t("settings.error_reports_ask")}</option>
+              <option value="always">{t("settings.error_reports_always")}</option>
+              <option value="never">{t("settings.error_reports_never")}</option>
+            </select>
+          </div>
+          <p
+            className="text-on-surface-variant leading-snug"
+            style={{ fontSize: "0.625rem" }}
+          >
+            {errorReportsForcedOff
+              ? t("settings.error_reports_disabled_by_org")
+              : t("settings.error_reports_hint")}
+          </p>
+        </div>
 
         {/* Workflows directory */}
         <div>
