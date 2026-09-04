@@ -26,6 +26,10 @@ interface RecorderState {
   statusMessage: string;
   outputDir: string | null;
   error: string | null;
+  /** The server job the failure belongs to, when the SSE stream named one.
+   *  Carried so an error report can be joined to the server's own event for
+   *  the same job (design D9's `job_id`); null for failures with no job. */
+  errorJobId: string | null;
   piiFindings: unknown | null;
   rateLimit: RateLimitInfo | null;
 }
@@ -36,6 +40,7 @@ export function useRecorder() {
     statusMessage: "",
     outputDir: null,
     error: null,
+    errorJobId: null,
     piiFindings: null,
     rateLimit: null,
   });
@@ -55,6 +60,7 @@ export function useRecorder() {
         statusMessage: "",
         outputDir: null,
         error: null,
+        errorJobId: null,
         piiFindings: null,
         rateLimit: null,
       });
@@ -64,6 +70,7 @@ export function useRecorder() {
         statusMessage: "",
         outputDir: null,
         error: String(e),
+        errorJobId: null,
         piiFindings: null,
         rateLimit: null,
       });
@@ -96,6 +103,7 @@ export function useRecorder() {
       status: "processing" as const,
       statusMessage: t("status.stopping"),
       error: null,
+      errorJobId: null,
       piiFindings: null,
       rateLimit: null,
     }));
@@ -107,6 +115,7 @@ export function useRecorder() {
         outputDir,
         statusMessage: "",
         error: null,
+        errorJobId: null,
         piiFindings: null,
         rateLimit: null,
       }));
@@ -117,7 +126,7 @@ export function useRecorder() {
         if (msg.includes("No screenshots found")) {
           return { ...s, status: "idle" as const, error: null, statusMessage: "no_clicks" };
         }
-        return { ...s, status: "error" as const, error: msg };
+        return { ...s, status: "error" as const, error: msg, errorJobId: null };
       });
     }
   }, []);
@@ -156,7 +165,7 @@ export function useRecorder() {
         if (rl) {
           return { ...s, status: "rate_limited" as const, error: null, rateLimit: rl };
         }
-        return { ...s, status: "error" as const, error: msg };
+        return { ...s, status: "error" as const, error: msg, errorJobId: null };
       });
     } finally {
       generatingRef.current = false;
@@ -187,6 +196,7 @@ export function useRecorder() {
       outputDir: dir,
       statusMessage: "",
       error: null,
+      errorJobId: null,
       piiFindings: null,
       rateLimit: null,
     }));
@@ -203,6 +213,7 @@ export function useRecorder() {
       statusMessage: "",
       outputDir: null,
       error: null,
+      errorJobId: null,
       piiFindings: null,
       rateLimit: null,
     });
@@ -219,6 +230,7 @@ export function useRecorder() {
       statusMessage: "",
       outputDir: null,
       error: null,
+      errorJobId: null,
       piiFindings: null,
       rateLimit: null,
     });
@@ -230,6 +242,7 @@ export function useRecorder() {
       statusMessage: "",
       outputDir: null,
       error: null,
+      errorJobId: null,
       piiFindings: null,
       rateLimit: null,
     });
@@ -243,7 +256,7 @@ export function useRecorder() {
     setState((s) => ({ ...s, status: "processing" as const, error: null, statusMessage: "" }));
   }, []);
 
-  const setError = useCallback((msg: string) => {
+  const setError = useCallback((msg: string, jobId?: string | null) => {
     // Route rate-limit errors to the structured modal even when they arrive
     // via the SSE `error` event path instead of the thrown-error path.
     const rl = parseRateLimit(msg);
@@ -251,7 +264,12 @@ export function useRecorder() {
       setState((s) => ({ ...s, status: "rate_limited" as const, error: null, rateLimit: rl }));
       return;
     }
-    setState((s) => ({ ...s, status: "error" as const, error: msg }));
+    setState((s) => ({
+      ...s,
+      status: "error" as const,
+      error: msg,
+      errorJobId: jobId ?? null,
+    }));
   }, []);
 
   const setPiiBlocked = useCallback((findings: unknown) => {
@@ -306,6 +324,8 @@ export function useRecorder() {
   return {
     ...state,
     reportableError,
+    /** The job id to attach to a report for `reportableError`, if any. */
+    reportableJobId: reportableError ? state.errorJobId : null,
     start,
     stop,
     confirmGeneration,

@@ -143,6 +143,8 @@ pub fn run() {
             commands::error_reports::decide_error_report,
             commands::error_reports::error_report_path,
             commands::error_reports::submit_error_reports,
+            commands::error_reports::set_error_report_phase,
+            commands::error_reports::debug_trigger_failure,
             recording::start_recording,
             recording::stop_recording,
             recording::delete_last_screenshot,

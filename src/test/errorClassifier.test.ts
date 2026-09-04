@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { expectedOutcome, isReportable } from "../lib/serverErrors";
 
 /**
@@ -50,5 +52,36 @@ describe("which failures are reportable (design D6)", () => {
 
   it("an empty message is not reportable", () => {
     expect(isReportable("")).toBe(false);
+  });
+});
+
+describe("the dev triggers exercise both sides of the classifier", () => {
+  // The `Command-Fehler` button once did nothing at all: it invoked the Rust
+  // command, caught the rejection and logged it, without ever running the
+  // classifier or creating a report. Nothing failed, because a button that
+  // does nothing looks exactly like a button whose effect is elsewhere.
+  // Reading the messages out of the Rust source keeps this honest even if
+  // somebody edits them there.
+  const source = readFileSync(
+    resolve(__dirname, "../../src-tauri/src/commands/error_reports.rs"),
+    "utf-8",
+  );
+
+  function messageFor(kind: string): string {
+    const match = source.match(
+      new RegExp(`"${kind}" => Err\\(\\s*"((?:[^"\\\\]|\\\\.)*)"`, "s"),
+    );
+    expect(match, `no Err message found for the ${kind} trigger`).not.toBeNull();
+    return match![1].replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+
+  it("the command_error trigger produces something reportable", () => {
+    expect(isReportable(messageFor("command_error"))).toBe(true);
+  });
+
+  it("the expected_command_error trigger produces something suppressed", () => {
+    const message = messageFor("expected_command_error");
+    expect(isReportable(message)).toBe(false);
+    expect(expectedOutcome(message)).toBe("no_active_recording");
   });
 });

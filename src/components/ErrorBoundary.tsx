@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { createErrorReport } from "../lib/tauri";
+import { createErrorReport, errorReportPhase } from "../lib/tauri";
 import { t } from "../i18n";
 
 interface ErrorBoundaryProps {
@@ -35,7 +35,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     // caught error, and the boundary does not re-render its children after.
     void createErrorReport(
       "ui_error",
-      "unknown",
+      errorReportPhase(),
       `${error.message}\n${info.componentStack ?? ""}`.trim(),
     ).catch(() => {});
   }

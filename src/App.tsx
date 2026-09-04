@@ -15,7 +15,9 @@ import { useSSE } from "./hooks/useSSE";
 import { useUpdater } from "./hooks/useUpdater";
 import { useTranslation } from "./hooks/useTranslation";
 import { useQuota } from "./hooks/useQuota";
+import { phaseForScreen } from "./lib/errorPhase";
 import {
+  setErrorReportPhase,
   getWorkArea,
   setRecorderRegion,
   getSettings,
@@ -178,7 +180,7 @@ function MainApp() {
   // SSE event handling
   useSSE({
     onStatus: (msg) => recorder.setStatusMessage(msg),
-    onError: (msg) => recorder.setError(msg),
+    onError: (msg, jobId) => recorder.setError(msg, jobId),
     onPiiBlocked: (findings) => recorder.setPiiBlocked(findings),
   });
 
@@ -263,6 +265,51 @@ function MainApp() {
       void exitCompactMode();
     }
   }, [recorder.status, exitCompactMode]);
+
+  // What the user is doing, for any report raised from here on (D3). Derived
+  // by `phaseForScreen`, which is a pure function with a table test -- the
+  // phases used to be set from scattered call sites and three of them were
+  // reachable by nobody.
+  const phase = phaseForScreen({
+    loggedIn: auth.loggedIn,
+    // The settings window publishes its own phase; this is the main window.
+    settingsOpen: false,
+    permissionSetup: permissionSetupVisible,
+    status: recorder.status,
+  });
+
+  useEffect(() => {
+    void setErrorReportPhase(phase);
+  }, [phase]);
+
+  // The settings window shares one phase with this one but has its own module
+  // state, so when it closes nothing here knows the phase needs restoring.
+  // Regaining focus is that signal.
+  useEffect(() => {
+    let cancelled = false;
+    let stop: (() => void) | null = null;
+    const off = () => {
+      try {
+        stop?.();
+      } catch {
+        // Already torn down.
+      }
+      stop = null;
+    };
+    void getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (focused) void setErrorReportPhase(phase, true);
+      })
+      .then((fn) => {
+        stop = fn;
+        if (cancelled) off();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      off();
+    };
+  }, [phase]);
 
   const handleOpenSettings = useCallback(async () => {
     // Check if settings window already exists
@@ -389,10 +436,11 @@ function MainApp() {
     if (!recorder.reportableError) return;
     await errorReports.create(
       "command_error",
-      recorder.status === "processing" ? "processing" : "idle",
+      phase,
       recorder.reportableError,
+      recorder.reportableJobId,
     );
-  }, [errorReports, recorder.reportableError, recorder.status]);
+  }, [errorReports, phase, recorder.reportableError, recorder.reportableJobId]);
 
   const handleGrantReport = useCallback(
     async (comment: string | null, alwaysSend: boolean) => {

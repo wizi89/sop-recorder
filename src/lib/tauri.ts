@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { Phase } from "./errorPhase";
 
 export interface SessionState {
   logged_in: boolean;
@@ -391,5 +392,54 @@ export async function areErrorReportsForcedOff(): Promise<boolean> {
     return await invoke<boolean>("are_error_reports_forced_off");
   } catch {
     return false;
+  }
+}
+
+/**
+ * Force a failure on purpose, for testing the report flow by hand.
+ *
+ * Dev builds only: the Rust side gates its bodies on `debug_assertions` and
+ * answers with a refusal in a release binary. Only reachable from the dev-only
+ * buttons on the settings page.
+ */
+export async function debugTriggerFailure(kind: string): Promise<void> {
+  await invoke("debug_trigger_failure", { kind });
+}
+
+/**
+ * The phase last published to the Rust side.
+ *
+ * Mirrored here because the two global error handlers in `main.tsx` and the
+ * React error boundary are synchronous and outside the component tree, so they
+ * cannot read React state or await a command. They used to pass the literal
+ * `"unknown"`, which is why every webview error arrived with no idea what the
+ * user was doing.
+ */
+let currentPhase: Phase = "unknown";
+
+/** What the webview last told the Rust side the user was doing. */
+export function errorReportPhase(): Phase {
+  return currentPhase;
+}
+
+/**
+ * Publish the current screen as the report phase.
+ *
+ * Idempotent and cheap: repeats are dropped, so callers can fire it from an
+ * effect on every render without thinking about it.
+ */
+export async function setErrorReportPhase(phase: Phase, force = false): Promise<void> {
+  // Each webview is its own JS context with its own mirror, but they share one
+  // phase in Rust. So when the settings window sets `settings` and closes, the
+  // main window's mirror still says what it said before and the dedup would
+  // skip the restore. `force` is how the main window reclaims the phase on
+  // regaining focus.
+  if (phase === currentPhase && !force) return;
+  currentPhase = phase;
+  try {
+    await invoke("set_error_report_phase", { phase });
+  } catch (e) {
+    // A phase that did not land is a mislabelled report, never a lost one.
+    console.warn("Phase für Fehlerberichte konnte nicht gesetzt werden:", e);
   }
 }
