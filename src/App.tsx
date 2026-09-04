@@ -35,6 +35,7 @@ import {
 } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { ask, open } from "@tauri-apps/plugin-dialog";
+import { safeUnlisten } from "./lib/safeUnlisten";
 const IS_DEV = import.meta.env.DEV;
 
 // Must match the label `create_recording_bar` builds the window under.
@@ -174,7 +175,7 @@ function MainApp() {
         }
       }
     });
-    return () => { unlisten.then((f) => f()); };
+    return () => { void unlisten.then(safeUnlisten); };
   }, [loadSettings, auth.loggedIn]);
 
   // SSE event handling
@@ -425,7 +426,7 @@ function MainApp() {
       listen("bar:undo", () => void handleUndoLastScreenshot()),
     ]);
     return () => {
-      void unlisten.then((fns) => fns.forEach((fn) => fn()));
+      void unlisten.then((fns) => fns.forEach(safeUnlisten));
     };
   }, [handleStop, handleUndoLastScreenshot, recorder]);
 

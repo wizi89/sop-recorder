@@ -10,6 +10,7 @@ import {
   type ErrorReportMode,
   type SubmittedReport,
 } from "../lib/tauri";
+import { safeUnlisten } from "../lib/safeUnlisten";
 
 /**
  * The webview's half of error reporting (design D1, D5, D7).
@@ -141,12 +142,11 @@ export function useErrorReports({
     let cancelled = false;
     let stop: (() => void) | null = null;
     const off = () => {
-      try {
-        stop?.();
-      } catch {
-        // Already gone. Nothing to undo, and throwing here would restart the
-        // loop described above.
-      }
+      // Must go through safeUnlisten: Tauri's unlisten is async, so the throw
+      // arrives as a rejected promise and the synchronous try/catch that used
+      // to stand here could not see it. That is how a report about our own
+      // teardown still reached the tracker on 2026-09-04.
+      safeUnlisten(stop);
       stop = null;
     };
     void listen(ERROR_REPORT_CREATED, () => void refresh())

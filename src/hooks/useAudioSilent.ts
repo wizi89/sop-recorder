@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { safeUnlisten } from "../lib/safeUnlisten";
 
 /**
  * True once the Rust side has reported that the input has been exactly silent
@@ -37,7 +38,7 @@ export function useAudioSilent(recording: boolean): boolean {
 
     return () => {
       cancelled = true;
-      unlisten?.();
+      safeUnlisten(unlisten);
     };
   }, []);
 

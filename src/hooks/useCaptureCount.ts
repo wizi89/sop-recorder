@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { safeUnlisten } from "../lib/safeUnlisten";
 
 /**
  * Track the number of screenshots captured during the active recording.
@@ -50,8 +51,8 @@ export function useCaptureCount(recording: boolean): number {
 
     return () => {
       cancelled = true;
-      if (unlistenCaptured) unlistenCaptured();
-      if (unlistenDeleted) unlistenDeleted();
+      safeUnlisten(unlistenCaptured);
+      safeUnlisten(unlistenDeleted);
     };
   }, []);
 

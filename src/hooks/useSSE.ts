@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { safeUnlisten } from "../lib/safeUnlisten";
 
 interface SSEStatusEvent {
   message: string;
@@ -88,7 +89,7 @@ export function useSSE(handlers: {
       p.then((unlisten) => {
         if (cancelled) {
           // Already unmounted -- clean up immediately
-          unlisten();
+          safeUnlisten(unlisten);
         } else {
           resolvedUnlisteners.push(unlisten);
         }
@@ -97,7 +98,7 @@ export function useSSE(handlers: {
 
     return () => {
       cancelled = true;
-      resolvedUnlisteners.forEach((unlisten) => unlisten());
+      resolvedUnlisteners.forEach(safeUnlisten);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

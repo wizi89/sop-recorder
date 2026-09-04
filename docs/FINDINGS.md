@@ -9,6 +9,33 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-09-04 Tauri's unlisten is typed `() => void` but returns a promise that rejects
+
+**Symptom:** the first live run of error reporting against staging produced an event nobody
+triggered: `ui_error: undefined is not an object (evaluating 'listeners[eventId].handlerId')`,
+phase `login`, seconds after an unrelated relaunch. `useErrorReports.ts` already carried a comment
+about this exact message and a `try { stop?.() } catch {}` guard against it. The guard did not hold.
+
+**Cause:** two things compound. Tauri 2.11's injected unlisten script
+(`tauri-2.11.1/src/event/mod.rs:212`) reads `listeners[eventId].handlerId` after checking only that
+the per-event object exists, never the entry. Its emit script twenty lines below checks both, so the
+asymmetry is an oversight. The entry is missing whenever the webview's `window` is recreated while
+Rust still holds listener ids -- an HMR reload under `tauri dev`, or a relaunch after a panic.
+
+The second half is why the existing guard failed: `listen()` resolves to
+`async () => _unlisten(event, eventId)`, so the failure arrives as a *rejected promise*, while the
+declared type is `UnlistenFn = () => void`. A synchronous `try/catch` cannot see it, and because the
+type hides the promise, no call site anywhere attaches a `.catch`. The rejection reaches
+`unhandledrejection`, and with reporting on it files a report about our own teardown.
+
+**Rule:** never invoke a Tauri unlisten function directly -- go through `safeUnlisten`, which
+coerces the return through `Promise.resolve` and swallows both the throw and the rejection. A
+source-scanning test in `safeUnlisten.test.ts` fails if a raw call reappears, because a raw call
+looks correct to reviewers and to `tsc` alike. There were nine such sites across eight files; a
+plain grep found eight of them.
+
+---
+
 ## 2026-09-04 A report was written and no dialog opened, because only panics announced themselves
 
 **Symptom:** Clicking a trigger in the settings window produced nothing. No dialog, no error, no log
