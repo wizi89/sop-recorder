@@ -1,0 +1,24 @@
+# Line endings are normalised so a Windows checkout is byte-identical to a
+# macOS one. This is not cosmetic here: several tests read their own source
+# with `include_str!` and split it on needles containing "\n". A CRLF checkout
+# made one of them scan the whole file instead of the shipping half and fail
+# in CI only, reporting a violation that had not happened. See
+# docs/FINDINGS.md, "A source-scanning test passed on macOS and failed on
+# Windows".
+* text=auto eol=lf
+
+# The exception: cmd.exe requires CRLF, and a batch file checked out with LF
+# can fail to parse mid-script rather than cleanly.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Shell scripts must keep LF even if the rule above is ever relaxed.
+*.sh text eol=lf
+
+# Never rewrite binaries.
+*.png binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
