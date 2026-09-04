@@ -652,6 +652,11 @@ pub fn set_app_handle(handle: tauri::AppHandle) {
 /// one path by which report content reaches the dialog.
 pub const REPORT_CREATED_EVENT: &str = "error_report:created";
 
+/// The lock-free record of what the panic hook managed to do. Not a report:
+/// it carries no user content, only stage names and timestamps.
+pub const TRAIL_FILE: &str = "panic-trail.log";
+const TRAIL_MAX_BYTES: u64 = 64 * 1024;
+
 // -- The panic hook (D5) --
 
 /// Install the hook that turns a panic into a report on disk.
@@ -669,6 +674,7 @@ pub const REPORT_CREATED_EVENT: &str = "error_report:created";
 /// once and for panics after the next launch.
 pub fn install_panic_hook() {
     if mode() == ReportMode::Never {
+        breadcrumb("hook not installed: mode is never");
         return;
     }
     // Warm the cache while a subprocess is still a safe thing to spawn.
@@ -678,13 +684,65 @@ pub fn install_panic_hook() {
         write_panic_report(info);
         previous(info);
     }));
+    breadcrumb("hook installed");
+}
+
+/// A one-line record that a panic happened, written before anything that can
+/// fail is touched.
+///
+/// The full report needs the ring buffer, the scrubber, the settings snapshot
+/// and a serialiser -- four things that take locks or allocate, inside a hook
+/// running on a thread that is already unwinding. If any of them misbehaves,
+/// the crash leaves no trace at all, which is how a main-thread panic came to
+/// kill the app and produce nothing. This uses only `std::fs` and takes no
+/// lock, so it records the crash even when the reporting machinery cannot, and
+/// it says which stage was reached.
+fn breadcrumb(stage: &str) {
+    // Next to the active reports directory, not to `data_local_dir` directly.
+    // The panic-hook tests install the process-global hook and panic on
+    // purpose; addressing the real directory meant `cargo test` appended to
+    // the user's own trail and wrote lines that read exactly like a misbehaving
+    // app -- three installs in nine seconds and a "mode is never" that no app
+    // run produced. A diagnostic that fabricates evidence is worse than none.
+    let Some(dir) = active_reports_dir() else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let line = format!(
+        "{} {}\n",
+        chrono::Utc::now().to_rfc3339(),
+        stage,
+    );
+    // One line per launch plus four per panic, appended forever, in a
+    // directory that otherwise empties itself. Start over rather than grow
+    // without limit; the recent past is the only part anyone reads.
+    let path = dir.join(TRAIL_FILE);
+    let too_big = std::fs::metadata(&path)
+        .map(|m| m.len() > TRAIL_MAX_BYTES)
+        .unwrap_or(false);
+
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(!too_big)
+        .write(too_big)
+        .truncate(too_big)
+        .open(&path)
+    {
+        let _ = file.write_all(line.as_bytes());
+    }
 }
 
 fn write_panic_report(info: &std::panic::PanicHookInfo<'_>) {
+    breadcrumb("panic-hook-entered");
     if mode() == ReportMode::Never {
+        breadcrumb("stopped: mode is never");
         return;
     }
     let Some(dir) = active_reports_dir() else {
+        breadcrumb("stopped: no reports directory");
         return;
     };
 
@@ -711,12 +769,12 @@ fn write_panic_report(info: &std::panic::PanicHookInfo<'_>) {
     );
     report.settings = context().map(|c| c.settings);
 
-    if write_report(&dir, &report).is_err() {
-        return;
-    }
-    if let Some(handle) = APP_HANDLE.get() {
-        use tauri::Emitter;
-        let _ = handle.emit(REPORT_CREATED_EVENT, report.report_id.clone());
+    breadcrumb("collected, about to write");
+    // `write_report` announces it; see the note there on why that is not done
+    // separately any more.
+    match write_report(&dir, &report) {
+        Ok(_) => breadcrumb(&format!("wrote report {}", report.report_id)),
+        Err(e) => breadcrumb(&format!("stopped: write failed: {}", e)),
     }
 }
 
@@ -729,13 +787,46 @@ pub fn reports_dir() -> Option<PathBuf> {
         .map(|p| p.join("com.cogniclone.recorder").join("error-reports"))
 }
 
+/// Write a report and announce it.
+///
+/// The announcement lives here, in the one function that writes, because it
+/// was once only in the panic hook: `create` wrote the file and told nobody.
+/// That went unnoticed because the only caller was the main window's own hook,
+/// which calls `refresh` itself -- so a report created anywhere else, such as
+/// from the settings window, landed on disk and no dialog ever opened. Tying
+/// the two together makes writing without announcing impossible rather than
+/// merely discouraged.
+///
+/// `Emitter::emit` reaches every webview, which is what makes a report raised
+/// in one window open the dialog in another. There is no app handle during
+/// tests or before the builder runs (D5), and then this is just a write.
 pub fn write_report(dir: &Path, report: &ErrorReport) -> Result<PathBuf, std::io::Error> {
+    let path = persist(dir, report)?;
+    announce_created(report);
+    Ok(path)
+}
+
+/// The only function that puts a report on disk. Everything that creates one
+/// goes through `write_report`, which adds the announcement; `decide` uses this
+/// directly, because recording a consent is not the creation of a report and
+/// must not tell every window that a new one has arrived.
+fn persist(dir: &Path, report: &ErrorReport) -> Result<PathBuf, std::io::Error> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(report.file_name());
     let json = serde_json::to_string_pretty(report)
         .map_err(std::io::Error::other)?;
     std::fs::write(&path, json)?;
     Ok(path)
+}
+
+/// Tell every webview a report is waiting. Best effort by design: a report on
+/// disk that nobody was told about is still found by the next `list_reports`,
+/// so a failed emit delays the dialog rather than losing the report.
+fn announce_created(report: &ErrorReport) {
+    if let Some(handle) = APP_HANDLE.get() {
+        use tauri::Emitter;
+        let _ = handle.emit(REPORT_CREATED_EVENT, report.report_id.clone());
+    }
 }
 
 pub fn read_report(path: &Path) -> Option<ErrorReport> {
@@ -788,7 +879,7 @@ pub fn decide(
     report.comment = comment
         .map(|c| truncate_bytes(c.trim(), COMMENT_MAX_BYTES))
         .filter(|c| !c.is_empty());
-    write_report(dir, &report).ok()?;
+    persist(dir, &report).ok()?;
     Some(report)
 }
 
@@ -835,6 +926,135 @@ pub fn create(
     report.job_id = job_id;
     write_report(&dir, &report).ok()?;
     Some(report)
+}
+
+/// Every path that puts a report on disk goes through `write_report`, which is
+/// what makes the dialog appear no matter which window raised the failure.
+///
+/// Asserted rather than trusted: the announcement used to sit in the panic
+/// hook alone, so a report created from the settings window was written and
+/// never shown. A second `std::fs::write` added elsewhere would reintroduce
+/// exactly that, and it would look fine in review.
+#[cfg(test)]
+mod single_writer {
+    #[test]
+    fn only_write_report_writes_a_report_file() {
+        let source = include_str!("error_reports.rs");
+        // Only the shipping half of the file: test fixtures write their own
+        // files on purpose, and this very test names the call it looks for.
+        // Split on the test *modules*, not on `#[cfg(test)]` -- that also
+        // decorates individual helpers much earlier in the file, and cutting
+        // there would hide `write_report` itself and pass for the wrong reason.
+        let production = source.split("#[cfg(test)]\nmod ").next().unwrap();
+        // Assembled at runtime so the needle is not itself a match.
+        let needle = format!("std::fs::{}(", "write");
+        let writes = production.matches(&needle).count();
+        assert_eq!(
+            writes, 1,
+            "a report file is written somewhere other than `persist`; every \
+             creation must go through `write_report`, which announces it, or \
+             no dialog will open"
+        );
+    }
+}
+
+/// The dev triggers have to differ in the way that matters.
+///
+/// A command body does not run on the main thread -- async commands run on the
+/// async runtime -- so `panic!()` written directly in one is a background
+/// panic and the app survives it. Both panic buttons therefore did the same
+/// thing, and the difference only shows up by clicking and noticing the app is
+/// still alive. Asserting the shape is the only way to catch that without a
+/// window on screen.
+#[cfg(test)]
+mod debug_triggers {
+    const SOURCE: &str = include_str!("commands/error_reports.rs");
+
+    fn arm(kind: &str) -> &'static str {
+        let start = SOURCE
+            .find(&format!("\"{}\" =>", kind))
+            .unwrap_or_else(|| panic!("no `{}` arm in debug_trigger_failure", kind));
+        let rest = &SOURCE[start..];
+        let end = rest.find("\n            \"").unwrap_or(rest.len());
+        &rest[..end]
+    }
+
+    #[test]
+    fn the_main_thread_trigger_reaches_the_event_loop() {
+        assert!(
+            arm("main_thread_panic").contains("run_on_main_thread"),
+            "a bare panic! in a command body runs on a worker thread and the \
+             app survives it; the main-thread trigger must go through the app \
+             handle or it is a duplicate of the background one"
+        );
+    }
+
+    #[test]
+    fn the_background_trigger_spawns_its_own_thread() {
+        assert!(
+            arm("background_panic").contains("thread::spawn"),
+            "the background trigger must panic off the main thread"
+        );
+    }
+
+    #[test]
+    fn the_two_panic_triggers_are_not_the_same_thing() {
+        assert_ne!(
+            arm("main_thread_panic").contains("run_on_main_thread"),
+            arm("background_panic").contains("run_on_main_thread"),
+        );
+    }
+}
+
+/// The diagnostic must not write outside the directory tests redirect.
+#[cfg(test)]
+mod breadcrumb_isolation {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn the_trail_starts_over_instead_of_growing_without_limit() {
+        let dir = tempdir().unwrap();
+        set_active_reports_dir(dir.path().to_path_buf());
+        let path = dir.path().join(TRAIL_FILE);
+        std::fs::write(&path, vec![b'x'; 70 * 1024]).unwrap();
+
+        breadcrumb("after the cap");
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("after the cap"));
+        assert!(
+            text.len() < 1024,
+            "an oversized trail must be replaced, not appended to"
+        );
+    }
+
+    #[test]
+    fn the_trail_follows_the_active_reports_directory() {
+        // Regression: this wrote to `dirs_next::data_local_dir()` regardless,
+        // so running the suite appended to the real user's trail and produced
+        // lines indistinguishable from a misbehaving app.
+        let dir = tempdir().unwrap();
+        set_active_reports_dir(dir.path().to_path_buf());
+
+        breadcrumb("test marker");
+
+        let trail = dir.path().join("panic-trail.log");
+        assert!(trail.exists(), "the trail must land in the active directory");
+        assert!(std::fs::read_to_string(&trail).unwrap().contains("test marker"));
+
+        let real = dirs_next::data_local_dir()
+            .map(|p| p.join("com.cogniclone.recorder").join("panic-trail.log"));
+        if let Some(real) = real {
+            if let Ok(text) = std::fs::read_to_string(&real) {
+                assert!(
+                    !text.contains("test marker"),
+                    "the suite wrote into the real user directory at {}",
+                    real.display()
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -130,9 +130,37 @@ export function useErrorReports({
 
   useEffect(() => {
     void refresh();
-    const unlisten = listen(ERROR_REPORT_CREATED, () => void refresh());
+    // The `cancelled` guard is the pattern useSSE already uses, and skipping
+    // it here was a real fault: under StrictMode the effect mounts, unmounts
+    // and mounts again, so the cleanup ran before `listen` had resolved and
+    // unregistered a listener that was not registered yet. Tauri threw
+    // `listeners[eventId].handlerId` out of an unawaited promise, the global
+    // unhandledrejection handler in main.tsx filed an error report about it,
+    // and that report opened this dialog -- the reporting machinery reporting
+    // itself. The unlisten is wrapped too: tearing down twice must not throw.
+    let cancelled = false;
+    let stop: (() => void) | null = null;
+    const off = () => {
+      try {
+        stop?.();
+      } catch {
+        // Already gone. Nothing to undo, and throwing here would restart the
+        // loop described above.
+      }
+      stop = null;
+    };
+    void listen(ERROR_REPORT_CREATED, () => void refresh())
+      .then((fn) => {
+        stop = fn;
+        if (cancelled) off();
+      })
+      .catch(() => {
+        // No listener means reports created by the Rust side are picked up on
+        // the next refresh instead of instantly. Degraded, not broken.
+      });
     return () => {
-      void unlisten.then((fn) => fn());
+      cancelled = true;
+      off();
     };
   }, [refresh]);
 

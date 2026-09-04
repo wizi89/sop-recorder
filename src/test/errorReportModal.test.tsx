@@ -86,8 +86,10 @@ describe("ErrorReportModal", () => {
       />,
     );
 
+    // The button carries one label in both states; the timing is the hint's
+    // job, so that is what this asserts on.
     expect(
-      screen.getByRole("button", { name: "Nach der Anmeldung senden" }),
+      screen.getByRole("button", { name: "Bericht senden" }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Der Bericht wird gespeichert und nach der nächsten Anmeldung gesendet/),
@@ -200,5 +202,89 @@ describe("ErrorReportModal", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Nicht senden" }));
     expect(onDecline).toHaveBeenCalled();
     expect(onGrant).not.toHaveBeenCalled();
+  });
+
+  it("keeps both consent buttons out of the scrolling region", () => {
+    // The app window is 440px tall and this dialog is the tallest thing in it.
+    // Before this was structured as header/scroll/footer the whole card grew
+    // past the window and both buttons sat below the fold, so the only way out
+    // of the dialog was to close the app -- a consent dialog you cannot
+    // decline. Layout is not measurable here, so assert the structure that
+    // guarantees it: neither button may live inside a scroll container.
+    render(
+      <ErrorReportModal
+        report={report()}
+        loggedIn
+        onGrant={noop}
+        onDecline={noop}
+        onClose={noop}
+      />,
+    );
+
+    for (const name of ["Nicht senden", "Bericht senden"]) {
+      let node: HTMLElement | null = screen.getByRole("button", { name });
+      while (node) {
+        expect(node.className).not.toContain("overflow-y-auto");
+        node = node.parentElement;
+      }
+    }
+  });
+
+  it("comes back to life when the next report takes the slot", async () => {
+    // `current` is `pending[0]`, so answering one report slides the next into
+    // this same mounted component rather than unmounting it. The dialog used
+    // to keep the previous answer's `busy` flag, leaving both buttons disabled
+    // behind a full-screen backdrop: the app looked frozen with no way out.
+    const onGrant = vi.fn();
+    const first = report({ report_id: "11111111-1111-4111-8111-111111111111" });
+    const second = report({ report_id: "22222222-2222-4222-8222-222222222222" });
+
+    const { rerender } = render(
+      <ErrorReportModal report={first} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+    );
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Bericht senden" }));
+    expect(onGrant).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ErrorReportModal report={second} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+    );
+
+    expect(screen.getByRole("button", { name: "Bericht senden" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Nicht senden" })).not.toBeDisabled();
+  });
+
+  it("a comment does not follow the user onto the next report", async () => {
+    // It describes the failure they were just asked about; carrying it over
+    // would attach the wrong context to a different report.
+    const onGrant = vi.fn();
+    const first = report({ report_id: "11111111-1111-4111-8111-111111111111" });
+    const second = report({ report_id: "22222222-2222-4222-8222-222222222222" });
+
+    const { rerender } = render(
+      <ErrorReportModal report={first} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+    );
+
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox"), "Beim Generieren geklickt");
+
+    rerender(
+      <ErrorReportModal report={second} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+    );
+
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
+
+  it("a failing send does not leave the dialog stuck", async () => {
+    const onGrant = vi.fn().mockRejectedValue(new Error("Netzwerk weg"));
+    render(
+      <ErrorReportModal report={report()} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+    );
+
+    const send = screen.getByRole("button", { name: "Bericht senden" });
+    await userEvent.setup().click(send);
+
+    await waitFor(() => expect(send).not.toBeDisabled());
+    expect(screen.getByRole("button", { name: "Nicht senden" })).not.toBeDisabled();
   });
 });

@@ -204,7 +204,6 @@ const de = {
   "report.comment_placeholder": "Zum Beispiel: Ich habe auf Generieren geklickt.",
   "report.always_send": "Fehlerberichte künftig automatisch senden",
   "report.send": "Bericht senden",
-  "report.send_after_login": "Nach der Anmeldung senden",
   "report.signed_out_hint":
     "Du bist nicht angemeldet. Der Bericht wird gespeichert und nach der nächsten Anmeldung gesendet.",
   "report.reveal_file": "Bericht-Datei anzeigen",
