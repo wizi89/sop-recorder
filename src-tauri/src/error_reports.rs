@@ -928,6 +928,23 @@ pub fn create(
     Some(report)
 }
 
+/// The ring buffer, the active reports directory, the mode and the phase are
+/// process globals, so every test that sets one runs under this lock instead
+/// of racing the others through cargo's thread pool. It lives at file scope
+/// because the tests that need it are spread across several modules: keeping
+/// it inside `mod tests` left `breadcrumb_isolation` racing everything else,
+/// which passed for weeks and then failed once, locally, on an unrelated run.
+///
+/// Poisoning is ignored deliberately -- one panicking test must not cascade
+/// into every later test failing on the lock instead of on its own assertion.
+#[cfg(test)]
+static GLOBAL_STATE_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+fn global_state_guard() -> std::sync::MutexGuard<'static, ()> {
+    GLOBAL_STATE_TESTS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// Every path that puts a report on disk goes through `write_report`, which is
 /// what makes the dialog appear no matter which window raised the failure.
 ///
@@ -939,7 +956,11 @@ pub fn create(
 mod single_writer {
     #[test]
     fn only_write_report_writes_a_report_file() {
-        let source = include_str!("error_reports.rs");
+        // Normalised first: git hands Windows checkouts CRLF, `include_str!`
+        // embeds the file as it sits on disk, and the split below would then
+        // match nothing -- scanning the test fixtures too and failing with a
+        // count of 3. It passed on macOS and failed only in CI.
+        let source = include_str!("error_reports.rs").replace("\r\n", "\n");
         // Only the shipping half of the file: test fixtures write their own
         // files on purpose, and this very test names the call it looks for.
         // Split on the test *modules*, not on `#[cfg(test)]` -- that also
@@ -970,13 +991,17 @@ mod single_writer {
 mod debug_triggers {
     const SOURCE: &str = include_str!("commands/error_reports.rs");
 
-    fn arm(kind: &str) -> &'static str {
-        let start = SOURCE
+    // Normalised for the same reason as `single_writer`: this one survives
+    // CRLF only because "\r\n" happens to contain "\n", which is luck rather
+    // than intent.
+    fn arm(kind: &str) -> String {
+        let source = SOURCE.replace("\r\n", "\n");
+        let start = source
             .find(&format!("\"{}\" =>", kind))
             .unwrap_or_else(|| panic!("no `{}` arm in debug_trigger_failure", kind));
-        let rest = &SOURCE[start..];
+        let rest = &source[start..];
         let end = rest.find("\n            \"").unwrap_or(rest.len());
-        &rest[..end]
+        rest[..end].to_string()
     }
 
     #[test]
@@ -1014,6 +1039,7 @@ mod breadcrumb_isolation {
 
     #[test]
     fn the_trail_starts_over_instead_of_growing_without_limit() {
+        let _guard = global_state_guard();
         let dir = tempdir().unwrap();
         set_active_reports_dir(dir.path().to_path_buf());
         let path = dir.path().join(TRAIL_FILE);
@@ -1034,6 +1060,7 @@ mod breadcrumb_isolation {
         // Regression: this wrote to `dirs_next::data_local_dir()` regardless,
         // so running the suite appended to the real user's trail and produced
         // lines indistinguishable from a misbehaving app.
+        let _guard = global_state_guard();
         let dir = tempdir().unwrap();
         set_active_reports_dir(dir.path().to_path_buf());
 
@@ -1152,13 +1179,9 @@ mod tests {
         assert!(capped.last().unwrap().starts_with("199 "));
     }
 
-    /// The ring is global, so the two tests that use it run under one lock
-    /// rather than racing each other through cargo's thread pool.
-    static RING_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
     #[test]
     fn ring_keeps_the_last_three_hundred_lines_in_order() {
-        let _guard = RING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = global_state_guard();
         clear_ring();
         for i in 0..350 {
             push_ring_line(&format!("line {i}"));
@@ -1172,7 +1195,7 @@ mod tests {
 
     #[test]
     fn ring_holds_fewer_lines_than_its_capacity_without_padding() {
-        let _guard = RING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = global_state_guard();
         clear_ring();
         push_ring_line("nur eine Zeile");
         assert_eq!(ring_lines(), vec!["nur eine Zeile".to_string()]);
@@ -1279,7 +1302,7 @@ mod tests {
 
     #[test]
     fn a_panic_on_another_thread_leaves_a_report_with_its_location() {
-        let _guard = RING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = global_state_guard();
         let dir = tempdir().unwrap();
         set_active_reports_dir(dir.path().to_path_buf());
         set_mode(ReportMode::Ask);
@@ -1314,7 +1337,7 @@ mod tests {
 
     #[test]
     fn the_hook_is_not_installed_when_reports_are_off() {
-        let _guard = RING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = global_state_guard();
         let dir = tempdir().unwrap();
         set_active_reports_dir(dir.path().to_path_buf());
         set_mode(ReportMode::Never);
@@ -1400,7 +1423,7 @@ mod tests {
 
     #[test]
     fn nothing_is_written_when_reports_are_off() {
-        let _guard = RING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = global_state_guard();
         let dir = tempdir().unwrap();
         set_active_reports_dir(dir.path().to_path_buf());
         set_mode(ReportMode::Never);
@@ -1412,7 +1435,7 @@ mod tests {
 
     #[test]
     fn a_created_report_carries_the_scrubbed_ring_and_the_job_id() {
-        let _guard = RING_TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = global_state_guard();
         let dir = tempdir().unwrap();
         set_active_reports_dir(dir.path().to_path_buf());
         set_mode(ReportMode::Ask);

@@ -9,6 +9,36 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-09-04 A source-scanning test passed on macOS and failed on Windows, because git hands it CRLF
+
+**Symptom:** `only_write_report_writes_a_report_file` failed in CI on Windows only, claiming three
+report writers where the source plainly has one. `left: 3, right: 1`. The same commit passed
+locally and every other test in the file passed on the same Windows run.
+
+**Cause:** the guard reads its own source with `include_str!` and cuts the test half off with
+`source.split("#[cfg(test)]\nmod ")`. `include_str!` embeds the file exactly as it sits on disk, and
+git checks out CRLF on Windows -- so the needle containing a bare `\n` matched nothing, `.next()`
+returned the *whole* file, and the count then included the two writes the test fixtures make on
+purpose. The assertion message was about a second writer, which is the one thing that had not
+happened.
+
+A sibling guard in the same file survived only by luck: it searches for `"\n            \""`, and
+`\r\n` happens to contain `\n`.
+
+**Rule:** any test that reads source text must normalise first --
+`include_str!(...).replace("\r\n", "\n")`. The failure cannot appear on a machine that checks out
+LF, so it will only ever be found in CI, and it will look like the thing being guarded has broken
+rather than the guard. Verified by converting the file to CRLF locally and watching the count go
+back to 3.
+
+**Related, found in the same run:** two tests in `breadcrumb_isolation` redirected the global
+reports directory without taking `RING_TEST_LOCK`, which the four tests in `mod tests` do take. They
+had raced happily for weeks. The lock now lives at file scope as `GLOBAL_STATE_TESTS` and every test
+that touches a process global takes it. A lock inside one test module cannot protect a global that
+another test module also writes.
+
+---
+
 ## 2026-09-04 Tauri's unlisten is typed `() => void` but returns a promise that rejects
 
 **Symptom:** the first live run of error reporting against staging produced an event nobody
