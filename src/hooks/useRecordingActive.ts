@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { safeUnlisten } from "../lib/safeUnlisten";
 
 /**
  * Whether a recording is currently running, from the Rust side's own events.
@@ -22,13 +23,13 @@ export function useRecordingActive(): boolean {
       listen("recording:started", () => setActive(true)),
       listen("recording:stopped", () => setActive(false)),
     ]).then((fns) => {
-      if (cancelled) fns.forEach((fn) => fn());
+      if (cancelled) fns.forEach(safeUnlisten);
       else unlisten = fns;
     });
 
     return () => {
       cancelled = true;
-      unlisten.forEach((fn) => fn());
+      unlisten.forEach(safeUnlisten);
     };
   }, []);
 

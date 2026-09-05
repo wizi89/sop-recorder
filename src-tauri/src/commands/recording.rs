@@ -234,6 +234,10 @@ pub async fn start_recording(
 
     *state.current_session.lock().unwrap() = Some(session);
     *status = RecordingStatus::Recording;
+    // What a panic report says the app was doing (design D3). Set here rather
+    // than read out of this mutex at panic time: the panic hook must not take
+    // a lock it may be racing or that may already be poisoned.
+    crate::error_reports::set_phase(crate::error_reports::Phase::Recording);
 
     let _ = app.emit("recording:started", ());
     log::info!("Recording started: {}", output_dir.display());
@@ -253,6 +257,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
             return Err("Keine aktive Aufnahme.".into());
         }
         *status = RecordingStatus::Processing;
+        crate::error_reports::set_phase(crate::error_reports::Phase::Processing);
     }
 
     // Extract everything from the session in one scoped block

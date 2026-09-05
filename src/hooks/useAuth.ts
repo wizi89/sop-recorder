@@ -6,6 +6,7 @@ import {
   refreshSession,
   type SessionState,
 } from "../lib/tauri";
+import { safeUnlisten } from "../lib/safeUnlisten";
 
 interface AuthState {
   loggedIn: boolean;
@@ -49,7 +50,7 @@ export function useAuth() {
       });
     });
     return () => {
-      unlisten.then((fn) => fn());
+      void unlisten.then(safeUnlisten);
     };
   }, []);
 

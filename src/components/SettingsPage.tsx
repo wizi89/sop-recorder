@@ -3,13 +3,20 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "../hooks/useTranslation";
+import { isReportable } from "../lib/serverErrors";
 import { emit } from "@tauri-apps/api/event";
 import {
   getSettings,
   saveSettings,
   getQuota,
   logout,
+  areErrorReportsForcedOff,
+  debugTriggerFailure,
+  setErrorReportPhase,
+  createErrorReport,
+  errorReportPhase,
   type AppSettings,
+  type ErrorReportMode,
   type GenerationSettings,
 } from "../lib/tauri";
 
@@ -42,8 +49,13 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     skip_pii_check: false,
     pipeline_version: 1,
     generation_model: "azure/gpt-4.1",
+    error_reports: "ask",
   });
   const [showPiiConfirm, setShowPiiConfirm] = useState(false);
+  // An installation can switch error reports off for everyone (design D1).
+  // The control then shows the chosen mode but cannot be changed, and says
+  // who decided -- a disabled control with no explanation reads as a bug.
+  const [errorReportsForcedOff, setErrorReportsForcedOff] = useState(false);
   const [advancedSettings, setAdvancedSettings] = useState(false);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(
     FALLBACK_GENERATION_SETTINGS,
@@ -53,6 +65,14 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
   // backend-bound), so the user has to log in again.
   const [initialUploadTarget, setInitialUploadTarget] = useState<string | null>(null);
 
+  // This window is on top of whatever the main window shows, so while it is
+  // open it is what the user is doing. The main window reclaims the phase when
+  // it regains focus; nothing here has to undo it, which is just as well since
+  // an unmount is not guaranteed when a window closes.
+  useEffect(() => {
+    void setErrorReportPhase("settings");
+  }, []);
+
   useEffect(() => {
     getSettings()
       .then((s) => {
@@ -60,6 +80,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
         setInitialUploadTarget(s.upload_target);
       })
       .catch(() => {});
+    areErrorReportsForcedOff().then(setErrorReportsForcedOff).catch(() => {});
     getQuota()
       .then((q) => {
         setAdvancedSettings(q.features?.advanced_settings ?? false);
@@ -219,6 +240,110 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
                 </option>
               ))}
             </select>
+          </div>
+        )}
+
+        {/* Error reports (design D1). Three modes, and a note when the
+            installation has taken the choice away. */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="label-sm" htmlFor="error-reports-mode">
+              {t("settings.error_reports")}
+            </label>
+            <select
+              id="error-reports-mode"
+              value={errorReportsForcedOff ? "never" : settings.error_reports}
+              disabled={errorReportsForcedOff}
+              onChange={(e) =>
+                setSettings((s) => ({
+                  ...s,
+                  error_reports: e.target.value as ErrorReportMode,
+                }))
+              }
+              className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
+              style={{
+                opacity: errorReportsForcedOff ? 0.5 : 1,
+                cursor: errorReportsForcedOff ? "not-allowed" : "pointer",
+              }}
+            >
+              <option value="ask">{t("settings.error_reports_ask")}</option>
+              <option value="always">{t("settings.error_reports_always")}</option>
+              <option value="never">{t("settings.error_reports_never")}</option>
+            </select>
+          </div>
+          <p
+            className="text-on-surface-variant leading-snug"
+            style={{ fontSize: "0.625rem" }}
+          >
+            {errorReportsForcedOff
+              ? t("settings.error_reports_disabled_by_org")
+              : t("settings.error_reports_hint")}
+          </p>
+        </div>
+
+        {/* Dev-only failure triggers. `import.meta.env.DEV` keeps them out of
+            the production bundle, and the Rust side is behind
+            `debug_assertions` as well, so a release build has neither the
+            button nor the panic. There is no other way to reach a panic by
+            hand: `withGlobalTauri` is off, so the console cannot invoke. */}
+        {import.meta.env.DEV && (
+          <div className="flex flex-col gap-2">
+            <label className="label-sm">Fehler auslösen (nur Entwicklung)</label>
+            {(settings.error_reports === "never" || errorReportsForcedOff) && (
+              // Silence is the correct behaviour in this mode, but a button
+              // that does nothing and says nothing is indistinguishable from a
+              // broken one -- which cost a debugging round.
+              <p
+                className="text-on-surface-variant leading-snug"
+                style={{ fontSize: "0.625rem" }}
+              >
+                {errorReportsForcedOff
+                  ? "Fehlerberichte sind von der Organisation deaktiviert: Diese Schaltflächen erzeugen keinen Bericht."
+                  : "Fehlerberichte stehen auf \u201eNie\u201c: Diese Schaltflächen erzeugen absichtlich keinen Bericht."}
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {[
+                ["command_error", "Command-Fehler"],
+                ["expected_command_error", "Command-Fehler (erwartet)"],
+                ["background_panic", "Panic (Hintergrund)"],
+                ["main_thread_panic", "Panic (Haupt-Thread)"],
+                ["ui_error", "UI-Fehler"],
+              ].map(([kind, label]) => (
+                <button
+                  key={kind}
+                  onClick={() => {
+                    if (kind === "ui_error") {
+                      // Thrown async so it reaches the window `error` handler
+                      // rather than being caught by React's boundary.
+                      setTimeout(() => {
+                        throw new Error("Absichtlicher UI-Testfehler");
+                      });
+                      return;
+                    }
+                    void debugTriggerFailure(kind).catch((e) => {
+                      // A rejected command is only half the path. The other
+                      // half is the classifier (D6): a failure the UI can
+                      // explain is not reported, and only what is left becomes
+                      // a report. Doing both here is what makes this button
+                      // exercise the real flow rather than just log.
+                      const message = String(e);
+                      if (!isReportable(message)) {
+                        console.warn("Klassifiziert als erwartetes Ergebnis, kein Bericht:", message);
+                        return;
+                      }
+                      void createErrorReport("command_error", errorReportPhase(), message).catch(
+                        (err) => console.warn("Bericht konnte nicht erstellt werden:", err),
+                      );
+                    });
+                  }}
+                  className="btn-secondary px-3 py-1.5"
+                  style={{ fontSize: "0.6875rem" }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

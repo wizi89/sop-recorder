@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { safeUnlisten } from "../lib/safeUnlisten";
 
 /**
  * Subscribe to the Rust-side `recording:audio_level` event and expose the
@@ -30,7 +31,7 @@ export function useAudioLevel(): number {
 
     return () => {
       cancelled = true;
-      if (unlisten) unlisten();
+      safeUnlisten(unlisten);
     };
   }, []);
 

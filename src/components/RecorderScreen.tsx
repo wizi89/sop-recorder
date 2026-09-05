@@ -41,6 +41,11 @@ interface RecorderScreenProps {
   /** When provided, renders a secondary button to run generation against a
    *  picked recording folder (regenerate an existing recording). */
   onGenerateFromFolder?: () => void;
+  /** Set when the current error is one worth reporting (design D6). Renders a
+   *  button beside the message rather than a modal on top of it: the user is
+   *  already looking at an error and choosing what to do next, and a modal
+   *  would be the second interruption in a second. */
+  onSendErrorReport?: () => void;
   version: string;
 }
 
@@ -69,6 +74,7 @@ export function RecorderScreen({
   onCancelFromReview,
   onUpgradeQuota,
   onGenerateFromFolder,
+  onSendErrorReport,
   version,
 }: RecorderScreenProps) {
   const { t } = useTranslation();
@@ -261,6 +267,14 @@ export function RecorderScreen({
           {status === "done" && (
             <button onClick={onOpenFolder} className="btn-secondary w-56 py-3 text-sm">
               {t("status.open_folder")}
+            </button>
+          )}
+          {status === "error" && onSendErrorReport && (
+            <button
+              onClick={onSendErrorReport}
+              className="btn-secondary w-56 py-2.5 text-sm"
+            >
+              {t("report.send_button")}
             </button>
           )}
           {/* Retry-from-disk: visible whenever a preserved session dir exists

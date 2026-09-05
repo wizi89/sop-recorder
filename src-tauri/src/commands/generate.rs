@@ -22,8 +22,10 @@ pub async fn run_generation(
         return Err("Generation already in progress".into());
     }
 
+    crate::error_reports::set_phase(crate::error_reports::Phase::Processing);
     let result = run_generation_inner(output_dir, app, session, state).await;
     GENERATING.store(false, Ordering::SeqCst);
+    crate::error_reports::set_phase(crate::error_reports::Phase::Idle);
     result
 }
 

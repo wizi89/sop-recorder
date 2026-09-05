@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod error_reports;
 pub mod generate;
 pub mod permissions;
 pub mod pipelines;

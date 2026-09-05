@@ -92,6 +92,13 @@ const de = {
   "settings.model_label": "KI-Modell",
   "settings.save": "Speichern",
   "settings.cancel": "Abbrechen",
+  "settings.error_reports": "Fehlerberichte",
+  "settings.error_reports_ask": "Vor dem Senden fragen",
+  "settings.error_reports_always": "Automatisch senden",
+  "settings.error_reports_never": "Keine Fehlerberichte",
+  "settings.error_reports_hint":
+    "Wenn CogniClone abstürzt oder ein Fehler auftritt, kann ein Bericht an uns gesendet werden. Er enthält nie Aufnahmen, Screenshots oder deine E-Mail-Adresse.",
+  "settings.error_reports_disabled_by_org": "Von Ihrer Organisation deaktiviert",
 
   // PII blocked modal
   "pii.title": "Personenbezogene Daten erkannt",
@@ -171,6 +178,45 @@ const de = {
 
   // Errors
   "error.prefix": "Fehler: {message}",
+
+  // Error reports
+  "report.title": "Fehlerbericht senden?",
+  "report.title_crash": "CogniClone wurde beim letzten Mal unerwartet beendet",
+  "report.intro":
+    "In CogniClone ist ein Fehler aufgetreten. Ein Bericht darüber hilft uns, ihn zu beheben.",
+  "report.intro_crash":
+    "Beim letzten Start hat sich CogniClone unerwartet beendet. Ein Bericht darüber hilft uns, den Absturz zu beheben.",
+  "report.consent": "Der Bericht wird nur gesendet, wenn du zustimmst.",
+  "report.contains_title": "Der Bericht enthält:",
+  "report.contains_1": "die Fehlermeldung und die Stelle im Programm, an der sie entstand",
+  "report.contains_2": "App-Version, Betriebssystem und Sprache",
+  "report.contains_3":
+    "die letzten Protokollzeilen, ohne Dateinamen, Pfade und Adressen",
+  "report.contains_4": "deine Einstellungen zur Verarbeitung",
+  "report.excludes_title": "Der Bericht enthält nie:",
+  "report.excludes_1": "Screenshots, Ton oder Transkripte",
+  "report.excludes_2": "Inhalte deiner Anleitungen",
+  "report.excludes_3": "deine E-Mail-Adresse, Zugangsdaten oder Schlüssel",
+  "report.excludes_4": "den Namen oder Pfad deines Anleitungsverzeichnisses",
+  "report.show_details": "Details anzeigen",
+  "report.hide_details": "Details ausblenden",
+  "report.comment_label": "Was hast du gerade gemacht? (optional)",
+  "report.comment_placeholder": "Zum Beispiel: Ich habe auf Generieren geklickt.",
+  "report.always_send": "Fehlerberichte künftig automatisch senden",
+  "report.send": "Bericht senden",
+  "report.signed_out_hint":
+    "Du bist nicht angemeldet. Der Bericht wird gespeichert und nach der nächsten Anmeldung gesendet.",
+  "report.reveal_file": "Bericht-Datei anzeigen",
+  "report.decline": "Nicht senden",
+  "report.sent_title": "Danke -- der Bericht ist angekommen.",
+  "report.sent_number": "Berichtsnummer: {number}",
+  "report.sent_hint":
+    "Nenne uns diese Nummer, wenn du dich zu dem Fehler bei uns meldest.",
+  "report.copy": "Kopieren",
+  "report.copied": "Kopiert!",
+  "report.close": "Schließen",
+  "report.send_button": "Fehlerbericht senden",
+  "report.auto_sent": "Fehlerbericht gesendet -- Nummer {number}",
 
   // Tray
   "tray.show": "Anzeigen",

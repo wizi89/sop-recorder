@@ -571,6 +571,23 @@ mod tests {
         Duration::from_millis(n)
     }
 
+    /// `SESSION` and `EXCLUDED_REGION` are process-global, correctly so: there
+    /// is one input hook per process. Cargo runs tests in parallel threads of
+    /// that one process, so the three tests below were mutating the same
+    /// session concurrently -- one test's `end_session` landing between
+    /// another's `begin_session` and its assertion, which failed as
+    /// "a session must be active" roughly once in twenty-five full runs.
+    /// Serialising them is the fix; making the state per-thread would be
+    /// testing something the recorder does not do.
+    static GLOBAL_SESSION_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Takes the lock without caring whether a previous test poisoned it: a
+    /// failed assertion in one test must report as that test failing, not as
+    /// every later test panicking on the lock.
+    fn global_session_guard() -> std::sync::MutexGuard<'static, ()> {
+        GLOBAL_SESSION_TESTS.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// The leak this guards: `rdev::listen` was called once per recording, so
     /// the N-th recording of an app session had N OS hooks installed and saw
     /// every physical click N times. There is exactly one session, whichever
@@ -581,6 +598,7 @@ mod tests {
     /// system-wide input hook, which a test run has no business doing.
     #[test]
     fn a_second_recording_replaces_the_session_rather_than_adding_one() {
+        let _guard = global_session_guard();
         begin_session(None, Arc::new(|_| {}));
         begin_session(Some(42), Arc::new(|_| {}));
 
@@ -603,6 +621,7 @@ mod tests {
 
     #[test]
     fn a_new_session_does_not_inherit_the_previous_baseline() {
+        let _guard = global_session_guard();
         begin_session(None, Arc::new(|_| {}));
         SESSION.lock().unwrap().as_mut().unwrap().baseline.mouse =
             Some(((400, 300), Instant::now()));
@@ -652,6 +671,7 @@ mod tests {
 
     #[test]
     fn ending_a_session_forgets_the_region() {
+        let _guard = global_session_guard();
         set_excluded_region(Some((1218, 840, 240, 34)));
         end_session();
         assert!(

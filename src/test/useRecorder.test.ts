@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { useRecorder } from "../hooks/useRecorder";
 
@@ -253,5 +253,26 @@ describe("useRecorder", () => {
     expect(result.current.status).toBe("idle");
     expect(result.current.rateLimit).toBeNull();
     expect(result.current.outputDir).toBe(outputDir); // still preserved for retry-from-disk
+  });
+});
+
+describe("useRecorder reportableError (design D6)", () => {
+  it("offers a report for an error it cannot explain", async () => {
+    const { result } = renderHook(() => useRecorder());
+    act(() => result.current.setError("Upload failed: 500 - <html>"));
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.reportableError).toBe("Upload failed: 500 - <html>");
+  });
+
+  it("offers nothing for an expected outcome", async () => {
+    const { result } = renderHook(() => useRecorder());
+    act(() => result.current.setError("Sitzung abgelaufen. Bitte erneut anmelden."));
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.reportableError).toBeNull();
+  });
+
+  it("offers nothing while there is no error at all", () => {
+    const { result } = renderHook(() => useRecorder());
+    expect(result.current.reportableError).toBeNull();
   });
 });
