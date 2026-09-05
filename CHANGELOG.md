@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-05
+
 ### Added
 
 - CogniClone can now send a report when something goes wrong, and asks first. A crash, a step that fails with an error the app cannot explain, or a fault in its own interface each offer to send a report -- a crash that ended the app asks the next time you start it. The dialog lists in plain words what the report contains before you decide, and shows you the exact text that would be sent if you want to read it. You can add a sentence about what you were doing, and the report gets a short number to quote if you write to us about it.
@@ -452,7 +454,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/wizi89/sop-recorder/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/wizi89/sop-recorder/compare/v0.14.0...v0.15.0
 [0.13.1]: https://github.com/wizi89/sop-recorder/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/wizi89/sop-recorder/compare/v0.12.6...v0.13.0
