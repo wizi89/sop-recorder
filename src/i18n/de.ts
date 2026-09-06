@@ -20,6 +20,9 @@ const de = {
   "status.cancel_message": "Die aktuelle Aufnahme wird verworfen.",
   "status.cancel_confirm": "Verwerfen",
   "status.open_folder": "Ordner öffnen",
+  "status.elapsed": "Läuft seit {elapsed} Min",
+  "status.still_waiting":
+    "Der Server arbeitet noch. Das Fenster kann offen bleiben, das Ergebnis kommt automatisch.",
   "status.retry": "Erneut versuchen",
   "status.retry_from_disk": "Aus Aufnahme erneut versuchen",
   "status.generate_from_folder": "Aus Ordner generieren",
@@ -32,6 +35,8 @@ const de = {
   "review.title": "Aufnahme prüfen",
   "review.summary": "{count} Screenshots -- {elapsed} Min aufgenommen",
   "review.summary_count_only": "{count} Screenshots in diesem Ordner",
+  "review.failed_captures":
+    "{count} von {total} Schritten konnten nicht aufgenommen werden. Die Anleitung ist unvollständig.",
   "review.loading": "Screenshots werden geladen...",
   "review.step_label": "Schritt {n}",
   "review.confirm": "Generieren",
@@ -84,6 +89,10 @@ const de = {
   "settings.title": "Einstellungen",
   "settings.hide_screenshots": "In Screenshots ausblenden",
   "settings.skip_pii_check": "PII-Prüfung überspringen",
+  "settings.reveal": "Anzeigen",
+  "settings.loading": "Wird geladen...",
+  "settings.save_failed":
+    "Einstellungen wurden nicht gespeichert: {error}. Das Fenster bleibt offen, damit nichts verloren geht.",
   "settings.workflows_dir": "Anleitungsverzeichnis",
   "settings.logs_dir": "Protokollverzeichnis",
   "settings.choose": "Wählen",

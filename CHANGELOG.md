@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A recording no longer loses every step after one that failed. If a screenshot could not be taken -- which happened under fast clicking, when several full-screen captures ran at once -- the guide stopped at that point and everything after it was silently dropped. In one test 21 clicks became a guide with a single step, with nothing on screen to say so. All the screenshots that were taken now reach the guide, and their narration with them.
+- CogniClone tells you when a step could not be captured. The review screen says how many of your actions are missing before you generate the guide, instead of presenting a short recording as a complete one.
+- The first save in Einstellungen takes effect. Changing a setting while the window was still loading looked like it worked and then quietly reverted, so the setting you chose was not the one that got saved -- and on a freshly installed Mac the window could take seconds to load, which made this easy to hit. The controls now wait until your settings have loaded, and a save that fails says so and keeps the window open instead of closing as though it had worked.
+- "Protokollverzeichnis" in Einstellungen names the folder the log files are actually in. On macOS it named a folder that did not exist. It is now shown rather than typed, with a button to open it, because it was never a setting you could change.
+- A dropped connection during processing is described as what it is. The message said the connection was interrupted, which read as lost work, for two generations that both finished normally. It now says the connection is being restored and that processing continues.
+
+### Changed
+
+- A step is recorded from the screen you were working on, not from all your screens at once. With two monitors both were captured side by side into one wide image and then shrunk to fit, which left each screen at a quarter of its detail -- enough that the guide named the wrong application in a test. With one monitor nothing changes.
+- The red click marker is a ring instead of a filled dot, and the drawn mouse pointer is gone. Both sat on top of the thing you had just clicked; in a test the name of the button was unreadable underneath them. The ring marks the same spot and leaves the button readable.
+- While a guide is being generated, CogniClone shows how long it has been working, and says so explicitly if the server has been quiet for a while.
+
 ## [0.16.0] - 2026-09-05
 
 ### Added

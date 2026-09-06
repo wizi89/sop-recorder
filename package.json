@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "app": "tauri dev",
+    "app:local": "tauri dev -- -- --local",
+    "app:staging": "tauri dev -- -- --staging",
+    "app:production": "tauri dev -- -- --production",
     "build": "tsc && vite build",
     "build:desktop": "tauri build",
     "build:windows": "tauri build --bundles nsis",

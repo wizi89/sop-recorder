@@ -14,7 +14,6 @@ export interface AppSettings {
   output_dir: string;
   logs_dir: string;
   hide_from_screenshots: boolean;
-  api_key: string | null;
   upload_target: string | null;
   skip_pii_check: boolean;
   pipeline_version: number;
@@ -45,6 +44,12 @@ export async function getSettings(): Promise<AppSettings> {
   return invoke("get_settings");
 }
 
+/// Whether a BYOK key is stored. Asked separately from `getSettings` so the
+/// settings window's load never waits on the OS credential store.
+export async function hasApiKey(): Promise<boolean> {
+  return invoke("has_api_key");
+}
+
 export async function saveSettings(settings: AppSettings): Promise<void> {
   return invoke("save_settings", { settings });
 }
@@ -53,7 +58,15 @@ export async function startRecording(): Promise<void> {
   return invoke("start_recording");
 }
 
-export async function stopRecording(): Promise<string> {
+/// What a stopped recording left behind. `failed_captures` is non-zero when a
+/// screenshot could not be taken or written: the recording is short of what the
+/// user did, and the review screen says so.
+export interface StoppedRecording {
+  output_dir: string;
+  failed_captures: number;
+}
+
+export async function stopRecording(): Promise<StoppedRecording> {
   return invoke("stop_recording");
 }
 

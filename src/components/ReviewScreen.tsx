@@ -14,6 +14,12 @@ interface ReviewScreenProps {
    * the summary then reports the count alone rather than "00:00 Min".
    */
   elapsedSec: number;
+  /**
+   * Captures that failed during this recording. Non-zero means the user did
+   * more than the guide will show, so it is said plainly here rather than left
+   * for them to notice a missing step later.
+   */
+  failedCaptures?: number;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -42,6 +48,7 @@ export function ReviewScreen({
   outputDir,
   captureCount,
   elapsedSec,
+  failedCaptures = 0,
   onConfirm,
   onCancel,
 }: ReviewScreenProps) {
@@ -107,6 +114,22 @@ export function ReviewScreen({
                 count: loading ? captureCount : thumbs.length,
               })}
         </p>
+        {failedCaptures > 0 && (
+          <p
+            className="mt-2 rounded px-2 py-1.5 leading-snug"
+            style={{
+              fontSize: "0.6875rem",
+              background: "rgba(255, 180, 50, 0.06)",
+              border: "1px solid rgba(255, 180, 50, 0.15)",
+              color: "rgba(255, 190, 80, 0.9)",
+            }}
+          >
+            {t("review.failed_captures", {
+              count: failedCaptures,
+              total: (loading ? captureCount : thumbs.length) + failedCaptures,
+            })}
+          </p>
+        )}
       </div>
 
       {/* Pipeline selector. Renders only at two or more entries: a dropdown

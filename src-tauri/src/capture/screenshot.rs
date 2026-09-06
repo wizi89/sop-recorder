@@ -1,6 +1,5 @@
 use image::{DynamicImage, Rgba, RgbaImage};
-use imageproc::drawing::{draw_filled_circle_mut, draw_polygon_mut};
-use imageproc::point::Point;
+use imageproc::drawing::draw_hollow_circle_mut;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use xcap::Monitor;
@@ -67,8 +66,90 @@ fn canvas_scale(monitors: &[(u32, u32)]) -> f64 {
         .fold(1.0f64, f64::max)
 }
 
+/// One monitor's placement, in the units cursor positions arrive in.
+/// `(x, y, width, height)`.
+pub type MonitorBounds = (i32, i32, u32, u32);
+
+/// Which monitor an action happened on.
+///
+/// A step documents the screen the user was working on, so the capture is
+/// scoped to that screen rather than to the whole desktop. Compositing every
+/// display into one canvas and then fitting it under the upload's 1920x1080 cap
+/// cost real legibility: two 4K displays side by side arrive at 960x540 each,
+/// against 1663x1080 for the same click with one display connected. That is the
+/// difference that made the model misread an application name in the
+/// 2026-09-03 test.
+///
+/// `point` is the click position. `None` means the event carried none -- a key
+/// press -- and the caller passes the cursor position in its place; when even
+/// that is unavailable the primary monitor is the answer. A point outside every
+/// monitor resolves to the primary too rather than failing: a step on an
+/// unexpected screen is worth more than no step.
+///
+/// Pure, and separate from `Monitor::all()`, so the choice can be tested
+/// against real display layouts without a display.
+pub fn monitor_for_click(
+    point: Option<(i32, i32)>,
+    bounds: &[MonitorBounds],
+    primary: usize,
+) -> usize {
+    monitor_containing(point, bounds).unwrap_or(primary)
+}
+
+/// The monitor a point falls on, or `None` when there is no point or it falls
+/// on none of them. Split out from `monitor_for_click` so a caller can tell a
+/// deliberate choice from a fallback -- which is worth saying in the log,
+/// because a step captured on the wrong display looks like nothing else.
+pub fn monitor_containing(
+    point: Option<(i32, i32)>,
+    bounds: &[MonitorBounds],
+) -> Option<usize> {
+    let (px, py) = point?;
+    bounds
+        .iter()
+        .position(|&(x, y, w, h)| px >= x && px < x + w as i32 && py >= y && py < y + h as i32)
+}
+
+/// Capture one monitor, and the geometry to place a click on it.
+///
+/// `index` addresses `Monitor::all()`'s ordering, which is also what
+/// `monitor_for_click` indexes into; the two read the list once, together, in
+/// `capture_and_save`.
+///
+/// The returned `VirtualScreen` has this monitor's own origin, so a click in
+/// desktop coordinates lands correctly on an image that starts at that origin,
+/// and its own geometry-to-capture ratio, so a Retina display still draws a
+/// marker sized for its pixels.
+fn capture_one_monitor(
+    monitor: &Monitor,
+) -> Result<(RgbaImage, VirtualScreen), String> {
+    let x = monitor
+        .x()
+        .map_err(|e| format!("Failed to read monitor x position: {}", e))?;
+    let y = monitor
+        .y()
+        .map_err(|e| format!("Failed to read monitor y position: {}", e))?;
+    let geometry_w = monitor
+        .width()
+        .map_err(|e| format!("Failed to read monitor width: {}", e))?;
+    let img = monitor
+        .capture_image()
+        .map_err(|e| format!("Capture failed for monitor: {}", e))?;
+
+    // Measured, not read from `scale_factor()`: xcap reports geometry in points
+    // on macOS and physical pixels on Windows, and the ratio answers the
+    // question without a per-platform branch. See `canvas_scale`.
+    let scale = canvas_scale(&[(geometry_w, img.width())]);
+
+    Ok((img, VirtualScreen { origin: (x, y), scale }))
+}
+
 /// Capture the full virtual screen across all monitors.
 /// Returns the composited image and the geometry it was composited against.
+///
+/// Retained for the case where no monitor can be singled out at all. Ordinary
+/// steps go through `capture_one_monitor`.
+#[allow(dead_code)]
 pub fn capture_full_screen() -> Result<(RgbaImage, VirtualScreen), String> {
     let monitors = Monitor::all().map_err(|e| format!("Failed to enumerate monitors: {}", e))?;
 
@@ -116,6 +197,14 @@ pub fn capture_full_screen() -> Result<(RgbaImage, VirtualScreen), String> {
         scale,
     };
     let mut canvas = RgbaImage::new(total_w, total_h);
+
+    log::info!(
+        "Compositing {} monitor(s) onto a {}x{} canvas at scale {}",
+        shots.len(),
+        total_w,
+        total_h,
+        scale,
+    );
 
     for shot in shots {
         // What this monitor must occupy on the canvas. Equal to what was
@@ -201,9 +290,21 @@ impl MarkerBox {
     }
 }
 
-/// The cursor arrow, as offsets from the click point at scale 1. Kept apart
-/// from the drawing so the marker box and the tests measure the same shape the
-/// renderer draws rather than a restatement of it.
+/// The cursor arrow that used to be drawn at the click point, as offsets from
+/// it at scale 1.
+///
+/// No longer drawn. It was a filled 15x25 px glyph anchored on the click point,
+/// so it sat on top of the control the step exists to identify -- the other
+/// half of the 2026-09-03 "the marker covers the button name" finding, and the
+/// half a ring alone does not fix. It also drew the same arrow whatever the
+/// real cursor was, contradicting the screenshot on a text field or a link.
+///
+/// Retained because `marker_box_at` is a server contract: the box travels with
+/// the step and the server blanks that rectangle out of both frames before
+/// comparing them (design D9). Shrinking it to the ring would change what the
+/// server masks, so the reported box stays exactly what it was. It is now
+/// larger than the drawing, which costs only a slightly blinder near-duplicate
+/// comparison -- the same region was masked before, when the arrow was there.
 const ARROW_OFFSETS: [(i32, i32); 7] = [
     (0, 0),
     (0, 20),
@@ -248,8 +349,20 @@ fn arrow_points(cx: i32, cy: i32, scale: f64) -> [(i32, i32); 7] {
     })
 }
 
-/// Render a click overlay on the screenshot: red semi-transparent dot + white
-/// cursor arrow.
+/// The ring's stroke, in canvas pixels at scale 1. Drawn as concentric hollow
+/// circles inward from the marker radius, so the outer edge -- and therefore
+/// `marker_box_at` -- is exactly where the filled disc's edge used to be.
+const CLICK_MARKER_STROKE: i32 = 3;
+
+/// Render a click overlay on the screenshot: a red ring around the click point
+/// and a white cursor arrow.
+///
+/// A ring, not a disc. `imageproc`'s primitives write pixels rather than
+/// blending them, so the `alpha` in a colour passed to them does nothing: the
+/// "semi-transparent" dot this replaces was an opaque 36 px circle centred on
+/// exactly the thing the user had just clicked, and it took the button label
+/// with it in the 2026-09-03 test. The ring marks the same point and leaves it
+/// readable, to a person and to the model.
 ///
 /// `click` is in the OS's logical coordinate space, as the input hook reports
 /// it; `screen` is the geometry the image was composited against and is the
@@ -267,17 +380,32 @@ pub fn render_click_overlay(
 ) -> MarkerBox {
     let (cx, cy) = screen.to_canvas(click_x, click_y);
 
-    // Red semi-transparent dot (alpha=0.7 -> 179)
-    let red = Rgba([255, 0, 0, 179]);
-    draw_filled_circle_mut(img, (cx, cy), scaled_radius(screen.scale), red);
+    // Opaque by construction: these primitives do not blend, so an alpha here
+    // would be a comment that looks like code.
+    let red = Rgba([255, 0, 0, 255]);
+    let white = Rgba([255, 255, 255, 255]);
+    let radius = scaled_radius(screen.scale);
 
-    // White cursor arrow polygon (simplified)
-    let white = Rgba([255, 255, 255, 230]);
-    let points: Vec<Point<i32>> = arrow_points(cx, cy, screen.scale)
-        .iter()
-        .map(|(x, y)| Point::new(*x, *y))
-        .collect();
-    draw_polygon_mut(img, &points, white);
+    // Concentric circles rather than one thick stroke, because imageproc draws
+    // a hollow circle one pixel wide. Scaled with the canvas so the ring stays
+    // visible on a Retina display instead of thinning to a hairline.
+    let stroke = ((CLICK_MARKER_STROKE as f64 * screen.scale).round() as i32).max(1);
+
+    // A white hairline on each edge of the red. Red alone vanishes against red
+    // or dark application chrome, and a marker that disappears on some screens
+    // is a marker you cannot rely on. Both hairlines sit *inside* `radius`, so
+    // the outer edge stays exactly where the filled disc's was and
+    // `marker_box_at` keeps reporting the same rectangle.
+    let mut draw_ring = |r: i32, colour| {
+        if r > 0 {
+            draw_hollow_circle_mut(img, (cx, cy), r, colour);
+        }
+    };
+    draw_ring(radius, white);
+    for inset in 1..=stroke {
+        draw_ring(radius - inset, red);
+    }
+    draw_ring(radius - stroke - 1, white);
 
     marker_box_at(cx, cy, screen.scale)
 }
@@ -291,6 +419,180 @@ mod tests {
     /// shape the renderer does not draw.
     fn drawn_box(cx: i32, cy: i32) -> MarkerBox {
         marker_box_at(cx, cy, 1.0)
+    }
+
+    /// A laptop left of an external 4K display, the arrangement in the
+    /// 2026-09-03 test. Retina geometry is in points, so 1512x982.
+    const LAPTOP_PLUS_4K: [MonitorBounds; 2] = [(0, 0, 1512, 982), (1512, 0, 3840, 2160)];
+
+    /// An external display placed to the *left* of the primary, which is where
+    /// negative coordinates come from and where an unsigned-arithmetic mistake
+    /// would show up.
+    const LEFT_OF_PRIMARY: [MonitorBounds; 2] = [(-1920, 0, 1920, 1080), (0, 0, 1512, 982)];
+
+    #[test]
+    fn a_click_picks_the_monitor_it_landed_on() {
+        assert_eq!(monitor_for_click(Some((10, 10)), &LAPTOP_PLUS_4K, 0), 0);
+        assert_eq!(monitor_for_click(Some((2000, 900)), &LAPTOP_PLUS_4K, 0), 1);
+    }
+
+    #[test]
+    fn a_monitor_left_of_the_primary_is_found_at_negative_coordinates() {
+        assert_eq!(monitor_for_click(Some((-1000, 500)), &LEFT_OF_PRIMARY, 1), 0);
+        assert_eq!(monitor_for_click(Some((-1, 0)), &LEFT_OF_PRIMARY, 1), 0);
+        assert_eq!(monitor_for_click(Some((0, 0)), &LEFT_OF_PRIMARY, 1), 1);
+    }
+
+    /// Boundaries are half-open, so the pixel column where two displays meet
+    /// belongs to exactly one of them and no click can match both.
+    #[test]
+    fn monitor_edges_do_not_overlap() {
+        assert_eq!(monitor_for_click(Some((1511, 0)), &LAPTOP_PLUS_4K, 0), 0);
+        assert_eq!(monitor_for_click(Some((1512, 0)), &LAPTOP_PLUS_4K, 0), 1);
+        assert_eq!(monitor_for_click(Some((1512, 981)), &LAPTOP_PLUS_4K, 0), 1);
+    }
+
+    /// A step on an unexpected display beats no step at all, so neither an
+    /// absent position nor an off-screen one is an error.
+    #[test]
+    fn no_position_and_an_off_screen_position_both_fall_back_to_primary() {
+        assert_eq!(monitor_for_click(None, &LAPTOP_PLUS_4K, 1), 1);
+        assert_eq!(monitor_for_click(Some((99_999, 99_999)), &LAPTOP_PLUS_4K, 1), 1);
+        assert_eq!(monitor_for_click(Some((0, -5)), &LAPTOP_PLUS_4K, 0), 0);
+    }
+
+    /// The caller distinguishes a real containment from a fallback so the log
+    /// can say which happened; `monitor_for_click` collapses the two.
+    #[test]
+    fn containment_is_reported_separately_from_the_fallback() {
+        assert_eq!(monitor_containing(Some((2000, 900)), &LAPTOP_PLUS_4K), Some(1));
+        assert_eq!(monitor_containing(Some((99_999, 0)), &LAPTOP_PLUS_4K), None);
+        assert_eq!(monitor_containing(None, &LAPTOP_PLUS_4K), None);
+    }
+
+    #[test]
+    fn a_single_monitor_desktop_always_answers_zero() {
+        let one = [(0, 0, 1512, 982)];
+        assert_eq!(monitor_for_click(Some((100, 100)), &one, 0), 0);
+        assert_eq!(monitor_for_click(None, &one, 0), 0);
+        assert_eq!(monitor_for_click(Some((5000, 5000)), &one, 0), 0);
+    }
+
+    /// The measurement from the finding, as a regression.
+    ///
+    /// The upload caps the saved image at 1920x1080. Composited, two 4K
+    /// displays are 7680x2160 and each one lands at 960x540 -- the pixelation
+    /// that made the model misread an application name. Captured singly, the
+    /// same display is 3840x2160 and lands at 1920x1080.
+    #[test]
+    fn one_4k_monitor_survives_the_upload_cap_that_two_composited_did_not() {
+        fn saved_width(canvas_w: u32, canvas_h: u32) -> u32 {
+            let (max_w, max_h) = (1920f64, 1080f64);
+            if canvas_w as f64 <= max_w && canvas_h as f64 <= max_h {
+                return canvas_w;
+            }
+            let scale = f64::min(max_w / canvas_w as f64, max_h / canvas_h as f64);
+            (canvas_w as f64 * scale) as u32
+        }
+
+        let composited = saved_width(7680, 2160) / 2;
+        let single = saved_width(3840, 2160);
+
+        assert_eq!(composited, 960, "the behaviour being replaced");
+        assert!(single >= 1600, "one monitor should survive the cap: {}", single);
+        // Exactly double the linear resolution, so four times the pixels on the
+        // display the user was actually looking at.
+        assert_eq!(single, composited * 2);
+    }
+
+    /// A plain canvas whose pixels are all distinguishable from the marker, so
+    /// "unchanged" and "drawn on" can be told apart.
+    fn blank(w: u32, h: u32) -> RgbaImage {
+        RgbaImage::from_pixel(w, h, Rgba([10, 20, 30, 255]))
+    }
+
+    const GROUND: Rgba<u8> = Rgba([10, 20, 30, 255]);
+    const MARKER_RED: Rgba<u8> = Rgba([255, 0, 0, 255]);
+    const MARKER_WHITE: Rgba<u8> = Rgba([255, 255, 255, 255]);
+
+    /// The finding: the marker used to be an opaque disc over exactly the thing
+    /// that was clicked, and the button label went with it.
+    #[test]
+    fn the_clicked_pixel_survives_the_marker() {
+        let mut img = blank(400, 400);
+        render_click_overlay(&mut img, 200, 200, &screen((0, 0), 1.0));
+
+        assert_eq!(
+            *img.get_pixel(200, 200),
+            GROUND,
+            "the click point must still show what was clicked",
+        );
+    }
+
+    /// ...but the marker still has to be there. Without this, "leave the centre
+    /// alone" is satisfiable by drawing nothing at all.
+    #[test]
+    fn the_ring_is_drawn_at_the_marker_radius() {
+        let mut img = blank(400, 400);
+        render_click_overlay(&mut img, 200, 200, &screen((0, 0), 1.0));
+
+        let radius = scaled_radius(1.0) as u32;
+        // Outermost pixel is the white hairline; the red stroke is just inside
+        // it. Both are part of the ring, and neither is the ground colour.
+        assert_eq!(*img.get_pixel(200 + radius, 200), MARKER_WHITE, "halo");
+        assert_eq!(*img.get_pixel(200 + radius - 1, 200), MARKER_RED, "red stroke");
+    }
+
+    /// The interior between the click point and the ring stays readable too --
+    /// a ring that is nearly filled is the old defect with a smaller hole.
+    #[test]
+    fn the_interior_of_the_ring_is_left_alone() {
+        let mut img = blank(400, 400);
+        render_click_overlay(&mut img, 200, 200, &screen((0, 0), 1.0));
+
+        let radius = scaled_radius(1.0);
+        // Inside the inner white hairline, which sits at radius - stroke - 1.
+        for offset in 0..(radius - CLICK_MARKER_STROKE - 2) {
+            assert_eq!(
+                *img.get_pixel((200 + offset) as u32, 200),
+                GROUND,
+                "the ring interior was painted over at offset {}",
+                offset,
+            );
+        }
+    }
+
+    /// The marker box travels to the server, which blanks that rectangle out of
+    /// both frames before comparing them. Changing the drawing must not move
+    /// it, so these are the values the filled disc reported.
+    #[test]
+    fn marker_geometry_is_unchanged_by_the_ring() {
+        assert_eq!(
+            marker_box_at(100, 100, 1.0),
+            MarkerBox { x0: 82, y0: 82, x1: 118, y1: 124 },
+        );
+        assert_eq!(
+            marker_box_at(100, 100, 2.0),
+            MarkerBox { x0: 64, y0: 64, x1: 136, y1: 148 },
+        );
+    }
+
+    /// At scale 2 a one-pixel ring would read as a hairline. The stroke scales
+    /// with the canvas, and the outer edge stays on the radius the box is
+    /// computed from.
+    #[test]
+    fn the_ring_thickens_on_a_dense_display_without_moving_its_outer_edge() {
+        let mut img = blank(800, 800);
+        render_click_overlay(&mut img, 200, 200, &screen((0, 0), 2.0));
+
+        let radius = scaled_radius(2.0) as u32;
+        assert_eq!(*img.get_pixel(400 + radius, 400), MARKER_WHITE, "outer halo");
+        assert_eq!(
+            *img.get_pixel(400 + radius - 5, 400),
+            MARKER_RED,
+            "a 6 px stroke at scale 2 should still be red 5 px in",
+        );
+        assert_eq!(*img.get_pixel(400, 400), GROUND, "centre still clear");
     }
 
     fn screen(origin: (i32, i32), scale: f64) -> VirtualScreen {
@@ -447,6 +749,64 @@ mod tests {
     }
 }
 
+/// Capture the monitor the action happened on.
+///
+/// Reads `Monitor::all()` once, so the index `monitor_for_click` returns and
+/// the monitor that gets captured come from the same list -- asking twice
+/// invites a different answer if a display is unplugged between the calls.
+///
+/// A key press carries no click position, so the cursor stands in for it. The
+/// cursor is where the user is working even when the keyboard is what they
+/// used, which is a better answer than the primary display and a much better
+/// one than every display at once.
+fn capture_active_monitor(
+    click_position: Option<(i32, i32)>,
+) -> Result<(RgbaImage, VirtualScreen), String> {
+    let monitors = Monitor::all().map_err(|e| format!("Failed to enumerate monitors: {}", e))?;
+    if monitors.is_empty() {
+        return Err("No monitors found".into());
+    }
+
+    let mut bounds: Vec<MonitorBounds> = Vec::with_capacity(monitors.len());
+    let mut primary = 0usize;
+    for (i, m) in monitors.iter().enumerate() {
+        bounds.push((
+            m.x().map_err(|e| format!("Failed to read monitor x position: {}", e))?,
+            m.y().map_err(|e| format!("Failed to read monitor y position: {}", e))?,
+            m.width().map_err(|e| format!("Failed to read monitor width: {}", e))?,
+            m.height().map_err(|e| format!("Failed to read monitor height: {}", e))?,
+        ));
+        if m.is_primary().unwrap_or(false) {
+            primary = i;
+        }
+    }
+
+    let point = click_position.or_else(super::input_hooks::get_cursor_position);
+    let containing = monitor_containing(point, &bounds);
+    let chosen = containing.unwrap_or(primary);
+
+    // Logged for a single display too, not only for several. "Which screen did
+    // this step come from" is the first question when a guide shows the wrong
+    // one, and a line that appears only on multi-monitor machines is missing
+    // from exactly the recordings that need it. One line per step, beside the
+    // one the save already writes.
+    let why = match (containing, point) {
+        (Some(_), _) => "",
+        (None, None) => " (no position available; fell back to the primary display)",
+        (None, Some(_)) => " (point is on no display; fell back to the primary display)",
+    };
+    log::info!(
+        "Capturing monitor {} of {} at {:?} for point {:?}{}",
+        chosen + 1,
+        monitors.len(),
+        bounds[chosen],
+        point,
+        why,
+    );
+
+    capture_one_monitor(&monitors[chosen])
+}
+
 /// Capture a screenshot and save it as a numbered PNG.
 ///
 /// Returns the marker box in the coordinate space of the **saved** image, or
@@ -458,7 +818,12 @@ pub fn capture_and_save(
     step_number: u32,
     click_position: Option<(i32, i32)>,
 ) -> Result<Option<MarkerBox>, String> {
-    let (mut img, screen) = capture_full_screen()?;
+    // Timed and dimensioned on every step, because the one question the
+    // 2026-09-03 test could not answer from the logs was which capture failed
+    // and how big the canvas was when it did.
+    let started = std::time::Instant::now();
+    let (mut img, screen) = capture_active_monitor(click_position)?;
+    let captured_in = started.elapsed();
 
     let marker = click_position.map(|(x, y)| render_click_overlay(&mut img, x, y, &screen));
 
@@ -489,6 +854,15 @@ pub fn capture_and_save(
         .save(&path)
         .map_err(|e| format!("Failed to save screenshot: {}", e))?;
 
-    log::info!("Screenshot saved: {}", path.display());
+    log::info!(
+        "Screenshot saved: {} (canvas {}x{}, saved {}x{}, capture {} ms, total {} ms)",
+        path.display(),
+        w,
+        h,
+        rgb_img.width(),
+        rgb_img.height(),
+        captured_in.as_millis(),
+        started.elapsed().as_millis(),
+    );
     Ok(saved_marker)
 }

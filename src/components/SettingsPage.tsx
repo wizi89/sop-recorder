@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "../hooks/useTranslation";
 import { isReportable } from "../lib/serverErrors";
 import { emit } from "@tauri-apps/api/event";
@@ -44,13 +44,20 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     output_dir: "",
     logs_dir: "",
     hide_from_screenshots: true,
-    api_key: null,
     upload_target: null,
     skip_pii_check: false,
     pipeline_version: 1,
     generation_model: "azure/gpt-4.1",
     error_reports: "ask",
   });
+  // Until the stored settings arrive, the form shows defaults the user must not
+  // be able to act on: the load used to replace the whole form state when it
+  // resolved, so a toggle flipped before then was silently reverted and the
+  // save wrote the old value. That is the "first save does not stick" report
+  // from 2026-09-03 -- made reachable by `get_settings` waiting on the macOS
+  // keychain, which after a reinstall can take seconds.
+  const [loaded, setLoaded] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [showPiiConfirm, setShowPiiConfirm] = useState(false);
   // An installation can switch error reports off for everyone (design D1).
   // The control then shows the chosen mode but cannot be changed, and says
@@ -79,7 +86,13 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
         setSettings(s);
         setInitialUploadTarget(s.upload_target);
       })
-      .catch(() => {});
+      .catch((e) => {
+        console.error("Failed to load settings:", e);
+      })
+      // Enabled either way. A form that stays disabled after a failed load is
+      // a window the user cannot close by saving, and the values on screen are
+      // then the defaults -- which is worth letting them correct.
+      .finally(() => setLoaded(true));
     areErrorReportsForcedOff().then(setErrorReportsForcedOff).catch(() => {});
     getQuota()
       .then((q) => {
@@ -102,6 +115,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
   }, []);
 
   const handleSave = async () => {
+    setSaveError(null);
     try {
       await saveSettings(settings);
       // Backend switch invalidates the current session token. Log out
@@ -118,7 +132,10 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
       const win = getCurrentWindow();
       await win.close();
     } catch (e) {
+      // The window stays open. Closing it on a failed save is what made a lost
+      // write indistinguishable from a successful one.
       console.error("Failed to save settings:", e);
+      setSaveError(String(e));
     }
   };
 
@@ -127,7 +144,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     await win.close();
   };
 
-  const handleBrowse = async (field: "output_dir" | "logs_dir") => {
+  const handleBrowse = async (field: "output_dir") => {
     const selected = await openDialog({
       directory: true,
       multiple: false,
@@ -162,6 +179,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           <button
             className="switch-track"
             data-checked={settings.hide_from_screenshots}
+            disabled={!loaded}
             onClick={() =>
               setSettings((s) => ({
                 ...s,
@@ -182,6 +200,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           <button
             className="switch-track"
             data-checked={settings.skip_pii_check}
+            disabled={!loaded}
             onClick={handlePiiToggle}
           >
             <span
@@ -197,6 +216,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             <label className="label-sm">{t("settings.pipeline_label")}</label>
             <select
               value={settings.pipeline_version}
+              disabled={!loaded}
               onChange={(e) =>
                 setSettings((s) => ({
                   ...s,
@@ -223,6 +243,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             <label className="label-sm">{t("settings.model_label")}</label>
             <select
               value={settings.generation_model}
+              disabled={!loaded}
               onChange={(e) =>
                 setSettings((s) => ({
                   ...s,
@@ -253,7 +274,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             <select
               id="error-reports-mode"
               value={errorReportsForcedOff ? "never" : settings.error_reports}
-              disabled={errorReportsForcedOff}
+              disabled={errorReportsForcedOff || !loaded}
               onChange={(e) =>
                 setSettings((s) => ({
                   ...s,
@@ -354,6 +375,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             <input
               type="text"
               value={settings.output_dir}
+              disabled={!loaded}
               onChange={(e) =>
                 setSettings((s) => ({ ...s, output_dir: e.target.value }))
               }
@@ -361,6 +383,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             />
             <button
               onClick={() => handleBrowse("output_dir")}
+              disabled={!loaded}
               className="btn-primary px-4 py-2.5"
               style={{ fontSize: "0.6875rem" }}
             >
@@ -369,24 +392,30 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           </div>
         </div>
 
-        {/* Logs directory */}
+        {/* Logs directory. Shown, not chosen: the log plugin's target is fixed
+            before the app handle exists, so a path typed here would be a
+            setting that changes nothing -- which is what it was, and it named a
+            directory that did not exist on macOS besides. */}
         <div>
-          <label className="label-sm block mb-2">{t("settings.logs_dir")}</label>
+          <label className="label-sm block mb-2" htmlFor="logs-dir">
+            {t("settings.logs_dir")}
+          </label>
           <div className="flex gap-2">
             <input
+              id="logs-dir"
               type="text"
               value={settings.logs_dir}
-              onChange={(e) =>
-                setSettings((s) => ({ ...s, logs_dir: e.target.value }))
-              }
+              readOnly
               className="input-field flex-1 rounded-lg px-3.5 py-2.5 text-sm"
+              style={{ opacity: 0.7 }}
             />
             <button
-              onClick={() => handleBrowse("logs_dir")}
+              onClick={() => revealItemInDir(settings.logs_dir)}
+              disabled={!loaded || !settings.logs_dir}
               className="btn-primary px-4 py-2.5"
               style={{ fontSize: "0.6875rem" }}
             >
-              {t("settings.choose")}
+              {t("settings.reveal")}
             </button>
           </div>
         </div>
@@ -417,6 +446,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
                       : null,
                 }))
               }
+              disabled={!loaded}
               className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
             >
               {isDev && <option value="Local">Local</option>}
@@ -428,13 +458,33 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3 pt-5 mt-auto">
-        <button onClick={handleCancel} className="btn-secondary flex-1 py-2.5 text-sm">
-          {t("settings.cancel")}
-        </button>
-        <button onClick={handleSave} className="btn-primary flex-1 py-2.5 text-sm">
-          {t("settings.save")}
-        </button>
+      <div className="flex flex-col gap-2 pt-5 mt-auto">
+        {saveError && (
+          <p
+            role="alert"
+            className="rounded px-2 py-1.5 leading-snug"
+            style={{
+              fontSize: "0.6875rem",
+              background: "rgba(255, 100, 90, 0.08)",
+              border: "1px solid rgba(255, 100, 90, 0.2)",
+              color: "rgba(255, 140, 130, 0.95)",
+            }}
+          >
+            {t("settings.save_failed", { error: saveError })}
+          </p>
+        )}
+        <div className="flex gap-3">
+          <button onClick={handleCancel} className="btn-secondary flex-1 py-2.5 text-sm">
+            {t("settings.cancel")}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!loaded}
+            className="btn-primary flex-1 py-2.5 text-sm"
+          >
+            {loaded ? t("settings.save") : t("settings.loading")}
+          </button>
+        </div>
       </div>
 
       {/* PII disable confirmation modal */}

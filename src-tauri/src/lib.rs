@@ -28,6 +28,19 @@ fn stored_error_report_mode() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before anything reads the runtime overrides, and before logging is set
+    // up: a bad flag should fail on the terminal that typed it rather than in a
+    // log file the user has not opened.
+    let args: Vec<String> = std::env::args().collect();
+    let backend = match runtime_config::parse_backend_flag(&args) {
+        Ok(backend) => backend,
+        Err(message) => {
+            eprintln!("cogniclone: {}", message);
+            std::process::exit(2);
+        }
+    };
+    runtime_config::init(backend);
+
     // Configure log targets:
     // - Dev mode: stdout + cogniclone .tmp/logs/ (side-by-side with server logs)
     // - Release mode: AppData/Roaming/{identifier}/logs/ (next to settings)
@@ -84,6 +97,17 @@ pub fn run() {
     // D5). Nothing here touches the store or the network: the hook writes a
     // file and calls the previous hook, and everything else happens later,
     // from the webview, off the back of that file.
+    // On the terminal, not through `log`: the logger plugin is not installed
+    // until the builder below runs, so a `log::` call here reaches nobody. The
+    // same line is written to the log inside `setup`, where it does.
+    if let Some(backend) = backend {
+        eprintln!(
+            "cogniclone: backend overridden on the command line: --{} ({})",
+            backend.as_str(),
+            backend.api_url(),
+        );
+    }
+
     if let Some(dir) = error_reports::reports_dir() {
         error_reports::set_active_reports_dir(dir);
     }
@@ -101,7 +125,18 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
+        .setup(move |app| {
+            // Now that the logger exists. Into the log file and the ring buffer
+            // an error report carries, so a report from a run like this says
+            // which backend it was against -- the 2026-09-03 test was run on
+            // production by someone who believed it was staging.
+            if let Some(backend) = backend {
+                log::warn!(
+                    "Backend overridden on the command line: --{} ({})",
+                    backend.as_str(),
+                    backend.api_url(),
+                );
+            }
             error_reports::set_app_handle(app.handle().clone());
             network::auth::migrate_keyring();
             settings::AppSettings::initialize(app.handle());
@@ -134,6 +169,7 @@ pub fn run() {
             auth::get_session_state,
             settings::get_settings,
             settings::save_settings,
+            settings::has_api_key,
             settings::get_webapp_url,
             settings::is_updater_enabled,
             settings::are_error_reports_forced_off,
