@@ -134,6 +134,7 @@ pub fn run() {
             auth::get_session_state,
             settings::get_settings,
             settings::save_settings,
+            settings::has_api_key,
             settings::get_webapp_url,
             settings::is_updater_enabled,
             settings::are_error_reports_forced_off,

@@ -39,18 +39,18 @@ These land before anything else, so the 2026-09-21 session with the tester produ
 
 ## 7. Settings load and save (spec: app-settings)
 
-- [ ] 7.1 Remove the `keyring_load` call and the `api_key` field from `get_settings` / `AppSettings`; add a `has_api_key() -> bool` command and register it. Verify with a Rust test asserting the credential store is not consulted during a load.
-- [ ] 7.2 Update the TypeScript `AppSettings` interface, `src/lib/tauri.ts` bindings, and the fixtures in `src/test/settings.test.tsx` and `src/test/errorReportFlow.test.tsx`. Verify `npm run build` and `npm test` pass.
-- [ ] 7.3 Call `store.save()` in `save_settings` and propagate its error. Verify with a Rust test that writes settings into a tempdir store, then reads `settings.json` **from disk** and finds `skip_pii_check: true`.
-- [ ] 7.4 Add a `loaded` flag to `SettingsPage`; disable all controls and the save button until the first `getSettings` resolves, and never replace form state from a later async result. Verify with the TS regression test: with `getSettings` pending, toggle and confirm skip-PII, resolve the promise, then assert the toggle is still on and `save_settings` receives `skip_pii_check: true`. This test must fail against the current code.
-- [ ] 7.5 Add a TS test asserting controls and the save button are `disabled` before the load resolves.
-- [ ] 7.6 Show a save error in `SettingsPage` and close the window only on success; add German copy. Verify with a TS test that a rejecting `save_settings` leaves the window open, renders the message, and does not call `close()`.
+- [x] 7.1 Remove the `keyring_load` call and the `api_key` field from `get_settings` / `AppSettings`; add a `has_api_key() -> bool` command and register it. Verify with a Rust test asserting the credential store is not consulted during a load.
+- [x] 7.2 Update the TypeScript `AppSettings` interface, `src/lib/tauri.ts` bindings, and the fixtures in `src/test/settings.test.tsx` and `src/test/errorReportFlow.test.tsx`. Verify `npm run build` and `npm test` pass.
+- [x] 7.3 Call `store.save()` in `save_settings` and propagate its error. Verify with a Rust test that writes settings into a tempdir store, then reads `settings.json` **from disk** and finds `skip_pii_check: true`.
+- [x] 7.4 Add a `loaded` flag to `SettingsPage`; disable all controls and the save button until the first `getSettings` resolves, and never replace form state from a later async result. Verify with the TS regression test: with `getSettings` pending, toggle and confirm skip-PII, resolve the promise, then assert the toggle is still on and `save_settings` receives `skip_pii_check: true`. This test must fail against the current code.
+- [x] 7.5 Add a TS test asserting controls and the save button are `disabled` before the load resolves.
+- [x] 7.6 Show a save error in `SettingsPage` and close the window only on success; add German copy. Verify with a TS test that a rejecting `save_settings` leaves the window open, renders the message, and does not call `close()`.
 
 ## 8. Log directory (spec: app-settings)
 
-- [ ] 8.1 Derive `logs_dir` in `AppSettings::defaults` from `app.path().app_log_dir()`. Verify with a Rust test asserting it equals the resolved log directory and differs from `app_local_data_dir()/logs` wherever the platform separates them.
-- [ ] 8.2 Overwrite a stored `logs_dir` that disagrees with the real one during `AppSettings::initialize`. Verify with a Rust test that pre-seeds a stale value and asserts it is corrected.
-- [ ] 8.3 Make the logs field read-only in `SettingsPage` and add a reveal button using `revealItemInDir`; add German copy. Verify with a TS test that the input is `readonly` and the button invokes reveal with the shown path.
+- [x] 8.1 Derive `logs_dir` in `AppSettings::defaults` from `app.path().app_log_dir()`. Verify with a Rust test asserting it equals the resolved log directory and differs from `app_local_data_dir()/logs` wherever the platform separates them.
+- [x] 8.2 Overwrite a stored `logs_dir` that disagrees with the real one during `AppSettings::initialize`. Verify with a Rust test that pre-seeds a stale value and asserts it is corrected.
+- [x] 8.3 Make the logs field read-only in `SettingsPage` and add a reveal button using `revealItemInDir`; add German copy. Verify with a TS test that the input is `readonly` and the button invokes reveal with the shown path.
 
 ## 9. Processing feedback (spec: guide-generation)
 

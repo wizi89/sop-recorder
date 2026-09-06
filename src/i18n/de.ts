@@ -86,6 +86,10 @@ const de = {
   "settings.title": "Einstellungen",
   "settings.hide_screenshots": "In Screenshots ausblenden",
   "settings.skip_pii_check": "PII-Prüfung überspringen",
+  "settings.reveal": "Anzeigen",
+  "settings.loading": "Wird geladen...",
+  "settings.save_failed":
+    "Einstellungen wurden nicht gespeichert: {error}. Das Fenster bleibt offen, damit nichts verloren geht.",
   "settings.workflows_dir": "Anleitungsverzeichnis",
   "settings.logs_dir": "Protokollverzeichnis",
   "settings.choose": "Wählen",
