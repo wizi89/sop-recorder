@@ -279,4 +279,43 @@ describe("useRecorder reportableError (design D6)", () => {
     const { result } = renderHook(() => useRecorder());
     expect(result.current.reportableError).toBeNull();
   });
+
+  /// The chain the review notice depends on: a capture failed during the
+  /// recording, stop_recording returns the count, and it reaches the state the
+  /// review screen reads. Each link was covered on its own; this is the joint.
+  it("carries the failed-capture count from stop into review state", async () => {
+    const outputDir = "C:\\Users\\test\\output";
+    mockInvoke
+      .mockResolvedValueOnce(undefined) // start
+      .mockResolvedValueOnce({ output_dir: outputDir, failed_captures: 2 }); // stop
+
+    const { result } = renderHook(() => useRecorder());
+
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    expect(result.current.status).toBe("review");
+    expect(result.current.failedCaptures).toBe(2);
+  });
+
+  it("reports no failures for a clean recording", async () => {
+    const outputDir = "C:\\Users\\test\\output";
+    mockInvoke
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ output_dir: outputDir, failed_captures: 0 });
+
+    const { result } = renderHook(() => useRecorder());
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      await result.current.stop();
+    });
+
+    expect(result.current.failedCaptures).toBe(0);
+  });
 });

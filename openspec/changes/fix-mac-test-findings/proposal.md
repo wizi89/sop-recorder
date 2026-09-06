@@ -16,6 +16,7 @@ An external tester ran four end-to-end recordings of the macOS build (v0.16.0) o
 Non-goals, recorded so the follow-up session does not relitigate them:
 
 - Per-step transcript excerpts (spoken content missing from guides) are a server-side prompt change. This change only guarantees the client stops silently dropping the step/audio alignment it already sends.
+- Telling the generation prompt *where the click was*. The recorder measures every click to the pixel and ships `click_x`, `click_y` and `marker_box` in each `step_NN.json`; the server uses them only to blank the marker before comparing adjacent frames, never in the prompt. So the model finds the marker by eye and guesses which control it belongs to — and during verification on 2026-09-06 it picked the wrong one of two near-identical sidebar rows, which is the same failure mode as the misread application name in the original report. The data is already there; using it needs its own change, because the prompts live in Langfuse and would need authoring and a quality comparison.
 - macOS code signing and notarization are release-engineering work, tracked separately.
 - Product-shape requests from the same session (step granularity, per-step carousel, removing click-undo, cropping) are backlog, not this change.
 
