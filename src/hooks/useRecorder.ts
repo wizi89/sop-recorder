@@ -202,6 +202,9 @@ export function useRecorder() {
       ...s,
       status: "review" as const,
       outputDir: dir,
+      // A folder from disk carries no capture failures of its own; without
+      // this the previous session's count would be shown against it.
+      failedCaptures: 0,
       statusMessage: "",
       error: null,
       errorJobId: null,

@@ -39,7 +39,7 @@ Affected code:
 - `src-tauri/src/capture/screenshot.rs` — monitor selection, click marker rendering, resize budget.
 - `src-tauri/src/commands/recording.rs` — capture concurrency, capture-failure accounting, `recording:step_failed` event.
 - `src-tauri/src/commands/generate.rs` — screenshot enumeration, sidecar alignment logging.
-- `src-tauri/src/commands/settings.rs` — `logs_dir` default, explicit store flush, keychain read removed from the load path, new `has_api_key` command.
+- `src-tauri/src/commands/settings.rs` — `logs_dir` default, explicit store flush, keychain read removed from the load path.
 - `src/components/SettingsPage.tsx` — gated load, save error handling, read-only logs field with a reveal button.
 - `src/components/ReviewScreen.tsx`, `src/components/StatusBar.tsx`, `src/hooks/useSSE.ts` — failed-step notice, elapsed-time and heartbeat display, reconnect wording.
 - `src/lib/tauri.ts`, `src/i18n/de.ts` — command bindings and copy for the above.

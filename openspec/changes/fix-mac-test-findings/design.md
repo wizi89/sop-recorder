@@ -48,7 +48,7 @@ Permit count 2 rather than 1: capture and PNG encode are the two costs, and they
 
 `monitor_for_click(point: Option<(i32, i32)>, bounds: &[(i32, i32, u32, u32)]) -> usize` returns the index of the containing monitor, falling back to the primary (index of the monitor at the smallest origin, matching `xcap`'s ordering guarantee being absent — resolved explicitly by asking `Monitor::is_primary`).
 
-`capture_full_screen` is kept but becomes `capture_monitor(index) -> (RgbaImage, VirtualScreen)` where `VirtualScreen.origin` is that monitor's origin and `scale` is measured from that monitor's own geometry-to-capture ratio. Everything downstream — `render_click_overlay`, `marker_box_at`, the 1920×1080 cap — is unchanged, because it was already written against `VirtualScreen` rather than against "the whole desktop".
+`capture_full_screen` is replaced by `capture_one_monitor(&Monitor) -> (RgbaImage, VirtualScreen)` where `VirtualScreen.origin` is that monitor's origin and `scale` is measured from that monitor's own geometry-to-capture ratio. Everything downstream — `render_click_overlay`, `marker_box_at`, the 1920×1080 cap — is unchanged, because it was already written against `VirtualScreen` rather than against "the whole desktop".
 
 *Alternative considered:* keep the composite and raise the size cap. Rejected — the cap exists for the 4 MB Azure OpenAI image limit, and a composite is the wrong image anyway: it shows the user a screen they weren't looking at.
 
@@ -68,7 +68,7 @@ A white hairline is drawn on each edge of the red stroke, both inside `radius`. 
 
 ### Split credential access out of `get_settings`
 
-`get_settings` stops returning `api_key`; a new `has_api_key() -> bool` command answers the only question the UI asks. `save_settings` keeps accepting an optional `api_key` for the write path.
+`get_settings` stops returning `api_key`, so the settings window's load never waits on the credential store. A `has_api_key() -> bool` command was added for the UI to ask the one question it needs, then removed again: no frontend ever called it, and there is no key-entry UI for it to sit beside. `save_settings` keeps accepting an optional `api_key` for the write path.
 
 This is a breaking change to the `AppSettings` payload shared with TypeScript. The field is dropped from the interface in the same change; `src/test/settings.test.tsx` and `errorReportFlow.test.tsx` fixtures are updated with it.
 

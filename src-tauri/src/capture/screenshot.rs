@@ -31,15 +31,6 @@ impl VirtualScreen {
     }
 }
 
-/// One monitor's capture, paired with the geometry it was reported at.
-struct Shot {
-    x: i32,
-    y: i32,
-    w: u32,
-    h: u32,
-    img: RgbaImage,
-}
-
 /// Canvas pixels per unit of the space monitor geometry is reported in, given
 /// `(geometry_width, captured_width)` for each monitor.
 ///
@@ -144,104 +135,6 @@ fn capture_one_monitor(
     Ok((img, VirtualScreen { origin: (x, y), scale }))
 }
 
-/// Capture the full virtual screen across all monitors.
-/// Returns the composited image and the geometry it was composited against.
-///
-/// Retained for the case where no monitor can be singled out at all. Ordinary
-/// steps go through `capture_one_monitor`.
-#[allow(dead_code)]
-pub fn capture_full_screen() -> Result<(RgbaImage, VirtualScreen), String> {
-    let monitors = Monitor::all().map_err(|e| format!("Failed to enumerate monitors: {}", e))?;
-
-    if monitors.is_empty() {
-        return Err("No monitors found".into());
-    }
-
-    // Every monitor is captured before any of it is composited: the canvas
-    // scale is measured from the captures, so they all have to be in hand
-    // before the canvas can be sized.
-    let mut shots = Vec::with_capacity(monitors.len());
-    for m in &monitors {
-        shots.push(Shot {
-            x: m.x()
-                .map_err(|e| format!("Failed to read monitor x position: {}", e))?,
-            y: m.y()
-                .map_err(|e| format!("Failed to read monitor y position: {}", e))?,
-            w: m.width()
-                .map_err(|e| format!("Failed to read monitor width: {}", e))?,
-            h: m.height()
-                .map_err(|e| format!("Failed to read monitor height: {}", e))?,
-            img: m
-                .capture_image()
-                .map_err(|e| format!("Capture failed for monitor: {}", e))?,
-        });
-    }
-
-    // Virtual screen bounds, in the units monitor geometry is reported in.
-    let min_x = shots.iter().map(|s| s.x).min().unwrap_or(0);
-    let min_y = shots.iter().map(|s| s.y).min().unwrap_or(0);
-    let max_x = shots.iter().map(|s| s.x + s.w as i32).max().unwrap_or(0);
-    let max_y = shots.iter().map(|s| s.y + s.h as i32).max().unwrap_or(0);
-
-    let scale = canvas_scale(
-        &shots
-            .iter()
-            .map(|s| (s.w, s.img.width()))
-            .collect::<Vec<_>>(),
-    );
-
-    let total_w = (((max_x - min_x) as f64) * scale).round() as u32;
-    let total_h = (((max_y - min_y) as f64) * scale).round() as u32;
-    let screen = VirtualScreen {
-        origin: (min_x, min_y),
-        scale,
-    };
-    let mut canvas = RgbaImage::new(total_w, total_h);
-
-    log::info!(
-        "Compositing {} monitor(s) onto a {}x{} canvas at scale {}",
-        shots.len(),
-        total_w,
-        total_h,
-        scale,
-    );
-
-    for shot in shots {
-        // What this monitor must occupy on the canvas. Equal to what was
-        // captured unless a denser monitor set the scale, so the resample is
-        // skipped outright on any desktop whose displays agree.
-        let target_w = ((shot.w as f64) * scale).round() as u32;
-        let target_h = ((shot.h as f64) * scale).round() as u32;
-        let img = if shot.img.width() == target_w && shot.img.height() == target_h {
-            shot.img
-        } else {
-            log::info!(
-                "Rescaling monitor capture from {}x{} to {}x{} for the shared canvas",
-                shot.img.width(),
-                shot.img.height(),
-                target_w,
-                target_h,
-            );
-            DynamicImage::ImageRgba8(shot.img)
-                .resize_exact(target_w, target_h, image::imageops::FilterType::Lanczos3)
-                .to_rgba8()
-        };
-
-        let (offset_x, offset_y) = screen.to_canvas(shot.x, shot.y);
-        let (offset_x, offset_y) = (offset_x.max(0) as u32, offset_y.max(0) as u32);
-
-        for (px, py, pixel) in img.enumerate_pixels() {
-            let cx = offset_x + px;
-            let cy = offset_y + py;
-            if cx < total_w && cy < total_h {
-                canvas.put_pixel(cx, cy, *pixel);
-            }
-        }
-    }
-
-    Ok((canvas, screen))
-}
-
 const CLICK_MARKER_RADIUS: i32 = 18;
 
 /// The area a click marker occupies, in the pixels of the image it is recorded
@@ -317,8 +210,9 @@ const ARROW_OFFSETS: [(i32, i32); 7] = [
 
 /// The box the marker occupies for a click at a canvas point, at `scale`.
 ///
-/// The arrow hangs below and to the right of the click point, so a box around
-/// the disc alone would leave its lower tips in the image.
+/// Larger than the ring that is actually drawn: it still spans the arrow's old
+/// extent, because the box is a server contract and shrinking it would change
+/// what the server masks. See `ARROW_OFFSETS`.
 fn marker_box_at(cx: i32, cy: i32, scale: f64) -> MarkerBox {
     let radius = scaled_radius(scale);
     let mut marker = MarkerBox {
@@ -354,8 +248,8 @@ fn arrow_points(cx: i32, cy: i32, scale: f64) -> [(i32, i32); 7] {
 /// `marker_box_at` -- is exactly where the filled disc's edge used to be.
 const CLICK_MARKER_STROKE: i32 = 3;
 
-/// Render a click overlay on the screenshot: a red ring around the click point
-/// and a white cursor arrow.
+/// Render a click overlay on the screenshot: a red-and-white ring around the
+/// click point. No cursor arrow -- see `ARROW_OFFSETS` for why it went.
 ///
 /// A ring, not a disc. `imageproc`'s primitives write pixels rather than
 /// blending them, so the `alpha` in a colour passed to them does nothing: the
@@ -642,7 +536,7 @@ mod tests {
     }
 
     /// What the caller actually depends on: on a single-monitor desktop the
-    /// target size equals the captured size, so `capture_full_screen` skips the
+    /// target size equals the captured size, so `capture_one_monitor` skips the
     /// Lanczos pass entirely. This is the assertion the old code failed on
     /// Windows while its comment claimed otherwise.
     #[test]

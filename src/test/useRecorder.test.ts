@@ -318,4 +318,32 @@ describe("useRecorder reportableError (design D6)", () => {
 
     expect(result.current.failedCaptures).toBe(0);
   });
+
+  /// The count belongs to the session it was measured in. A folder opened from
+  /// disk is a different session, and inheriting the previous one's count made
+  /// the review screen announce failures the folder never had -- and inflate
+  /// its step total by them.
+  it("drops the failed-capture count when a folder is opened from disk", async () => {
+    mockInvoke
+      .mockResolvedValueOnce(undefined) // start
+      .mockResolvedValueOnce({ output_dir: "/tmp/recorded", failed_captures: 2 }); // stop
+
+    const { result } = renderHook(() => useRecorder());
+
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      await result.current.stop();
+    });
+    expect(result.current.failedCaptures).toBe(2);
+
+    await act(async () => {
+      await result.current.generateFromDir("/tmp/some-other-folder");
+    });
+
+    expect(result.current.status).toBe("review");
+    expect(result.current.outputDir).toBe("/tmp/some-other-folder");
+    expect(result.current.failedCaptures).toBe(0);
+  });
 });

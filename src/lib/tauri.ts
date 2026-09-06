@@ -44,12 +44,6 @@ export async function getSettings(): Promise<AppSettings> {
   return invoke("get_settings");
 }
 
-/// Whether a BYOK key is stored. Asked separately from `getSettings` so the
-/// settings window's load never waits on the OS credential store.
-export async function hasApiKey(): Promise<boolean> {
-  return invoke("has_api_key");
-}
-
 export async function saveSettings(settings: AppSettings): Promise<void> {
   return invoke("save_settings", { settings });
 }

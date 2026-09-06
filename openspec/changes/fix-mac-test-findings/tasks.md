@@ -27,7 +27,7 @@ These land before anything else, so the 2026-09-21 session with the tester produ
 ## 5. Per-monitor capture (spec: step-capture)
 
 - [x] 5.1 Add pure `monitor_for_click(point: Option<(i32,i32)>, bounds: &[(i32,i32,u32,u32)], primary: usize) -> usize` in `capture/screenshot.rs`. Verify with unit tests for a point on each of three monitors, a layout with a negative-origin monitor left of the primary, a point outside all bounds, and `None`.
-- [x] 5.2 Replace `capture_full_screen` with `capture_monitor(index)` returning the single monitor's image and a `VirtualScreen` whose origin is that monitor's origin and whose scale is measured from that monitor alone. Verify existing `canvas_scale` and `to_canvas` tests still pass and add one asserting the origin is the monitor's, not the desktop's.
+- [x] 5.2 Replace `capture_full_screen` with `capture_one_monitor(&Monitor)` returning the single monitor's image and a `VirtualScreen` whose origin is that monitor's origin and whose scale is measured from that monitor alone. Verify existing `canvas_scale` and `to_canvas` tests still pass and add one asserting the origin is the monitor's, not the desktop's.
 - [x] 5.3 Wire `capture_and_save` to select the monitor from the click position, with the cursor-position then primary fallback for key-triggered steps; log which display was chosen and when the fallback was used. Verify with a test using synthetic monitor bounds that a right-hand-monitor click yields an image of that monitor's size with the marker at the correct relative offset.
 - [x] 5.4 Add the regression test from the design's measurement: two 3840×2160 monitors produce a saved image at least 1600 px wide (today 960). Verify `cargo test` fails on the pre-change code and passes after.
 
@@ -39,7 +39,7 @@ These land before anything else, so the 2026-09-21 session with the tester produ
 
 ## 7. Settings load and save (spec: app-settings)
 
-- [x] 7.1 Remove the `keyring_load` call and the `api_key` field from `get_settings` / `AppSettings`; add a `has_api_key() -> bool` command and register it. Verify with a Rust test asserting the credential store is not consulted during a load.
+- [x] 7.1 Remove the `keyring_load` call and the `api_key` field from `get_settings` / `AppSettings`; verify with a Rust test asserting the credential store is not consulted during a load. (A `has_api_key() -> bool` command was added here and then dropped: nothing in the UI called it.)
 - [x] 7.2 Update the TypeScript `AppSettings` interface, `src/lib/tauri.ts` bindings, and the fixtures in `src/test/settings.test.tsx` and `src/test/errorReportFlow.test.tsx`. Verify `npm run build` and `npm test` pass.
 - [x] 7.3 Call `store.save()` in `save_settings` and propagate its error. Verify with a Rust test that writes settings into a tempdir store, then reads `settings.json` **from disk** and finds `skip_pii_check: true`.
 - [x] 7.4 Add a `loaded` flag to `SettingsPage`; disable all controls and the save button until the first `getSettings` resolves, and never replace form state from a later async result. Verify with the TS regression test: with `getSettings` pending, toggle and confirm skip-PII, resolve the promise, then assert the toggle is still on and `save_settings` receives `skip_pii_check: true`. This test must fail against the current code.

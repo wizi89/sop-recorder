@@ -249,22 +249,6 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     Ok(())
 }
 
-/// Whether a BYOK key is stored, without retrieving it.
-///
-/// The settings window only ever needs the answer to this question, and asking
-/// it this way keeps the credential store off the window's load path. Reading
-/// the key there made opening settings wait on the OS credential store, which
-/// after a reinstall or a re-signing can prompt or block for seconds -- long
-/// enough for the user to change a setting into a form that was about to be
-/// overwritten by the load.
-#[tauri::command]
-pub async fn has_api_key() -> bool {
-    crate::network::auth::keyring_load("openai-key")
-        .ok()
-        .flatten()
-        .is_some_and(|key| !key.is_empty())
-}
-
 #[tauri::command]
 pub async fn get_webapp_url(app: tauri::AppHandle) -> Result<String, String> {
     let target = app
@@ -322,8 +306,8 @@ mod tests {
     /// *absence* of a call, and the keyring has no seam to stub here. Reading
     /// the key on this path is what made the window load slowly enough after a
     /// reinstall for the pending load to overwrite an edit the user had already
-    /// made (2026-09-03). `has_api_key` answers the only question the window
-    /// asks, and is called on its own.
+    /// made (2026-09-03). Nothing on this path needs the key: the only
+    /// consumer reads it from the keyring when it generates.
     #[test]
     fn the_settings_load_path_never_touches_the_credential_store() {
         let source = production_source();

@@ -36,7 +36,6 @@ fn strip_markdown(text: &str) -> String {
     result
 }
 
-/// Generate a PDF from enriched step data.
 /// The image belonging to the guide's `order`-th step (1-based).
 ///
 /// A lookup by position into the uploaded set, never a filename rebuilt from
