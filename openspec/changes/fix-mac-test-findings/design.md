@@ -62,6 +62,10 @@ Permit count 2 rather than 1: capture and PNG encode are the two costs, and they
 
 *Alternative considered:* real alpha blending via `imageproc::drawing::Blend`. Rejected — a 70 %-opaque red wash still degrades OCR of the text under it, which is the whole complaint.
 
+**Revised during implementation: the cursor arrow is removed too.** This document said "keep the white arrow"; the first test showed why that cannot stand. `ARROW_OFFSETS[0]` is `(0, 0)`, so the arrow's tip is drawn *on* the click point and its filled body covers 15×25 px of the control down and right of it. The ring alone therefore does not fix the finding — it removes the disc and leaves the arrow sitting on the button label. It is also redundant (the ring already localises the click), misleading (the same arrow glyph is drawn whatever the real cursor was, so a text field gets an arrow it never had), and the least survivable part of the image through the 1920×1080 downscale. Removed; `ARROW_OFFSETS` is retained solely because `marker_box_at` is a server contract. The reported box is now larger than the drawing, which costs a marginally blinder near-duplicate comparison — the same region was masked before, when the arrow occupied it.
+
+A white hairline is drawn on each edge of the red stroke, both inside `radius`. A bare red ring disappears against red or dark application chrome, and keeping the hairlines inside the radius means the outer edge, and so the reported box, does not move.
+
 ### Split credential access out of `get_settings`
 
 `get_settings` stops returning `api_key`; a new `has_api_key() -> bool` command answers the only question the UI asks. `save_settings` keeps accepting an optional `api_key` for the write path.

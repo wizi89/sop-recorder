@@ -11,6 +11,7 @@ use tauri_plugin_store::StoreExt;
 
 use crate::capture::audio::AudioHandle;
 use crate::capture::input_hooks;
+use crate::capture::permits::CapturePermits;
 use crate::capture::screenshot;
 use crate::output::pending;
 use crate::output::step_meta::{self, StepMeta};
@@ -140,6 +141,9 @@ pub async fn start_recording(
     let step_counter = Arc::new(AtomicU32::new(0));
     let in_flight = Arc::new(AtomicU32::new(0));
     let failed_captures = Arc::new(AtomicU32::new(0));
+    // Bounds how many full-screen buffers are resident at once. Per recording
+    // rather than global: nothing captures between recordings.
+    let capture_permits = Arc::new(CapturePermits::default());
 
     // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
@@ -163,6 +167,7 @@ pub async fn start_recording(
     let counter_clone = step_counter.clone();
     let in_flight_clone = in_flight.clone();
     let failed_clone = failed_captures.clone();
+    let permits_clone = capture_permits.clone();
     let stop_clone = stop_flag.clone();
     let screenshots_dir_clone = screenshots_dir.clone();
     let app_clone = app.clone();
@@ -191,8 +196,16 @@ pub async fn start_recording(
         let app = app_clone.clone();
         let flight = in_flight_clone.clone();
         let failed = failed_clone.clone();
+        let permits = permits_clone.clone();
+        // Incremented before the spawn, so the counter covers a capture that is
+        // still queued for a permit as well as one already running. That is what
+        // `stop_recording` and the generate path wait on, and a queued capture
+        // is exactly the kind they must not race past.
         flight.fetch_add(1, Ordering::SeqCst);
         std::thread::spawn(move || {
+            // Held for the capture and the sidecar write, released on the way
+            // out of this scope however the capture ends.
+            let _permit = permits.acquire();
             match screenshot::capture_and_save(&dir, step_num, click_pos) {
                 Ok(marker_box) => {
                     // Write the sidecar AFTER the PNG has been written so a

@@ -21,21 +21,21 @@ These land before anything else, so the 2026-09-21 session with the tester produ
 
 ## 4. Bounded capture concurrency (spec: step-capture)
 
-- [ ] 4.1 Introduce a 2-permit capture semaphore, acquired inside the spawned capture thread after the step number is assigned. Verify with a Rust test that 20 concurrent jobs never exceed 2 in flight and all 20 complete.
-- [ ] 4.2 Confirm the existing `in_flight` counter still reaches zero before `stop_recording` returns with a queue present; verify with a Rust test that queues jobs behind the semaphore and asserts the stop wait drains them.
+- [x] 4.1 Introduce a 2-permit capture semaphore, acquired inside the spawned capture thread after the step number is assigned. Verify with a Rust test that 20 concurrent jobs never exceed 2 in flight and all 20 complete.
+- [x] 4.2 Confirm the existing `in_flight` counter still reaches zero before `stop_recording` returns with a queue present; verify with a Rust test that queues jobs behind the semaphore and asserts the stop wait drains them.
 
 ## 5. Per-monitor capture (spec: step-capture)
 
-- [ ] 5.1 Add pure `monitor_for_click(point: Option<(i32,i32)>, bounds: &[(i32,i32,u32,u32)], primary: usize) -> usize` in `capture/screenshot.rs`. Verify with unit tests for a point on each of three monitors, a layout with a negative-origin monitor left of the primary, a point outside all bounds, and `None`.
-- [ ] 5.2 Replace `capture_full_screen` with `capture_monitor(index)` returning the single monitor's image and a `VirtualScreen` whose origin is that monitor's origin and whose scale is measured from that monitor alone. Verify existing `canvas_scale` and `to_canvas` tests still pass and add one asserting the origin is the monitor's, not the desktop's.
-- [ ] 5.3 Wire `capture_and_save` to select the monitor from the click position, with the cursor-position then primary fallback for key-triggered steps; log which display was chosen and when the fallback was used. Verify with a test using synthetic monitor bounds that a right-hand-monitor click yields an image of that monitor's size with the marker at the correct relative offset.
-- [ ] 5.4 Add the regression test from the design's measurement: two 3840×2160 monitors produce a saved image at least 1600 px wide (today 960). Verify `cargo test` fails on the pre-change code and passes after.
+- [x] 5.1 Add pure `monitor_for_click(point: Option<(i32,i32)>, bounds: &[(i32,i32,u32,u32)], primary: usize) -> usize` in `capture/screenshot.rs`. Verify with unit tests for a point on each of three monitors, a layout with a negative-origin monitor left of the primary, a point outside all bounds, and `None`.
+- [x] 5.2 Replace `capture_full_screen` with `capture_monitor(index)` returning the single monitor's image and a `VirtualScreen` whose origin is that monitor's origin and whose scale is measured from that monitor alone. Verify existing `canvas_scale` and `to_canvas` tests still pass and add one asserting the origin is the monitor's, not the desktop's.
+- [x] 5.3 Wire `capture_and_save` to select the monitor from the click position, with the cursor-position then primary fallback for key-triggered steps; log which display was chosen and when the fallback was used. Verify with a test using synthetic monitor bounds that a right-hand-monitor click yields an image of that monitor's size with the marker at the correct relative offset.
+- [x] 5.4 Add the regression test from the design's measurement: two 3840×2160 monitors produce a saved image at least 1600 px wide (today 960). Verify `cargo test` fails on the pre-change code and passes after.
 
 ## 6. Click marker (spec: step-capture)
 
-- [ ] 6.1 Replace the filled disc in `render_click_overlay` with a ring drawn at a 3 px stroke scaled by the canvas scale, keeping the white cursor arrow. Verify with a Rust test that the pixel at the click point is unchanged after rendering.
-- [ ] 6.2 Add a test asserting a pixel on the ring radius is red, so the marker cannot be silently removed altogether.
-- [ ] 6.3 Add a test asserting `marker_box_at` returns identical bounds to the pre-change values at scale 1.0 and 2.0, protecting the server-side masking contract.
+- [x] 6.1 Ring replaces the filled disc, **and the cursor arrow is removed** rather than kept as this task originally said. The arrow was a filled 15x25 px glyph anchored on the click point, so it occluded the control the step exists to identify — the other half of the finding, and the half a ring alone does not fix; it also drew the same glyph whatever the real cursor was. A white hairline is drawn on each edge of the red stroke, inside the existing radius, so the marker reads on dark or red chrome without moving the reported box. Verified: the pixel at the click point is unchanged after rendering.
+- [x] 6.2 Add a test asserting a pixel on the ring radius is red, so the marker cannot be silently removed altogether.
+- [x] 6.3 Add a test asserting `marker_box_at` returns identical bounds to the pre-change values at scale 1.0 and 2.0, protecting the server-side masking contract.
 
 ## 7. Settings load and save (spec: app-settings)
 
