@@ -20,6 +20,9 @@ const de = {
   "status.cancel_message": "Die aktuelle Aufnahme wird verworfen.",
   "status.cancel_confirm": "Verwerfen",
   "status.open_folder": "Ordner öffnen",
+  "status.elapsed": "Läuft seit {elapsed} Min",
+  "status.still_waiting":
+    "Der Server arbeitet noch. Das Fenster kann offen bleiben, das Ergebnis kommt automatisch.",
   "status.retry": "Erneut versuchen",
   "status.retry_from_disk": "Aus Aufnahme erneut versuchen",
   "status.generate_from_folder": "Aus Ordner generieren",

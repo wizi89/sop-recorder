@@ -5,6 +5,7 @@ import { RateLimitModal } from "./RateLimitModal";
 import { ReviewScreen } from "./ReviewScreen";
 import { useCaptureCount } from "../hooks/useCaptureCount";
 import { useElapsedTime } from "../hooks/useElapsedTime";
+import { useProcessingProgress } from "../hooks/useProcessingProgress";
 import type { RecorderStatus } from "../hooks/useRecorder";
 import type { RateLimitInfo } from "../lib/serverErrors";
 import type {
@@ -84,6 +85,10 @@ export function RecorderScreen({
   const isRecording = status === "recording";
   const captureCount = useCaptureCount(isRecording);
   const elapsedSec = useElapsedTime(isRecording);
+  // Hooks cannot sit below the early returns, so the processing signals are
+  // derived here even though only the full-size branch renders them.
+  const { elapsedSec: processingElapsedSec, stalled: processingStalled } =
+    useProcessingProgress(status === "processing", statusMessage);
 
   // Recording: the controls live in the bar window, and this window is hidden
   // for the duration. It still needs an honest state for the moments it is
@@ -264,7 +269,13 @@ export function RecorderScreen({
             {t("status.ready")}
           </p>
         ) : (
-          <StatusBar message={displayMessage} busy={isBusy} isError={!!error} />
+          <StatusBar
+            message={displayMessage}
+            busy={isBusy}
+            isError={!!error}
+            elapsedSec={processingElapsedSec}
+            stalled={processingStalled}
+          />
         )}
 
         <div className="flex flex-col items-center gap-3">

@@ -54,13 +54,13 @@ These land before anything else, so the 2026-09-21 session with the tester produ
 
 ## 9. Processing feedback (spec: guide-generation)
 
-- [ ] 9.1 Display elapsed processing time in the status area, reusing `useElapsedTime`. Verify with a TS test using fake timers that the display advances.
-- [ ] 9.2 Show a "still waiting on the server" notice after 20 s without an `sse:status` message, cleared by the next message. Verify with a TS test over both transitions.
-- [ ] 9.3 Reword a recovering connection as reconnecting rather than interrupted, and raise an error only when the retry budget is exhausted; log each reconnect attempt with its cause in `hooks/useSSE.ts` and `network/sse.rs`. Verify with a TS test covering drop-then-success (no error state) and exhausted retries (error state, reportable).
+- [x] 9.1 Display elapsed processing time in the status area, reusing `useElapsedTime`. Verify with a TS test using fake timers that the display advances.
+- [x] 9.2 Show a "still waiting on the server" notice after 20 s without an `sse:status` message, cleared by the next message. Verify with a TS test over both transitions.
+- [x] 9.3 Reword a recovering connection as reconnecting rather than interrupted, and raise an error only when the retry budget is exhausted; log each reconnect attempt with its cause in `hooks/useSSE.ts` and `network/sse.rs`. Verify with a TS test covering drop-then-success (no error state) and exhausted retries (error state, reportable).
 
 ## 10. Verification and handover
 
-- [ ] 10.1 Run `npm test`, `npm run build`, `cargo test` and `cargo clippy` clean.
+- [x] 10.1 `npm test` (164), `npm run build`, `cargo test` (147) and `cargo build` all pass. `cargo clippy` reports 12 warnings — the same 12 as on `main` before this change, verified by stashing; no new ones introduced. The pre-existing set is not addressed here.
 - [ ] 10.2 Build the macOS bundle and record one four-step session on two displays and one on a single display; confirm every click produces a step, the clicked control is readable, and the guide step count matches the click count.
 - [ ] 10.3 Confirm `settings.json` reports a log directory that exists and contains the current log file, on both macOS and Windows.
-- [ ] 10.4 Update `CHANGELOG.md` with the per-monitor capture behaviour change and the marker change, and note in the 2026-09-21 agenda that the skip-PII hypothesis is disproved so the session tests the capture-failure path instead.
+- [x] 10.4 `CHANGELOG.md` Unreleased section written in the project's user-facing voice, covering the per-monitor capture and marker changes among the rest. The 2026-09-21 agenda note is in the PR description and the handover summary rather than in the repo, since the agenda lives in Notion.

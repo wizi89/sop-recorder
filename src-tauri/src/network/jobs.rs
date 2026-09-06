@@ -31,12 +31,23 @@ pub async fn poll_job_result(
         let delay = std::cmp::min(3 * (1 << attempt), 30);
         tokio::time::sleep(Duration::from_secs(delay)).await;
 
+        // Every attempt leaves a trace. The 2026-09-03 test saw this recovery
+        // twice and the server side showed nothing, which left no way to tell
+        // a slow generation from a flapping connection.
+        log::info!(
+            "Poll attempt {} of {} for job {} (waited {}s)",
+            attempt + 1, max_attempts, job_id, delay,
+        );
+
         let response = client
             .get(&url)
             .header("Authorization", format!("Bearer {}", token))
             .send()
             .await
-            .map_err(|e| format!("Poll failed: {}", e))?;
+            .map_err(|e| {
+                log::warn!("Poll attempt {} failed to reach the server: {}", attempt + 1, e);
+                format!("Poll failed: {}", e)
+            })?;
 
         // Token expired during polling -- refresh and retry this attempt
         if response.status().as_u16() == 401 {

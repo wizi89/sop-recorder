@@ -343,14 +343,19 @@ async fn run_generation_inner(
         Ok(r) => r,
         Err(e) => {
             if let Some(ref job_id) = captured_job_id {
+                // Not a failure: the server keeps running the job, and the
+                // result is fetched by polling. Reported to the user as the
+                // recovery it is -- "unterbrochen" read as data loss in the
+                // 2026-09-03 test for two generations that both completed.
                 log::warn!(
-                    "SSE stream failed ({}) but have job_id={}, polling for result",
+                    "SSE stream dropped ({}); job_id={} is still running, \
+                     polling for its result",
                     e, job_id
                 );
                 let _ = app.emit(
                     "sse:status",
                     sse::SSEStatusPayload {
-                        message: "Verbindung unterbrochen -- warte auf Ergebnis...".into(),
+                        message: "Verbindung wird wiederhergestellt -- die Verarbeitung läuft weiter...".into(),
                     },
                 );
                 jobs::poll_job_result(&access_token, job_id, api_url.as_deref(), api_base, 40).await?
