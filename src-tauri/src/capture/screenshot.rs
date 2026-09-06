@@ -117,6 +117,14 @@ pub fn capture_full_screen() -> Result<(RgbaImage, VirtualScreen), String> {
     };
     let mut canvas = RgbaImage::new(total_w, total_h);
 
+    log::info!(
+        "Compositing {} monitor(s) onto a {}x{} canvas at scale {}",
+        shots.len(),
+        total_w,
+        total_h,
+        scale,
+    );
+
     for shot in shots {
         // What this monitor must occupy on the canvas. Equal to what was
         // captured unless a denser monitor set the scale, so the resample is
@@ -458,7 +466,12 @@ pub fn capture_and_save(
     step_number: u32,
     click_position: Option<(i32, i32)>,
 ) -> Result<Option<MarkerBox>, String> {
+    // Timed and dimensioned on every step, because the one question the
+    // 2026-09-03 test could not answer from the logs was which capture failed
+    // and how big the canvas was when it did.
+    let started = std::time::Instant::now();
     let (mut img, screen) = capture_full_screen()?;
+    let captured_in = started.elapsed();
 
     let marker = click_position.map(|(x, y)| render_click_overlay(&mut img, x, y, &screen));
 
@@ -489,6 +502,15 @@ pub fn capture_and_save(
         .save(&path)
         .map_err(|e| format!("Failed to save screenshot: {}", e))?;
 
-    log::info!("Screenshot saved: {}", path.display());
+    log::info!(
+        "Screenshot saved: {} (canvas {}x{}, saved {}x{}, capture {} ms, total {} ms)",
+        path.display(),
+        w,
+        h,
+        rgb_img.width(),
+        rgb_img.height(),
+        captured_in.as_millis(),
+        started.elapsed().as_millis(),
+    );
     Ok(saved_marker)
 }

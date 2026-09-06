@@ -2,15 +2,15 @@
 
 These land before anything else, so the 2026-09-21 session with the tester produces measurements rather than another hypothesis.
 
-- [ ] 1.1 Log monitor count, canvas dimensions and elapsed milliseconds for every capture in `screenshot::capture_and_save`; verify by running a recording and confirming one line per step in the log file.
-- [ ] 1.2 Log the resolved screenshot set at the start of `run_generation_inner` (count, first and last step number, any gaps); verify by generating from a folder with a manually deleted `step_02.png` and reading the line back.
+- [x] 1.1 Log monitor count, canvas dimensions and elapsed milliseconds for every capture in `screenshot::capture_and_save`; verify by running a recording and confirming one line per step in the log file.
+- [x] 1.2 Log the resolved screenshot set at the start of `run_generation_inner` (count, first and last step number, any gaps); verify by generating from a folder with a manually deleted `step_02.png` and reading the line back.
 
 ## 2. Screenshot enumeration (spec: guide-generation)
 
-- [ ] 2.1 Add `collect_step_screenshots(dir) -> Result<Vec<(u32, PathBuf)>, String>` in `commands/generate.rs`: read the directory, match `step_<n>.png`, parse and sort numerically, log gaps. Verify with a Rust unit test over a tempdir containing `step_01`, `step_03`, `step_04` returning all three in order.
-- [ ] 2.2 Add unit tests for the remaining enumeration scenarios: empty directory returns `Err`, `step_10` sorts after `step_09`, non-matching filenames are ignored. Verify `cargo test` passes.
-- [ ] 2.3 Replace the counting loop at `generate.rs:90` with the new function; verify the existing generation path still uploads a gapless recording unchanged.
-- [ ] 2.4 Log both counts and the words "alignment dropped" when the sidecar count differs from the screenshot count; verify with a unit test asserting the warn-level message is emitted for mismatched inputs.
+- [x] 2.1 Add `collect_step_screenshots(dir) -> Result<Vec<(u32, PathBuf)>, String>` in `commands/generate.rs`: read the directory, match `step_<n>.png`, parse and sort numerically, log gaps. Verify with a Rust unit test over a tempdir containing `step_01`, `step_03`, `step_04` returning all three in order.
+- [x] 2.2 Add unit tests for the remaining enumeration scenarios: empty directory returns `Err`, `step_10` sorts after `step_09`, non-matching filenames are ignored. Verify `cargo test` passes.
+- [x] 2.3 Replace the counting loop at `generate.rs:90` with the new function; verify the existing generation path still uploads a gapless recording unchanged.
+- [x] 2.4 Make `step_meta::read_all` gap-tolerant too (it had the same count-and-stop defect), extract `steps_for_upload` so the drop decision is testable, and log both counts with "alignment dropped". Verified by unit tests on the decision plus an end-to-end test that a recording with a failed capture keeps screenshot/sidecar order and length in step.
 
 ## 3. Capture failure accounting (spec: step-capture)
 

@@ -10,6 +10,91 @@ use crate::state::{AppState, RecordingStatus};
 
 static GENERATING: AtomicBool = AtomicBool::new(false);
 
+/// The step number a screenshot filename encodes, or `None` if the name is not
+/// one of ours.
+///
+/// Parsed rather than pattern-matched on a fixed width: the writer formats with
+/// `{:02}`, so step 100 is `step_100.png`, and a width-two assumption would
+/// drop every step past 99 on a long recording.
+fn step_number_from_filename(name: &str) -> Option<u32> {
+    let digits = name.strip_prefix("step_")?.strip_suffix(".png")?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok()
+}
+
+/// Every screenshot in a recording folder, in ascending step order.
+///
+/// Reads the directory rather than counting upward from 1. The count-and-stop
+/// version this replaces ended enumeration at the first missing number, so a
+/// single failed capture silently removed every later screenshot from the
+/// upload -- 21 clicks shipped as one step in the 2026-09-03 test. A gap is a
+/// capture that failed, not the end of the recording, and the steps after it
+/// are still the user's work.
+///
+/// Sorting is on the parsed number, not the filename: lexicographically
+/// `step_10.png` precedes `step_09.png`, which would reorder the guide the
+/// moment a recording passes nine steps.
+fn collect_step_screenshots(screenshots_dir: &Path) -> Result<Vec<(u32, PathBuf)>, String> {
+    let entries = std::fs::read_dir(screenshots_dir)
+        .map_err(|e| format!("Failed to read {}: {}", screenshots_dir.display(), e))?;
+
+    let mut found: Vec<(u32, PathBuf)> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let path = entry.path();
+            let step = step_number_from_filename(&path.file_name()?.to_string_lossy())?;
+            Some((step, path))
+        })
+        .collect();
+    found.sort_by_key(|(step, _)| *step);
+
+    if let Some((last, _)) = found.last() {
+        let present: std::collections::HashSet<u32> = found.iter().map(|(n, _)| *n).collect();
+        let missing: Vec<u32> = (1..=*last).filter(|n| !present.contains(n)).collect();
+        if !missing.is_empty() {
+            // The count is what tells a reader whether the recording lost work,
+            // so it is stated even though the steps are recoverable.
+            log::warn!(
+                "generate: {} screenshot(s) present, {} missing from the sequence ({:?}); \
+                 uploading what is on disk",
+                found.len(),
+                missing.len(),
+                missing,
+            );
+        }
+    }
+
+    Ok(found)
+}
+
+/// The per-step metadata to send with an upload, or `None` to send none.
+///
+/// The server pairs `metadata.steps` to the screenshots by position and only
+/// when the two lengths agree (`routes_generate.py`); it never reads `order`.
+/// So a divergence has to drop the array outright -- shipping a shorter one
+/// would describe every step after the divergence against the wrong image,
+/// which is worse than having no per-step transcript at all.
+fn steps_for_upload<'a>(
+    metas: &'a [step_meta::StepMeta],
+    screenshot_count: usize,
+) -> Option<&'a [step_meta::StepMeta]> {
+    if metas.len() == screenshot_count && !metas.is_empty() {
+        return Some(metas);
+    }
+    // Logged even when there are no sidecars at all: "none were readable" and
+    // "there were none" look identical in the resulting guide, and the
+    // 2026-09-03 test showed what silence here costs.
+    log::warn!(
+        "generate: alignment dropped -- {} sidecar(s) for {} screenshot(s); \
+         the guide will have no per-step transcript",
+        metas.len(),
+        screenshot_count,
+    );
+    None
+}
+
 #[tauri::command]
 pub async fn run_generation(
     output_dir: String,
@@ -88,18 +173,24 @@ async fn run_generation_inner(
     }
 
     let screenshots_dir = output_path.join("screenshots");
-    let mut screenshot_paths: Vec<(u32, PathBuf)> = Vec::new();
-    let mut step_num = 1u32;
-    loop {
-        let filename = format!("step_{:02}.png", step_num);
-        let path = screenshots_dir.join(&filename);
-        if path.exists() {
-            screenshot_paths.push((step_num, path));
-            step_num += 1;
-        } else {
-            break;
+    // An unreadable folder and an empty one are the same thing to the user, and
+    // both have to put the app back in an idle state -- returning early without
+    // that leaves it showing "Processing" with nothing processing.
+    let screenshot_paths = match collect_step_screenshots(&screenshots_dir) {
+        Ok(paths) => paths,
+        Err(e) => {
+            *state.recording_status.lock().unwrap() = RecordingStatus::Idle;
+            return Err(e);
         }
-    }
+    };
+
+    log::info!(
+        "generate: {} screenshot(s) from {} (steps {:?}..{:?})",
+        screenshot_paths.len(),
+        screenshots_dir.display(),
+        screenshot_paths.first().map(|(n, _)| *n),
+        screenshot_paths.last().map(|(n, _)| *n),
+    );
 
     if screenshot_paths.is_empty() {
         *state.recording_status.lock().unwrap() = RecordingStatus::Idle;
@@ -116,23 +207,16 @@ async fn run_generation_inner(
                 .unwrap_or_else(|| "SOP".to_string())
         });
 
-    // Read per-step sidecar JSONs alongside the PNGs. If the sidecar count
-    // diverges from the screenshot count (e.g. user deleted a PNG manually
-    // between stop and generate), drop the array rather than send a
-    // misaligned one -- the server falls back to no per-step alignment.
+    // Read per-step sidecar JSONs alongside the PNGs. The server pairs these to
+    // the screenshots positionally and only when the two lengths agree, so a
+    // divergence (a PNG deleted by hand, a sidecar that failed to write) has to
+    // drop the array rather than ship a misaligned one: every step after the
+    // divergence would otherwise be described against the wrong image.
+    //
+    // Both sides survive gaps now, so the ordinary failed-capture case keeps
+    // its alignment instead of losing the recording's narration.
     let step_metas = step_meta::read_all(&screenshots_dir);
-    let steps_arg: Option<&[step_meta::StepMeta]> = if step_metas.len() == screenshot_paths.len() {
-        Some(&step_metas)
-    } else {
-        if !step_metas.is_empty() {
-            log::warn!(
-                "step sidecar count ({}) does not match screenshots ({}); falling back to no alignment",
-                step_metas.len(),
-                screenshot_paths.len()
-            );
-        }
-        None
-    };
+    let steps_arg = steps_for_upload(&step_metas, screenshot_paths.len());
 
     // Build path refs for upload
     let path_refs: Vec<(u32, &Path)> = screenshot_paths
@@ -346,4 +430,146 @@ async fn download_pdf(url: &str, output_dir: &Path) -> Result<(), String> {
         .map_err(|e| format!("Failed to write PDF file: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn touch(dir: &Path, name: &str) {
+        std::fs::write(dir.join(name), b"not really a png").unwrap();
+    }
+
+    fn steps(dir: &Path) -> Vec<u32> {
+        collect_step_screenshots(dir)
+            .unwrap()
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect()
+    }
+
+    /// The 2026-09-03 regression. A capture failed at step 2; the counting loop
+    /// this replaces stopped there and shipped one screenshot out of three.
+    #[test]
+    fn a_gap_does_not_end_the_sequence() {
+        let dir = tempdir().unwrap();
+        for name in ["step_01.png", "step_03.png", "step_04.png"] {
+            touch(dir.path(), name);
+        }
+
+        assert_eq!(steps(dir.path()), vec![1, 3, 4]);
+    }
+
+    /// Lexicographic order puts step 10 before step 9. Sorting on the parsed
+    /// number is what keeps a recording longer than nine steps in order.
+    #[test]
+    fn steps_are_ordered_numerically_not_lexicographically() {
+        let dir = tempdir().unwrap();
+        for step in 1..=21u32 {
+            touch(dir.path(), &format!("step_{:02}.png", step));
+        }
+
+        assert_eq!(steps(dir.path()), (1..=21).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn unrelated_files_are_ignored() {
+        let dir = tempdir().unwrap();
+        touch(dir.path(), "step_01.png");
+        for name in [
+            "step_01.json",
+            "step_.png",
+            "step_2a.png",
+            "notes.txt",
+            "step_01.png.bak",
+        ] {
+            touch(dir.path(), name);
+        }
+
+        assert_eq!(steps(dir.path()), vec![1]);
+    }
+
+    #[test]
+    fn an_empty_folder_yields_no_steps() {
+        let dir = tempdir().unwrap();
+        assert!(collect_step_screenshots(dir.path()).unwrap().is_empty());
+    }
+
+    /// A folder that is not there at all is an error rather than an empty
+    /// result, so the caller can name it instead of reporting "no screenshots"
+    /// for a recording that was never written.
+    #[test]
+    fn a_missing_folder_is_an_error_naming_it() {
+        let dir = tempdir().unwrap();
+        let missing = dir.path().join("screenshots");
+
+        let err = collect_step_screenshots(&missing).unwrap_err();
+        assert!(err.contains("screenshots"), "{}", err);
+    }
+
+    #[test]
+    fn step_numbers_past_ninety_nine_still_parse() {
+        assert_eq!(step_number_from_filename("step_100.png"), Some(100));
+        assert_eq!(step_number_from_filename("step_01.png"), Some(1));
+        assert_eq!(step_number_from_filename("step_1.png"), Some(1));
+        assert_eq!(step_number_from_filename("step_01.json"), None);
+        assert_eq!(step_number_from_filename("step_.png"), None);
+        assert_eq!(step_number_from_filename("recording.wav"), None);
+    }
+
+    fn meta(order: u32) -> step_meta::StepMeta {
+        step_meta::StepMeta {
+            order,
+            timestamp_seconds: order as f64,
+            click_x: None,
+            click_y: None,
+            trigger: "enter_key".into(),
+            marker_box: None,
+        }
+    }
+
+    #[test]
+    fn metadata_travels_when_the_counts_agree() {
+        let metas = vec![meta(1), meta(2)];
+        assert!(steps_for_upload(&metas, 2).is_some());
+    }
+
+    #[test]
+    fn metadata_is_dropped_when_the_counts_disagree() {
+        let metas = vec![meta(1)];
+        assert!(steps_for_upload(&metas, 20).is_none());
+        assert!(steps_for_upload(&metas, 0).is_none());
+    }
+
+    #[test]
+    fn no_sidecars_sends_no_metadata() {
+        assert!(steps_for_upload(&[], 3).is_none());
+        assert!(steps_for_upload(&[], 0).is_none());
+    }
+
+    /// The end-to-end property the server's positional pairing rests on: after
+    /// a failed capture, the screenshots and the sidecars still describe the
+    /// same steps, in the same order, at the same length -- so alignment
+    /// survives rather than being dropped for the whole recording.
+    #[test]
+    fn a_failed_capture_keeps_its_alignment() {
+        let dir = tempdir().unwrap();
+        // Step 2's capture failed: no PNG, and so no sidecar either.
+        for step in [1u32, 3, 4] {
+            touch(dir.path(), &format!("step_{:02}.png", step));
+            crate::output::step_meta::write_sidecar(dir.path(), &meta(step)).unwrap();
+        }
+
+        let screenshots = collect_step_screenshots(dir.path()).unwrap();
+        let metas = crate::output::step_meta::read_all(dir.path());
+
+        assert_eq!(screenshots.len(), metas.len());
+        assert_eq!(
+            screenshots.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
+            metas.iter().map(|m| m.order).collect::<Vec<_>>(),
+            "screenshot and sidecar order must match position for position",
+        );
+        assert!(steps_for_upload(&metas, screenshots.len()).is_some());
+    }
 }

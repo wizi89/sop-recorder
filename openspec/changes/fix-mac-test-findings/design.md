@@ -30,6 +30,10 @@ Replace the counting loop with a pure `collect_step_screenshots(dir) -> Result<V
 
 *Alternative considered:* keep the counting loop but continue past a gap up to a bound. Rejected — it needs an arbitrary bound and still can't tell "step 7 failed" from "the recording ended at 6". Reading the directory answers both.
 
+**Correction, made during implementation.** `step_meta::read_all` had the *same* count-and-stop defect, with a test pinning it (`read_all_stops_at_first_gap`). Fixing only `generate.rs` would have shipped all 20 screenshots with zero per-step timestamps, because the sidecar count would still stop at 1 and fail the length check — turning finding A into finding G for exactly the recordings that hit it. Both scans are now directory reads. The earlier claim in this document that fixing A "closes that gap" for G was wrong as written: it needs this second fix to be true.
+
+**Verified against the backend** (`sop-sorcery`, `server/routes_generate.py:260-280`): `metadata.steps` is paired to the screenshots **by position**, gated only on `len(raw_steps_meta) == len(screenshots)`, and `order` is never read. Screenshots are ordered by `sorted(form.keys())`. Sparse-but-ascending step numbers therefore pair correctly with no server change — renumbering to a contiguous 1..N at upload time was considered and rejected as unnecessary.
+
 Numeric sort matters: lexicographic ordering puts `step_10` before `step_09`. The current `{:02}` format masks this below 100 steps, so the sort is on the parsed integer, not the filename.
 
 ### Bound capture concurrency with a semaphore, keep the thread-per-event shape
