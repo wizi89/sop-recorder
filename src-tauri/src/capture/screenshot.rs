@@ -785,21 +785,24 @@ fn capture_active_monitor(
     let containing = monitor_containing(point, &bounds);
     let chosen = containing.unwrap_or(primary);
 
-    if monitors.len() > 1 {
-        let why = match (containing, point) {
-            (Some(_), _) => "",
-            (None, None) => " (no position available; fell back to the primary display)",
-            (None, Some(_)) => " (point is on no display; fell back to the primary display)",
-        };
-        log::info!(
-            "Capturing monitor {} of {} at {:?} for point {:?}{}",
-            chosen + 1,
-            monitors.len(),
-            bounds[chosen],
-            point,
-            why,
-        );
-    }
+    // Logged for a single display too, not only for several. "Which screen did
+    // this step come from" is the first question when a guide shows the wrong
+    // one, and a line that appears only on multi-monitor machines is missing
+    // from exactly the recordings that need it. One line per step, beside the
+    // one the save already writes.
+    let why = match (containing, point) {
+        (Some(_), _) => "",
+        (None, None) => " (no position available; fell back to the primary display)",
+        (None, Some(_)) => " (point is on no display; fell back to the primary display)",
+    };
+    log::info!(
+        "Capturing monitor {} of {} at {:?} for point {:?}{}",
+        chosen + 1,
+        monitors.len(),
+        bounds[chosen],
+        point,
+        why,
+    );
 
     capture_one_monitor(&monitors[chosen])
 }
