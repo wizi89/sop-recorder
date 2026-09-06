@@ -37,10 +37,34 @@ fn strip_markdown(text: &str) -> String {
 }
 
 /// Generate a PDF from enriched step data.
+/// The image belonging to the guide's `order`-th step (1-based).
+///
+/// A lookup by position into the uploaded set, never a filename rebuilt from
+/// the number. `step_NN.png` is the number of the *capture*, and a capture that
+/// failed leaves a gap -- after one, the guide's third step is `step_04.png`.
+/// Rebuilding the name put the previous step's picture under the text and left
+/// the step at the gap with none, which is worse than either alone: the guide
+/// looked complete and was wrong.
+fn screenshot_for_step(
+    screenshots: &[(u32, std::path::PathBuf)],
+    order: usize,
+) -> Option<&(u32, std::path::PathBuf)> {
+    screenshots.get(order.checked_sub(1)?)
+}
+
+/// Build the local PDF fallback.
+///
+/// `screenshots` is the uploaded set, in the order it was sent, as
+/// `(step number, path)`. Passed in rather than reconstructed from the step's
+/// position: a capture that failed leaves a gap, so the third step of a guide
+/// is not necessarily `step_03.png`. Rebuilding the name from the position put
+/// the wrong picture under the text -- and, for the step at the gap, no picture
+/// at all.
 pub fn generate_pdf(
     output_dir: &Path,
     guide_title: &str,
     enriched: &[serde_json::Value],
+    screenshots: &[(u32, std::path::PathBuf)],
 ) -> Result<(), String> {
     let font_dir = "C:/Windows/Fonts";
 
@@ -127,16 +151,29 @@ pub fn generate_pdf(
             doc.push(Break::new(0.5));
         }
 
-        let screenshot_path = output_dir.join("screenshots").join(format!("step_{:02}.png", order));
-        if screenshot_path.exists() {
-            match Image::from_path(&screenshot_path) {
+        // By position in the uploaded set, which is what `order` counts, not by
+        // a filename rebuilt from it.
+        if let Some((step_number, screenshot_path)) = screenshot_for_step(screenshots, order) {
+            match Image::from_path(screenshot_path) {
                 Ok(img) => {
                     doc.push(img);
                 }
                 Err(e) => {
-                    log::warn!("Failed to embed screenshot {}: {}", order, e);
+                    log::warn!(
+                        "Failed to embed screenshot {} ({}): {}",
+                        step_number,
+                        screenshot_path.display(),
+                        e,
+                    );
                 }
             }
+        } else {
+            log::warn!(
+                "No screenshot for step {} of {}; the guide has more steps than \
+                 the recording has images",
+                order,
+                screenshots.len(),
+            );
         }
 
         // Warnings (skip empty strings)
@@ -168,4 +205,57 @@ pub fn generate_pdf(
 
     log::info!("PDF saved: {}", pdf_path.display());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// A recording whose second capture failed: the files on disk are 1, 3, 4.
+    fn gapped() -> Vec<(u32, PathBuf)> {
+        vec![
+            (1, PathBuf::from("screenshots/step_01.png")),
+            (3, PathBuf::from("screenshots/step_03.png")),
+            (4, PathBuf::from("screenshots/step_04.png")),
+        ]
+    }
+
+    /// The regression. Guide step 2 is the *second uploaded* image, which after
+    /// a gap is `step_03.png`. Rebuilding the name from the position asked for
+    /// `step_02.png`, which does not exist, and gave step 3 the picture from
+    /// step 2.
+    #[test]
+    fn a_step_after_a_gap_gets_the_image_that_was_uploaded_for_it() {
+        let shots = gapped();
+
+        assert_eq!(screenshot_for_step(&shots, 1).unwrap().0, 1);
+        assert_eq!(screenshot_for_step(&shots, 2).unwrap().0, 3);
+        assert_eq!(screenshot_for_step(&shots, 3).unwrap().0, 4);
+    }
+
+    #[test]
+    fn a_gapless_recording_is_unchanged() {
+        let shots: Vec<(u32, PathBuf)> = (1..=3)
+            .map(|n| (n, PathBuf::from(format!("screenshots/step_{:02}.png", n))))
+            .collect();
+
+        for order in 1..=3usize {
+            assert_eq!(screenshot_for_step(&shots, order).unwrap().0, order as u32);
+        }
+    }
+
+    /// The server can return fewer steps than there were screenshots. Asking
+    /// past the end is a missing image, not a panic.
+    #[test]
+    fn asking_beyond_the_uploaded_set_yields_nothing() {
+        assert!(screenshot_for_step(&gapped(), 4).is_none());
+        assert!(screenshot_for_step(&[], 1).is_none());
+    }
+
+    /// `order` is 1-based; zero would silently wrap to the last element.
+    #[test]
+    fn a_zero_order_is_refused_rather_than_wrapping() {
+        assert!(screenshot_for_step(&gapped(), 0).is_none());
+    }
 }

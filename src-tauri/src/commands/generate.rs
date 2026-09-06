@@ -400,7 +400,7 @@ async fn run_generation_inner(
                 message: "PDF wird lokal erstellt...".into(),
             },
         );
-        pdf::generate_pdf(&output_path, &guide_title, &result.enriched)
+        pdf::generate_pdf(&output_path, &guide_title, &result.enriched, &screenshot_paths)
             .map_err(|e| format!("PDF generation failed: {}", e))?;
     }
 
