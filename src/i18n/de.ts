@@ -32,6 +32,8 @@ const de = {
   "review.title": "Aufnahme prüfen",
   "review.summary": "{count} Screenshots -- {elapsed} Min aufgenommen",
   "review.summary_count_only": "{count} Screenshots in diesem Ordner",
+  "review.failed_captures":
+    "{count} von {total} Schritten konnten nicht aufgenommen werden. Die Anleitung ist unvollständig.",
   "review.loading": "Screenshots werden geladen...",
   "review.step_label": "Schritt {n}",
   "review.confirm": "Generieren",

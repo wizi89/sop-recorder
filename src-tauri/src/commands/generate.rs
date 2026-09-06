@@ -76,10 +76,10 @@ fn collect_step_screenshots(screenshots_dir: &Path) -> Result<Vec<(u32, PathBuf)
 /// So a divergence has to drop the array outright -- shipping a shorter one
 /// would describe every step after the divergence against the wrong image,
 /// which is worse than having no per-step transcript at all.
-fn steps_for_upload<'a>(
-    metas: &'a [step_meta::StepMeta],
+fn steps_for_upload(
+    metas: &[step_meta::StepMeta],
     screenshot_count: usize,
-) -> Option<&'a [step_meta::StepMeta]> {
+) -> Option<&[step_meta::StepMeta]> {
     if metas.len() == screenshot_count && !metas.is_empty() {
         return Some(metas);
     }

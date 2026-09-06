@@ -32,9 +32,10 @@ describe("useRecorder", () => {
 
   it("stop transitions to review, then confirmGeneration completes to done", async () => {
     const outputDir = "C:\\Users\\test\\output";
+    const stopped = { output_dir: outputDir, failed_captures: 0 };
     mockInvoke
       .mockResolvedValueOnce(undefined) // start_recording
-      .mockResolvedValueOnce(outputDir) // stop_recording
+      .mockResolvedValueOnce(stopped) // stop_recording
       .mockResolvedValueOnce(undefined); // run_generation
 
     const { result } = renderHook(() => useRecorder());
@@ -66,9 +67,10 @@ describe("useRecorder", () => {
 
   it("cancelFromReview discards session and returns to idle", async () => {
     const outputDir = "C:\\Users\\test\\output";
+    const stopped = { output_dir: outputDir, failed_captures: 0 };
     mockInvoke
       .mockResolvedValueOnce(undefined) // start_recording
-      .mockResolvedValueOnce(outputDir); // stop_recording
+      .mockResolvedValueOnce(stopped); // stop_recording
 
     const { result } = renderHook(() => useRecorder());
 
@@ -105,7 +107,7 @@ describe("useRecorder", () => {
   it("transitions to error on generation failure after review confirm", async () => {
     mockInvoke
       .mockResolvedValueOnce(undefined) // start
-      .mockResolvedValueOnce("C:\\out") // stop
+      .mockResolvedValueOnce({ output_dir: "C:\\out", failed_captures: 0 }) // stop
       .mockRejectedValueOnce(new Error("Upload failed")); // generate
 
     const { result } = renderHook(() => useRecorder());
@@ -137,7 +139,7 @@ describe("useRecorder", () => {
   it("routes rate_limit errors to rate_limited status after review confirm", async () => {
     mockInvoke
       .mockResolvedValueOnce(undefined) // start
-      .mockResolvedValueOnce("C:\\out") // stop
+      .mockResolvedValueOnce({ output_dir: "C:\\out", failed_captures: 0 }) // stop
       .mockRejectedValueOnce(
         'Server error (429 Too Many Requests): {"error":"rate_limit","message":"Generation limit reached (10/10). Upgrade your plan for higher limits."}',
       );
@@ -185,9 +187,10 @@ describe("useRecorder", () => {
 
   it("error path preserves outputDir for retry-from-disk", async () => {
     const outputDir = "C:\\Users\\test\\output";
+    const stopped = { output_dir: outputDir, failed_captures: 0 };
     mockInvoke
       .mockResolvedValueOnce(undefined) // start
-      .mockResolvedValueOnce(outputDir) // stop
+      .mockResolvedValueOnce(stopped) // stop
       .mockRejectedValueOnce(new Error("Upload failed")); // generate
 
     const { result } = renderHook(() => useRecorder());
@@ -220,9 +223,10 @@ describe("useRecorder", () => {
 
   it("dismissRateLimit returns to idle while preserving outputDir", async () => {
     const outputDir = "C:\\Users\\test\\output";
+    const stopped = { output_dir: outputDir, failed_captures: 0 };
     mockInvoke
       .mockResolvedValueOnce(undefined) // start
-      .mockResolvedValueOnce(outputDir) // stop
+      .mockResolvedValueOnce(stopped) // stop
       .mockRejectedValueOnce(
         '{"error":"rate_limit","message":"Generation limit reached (5/5)."}',
       );

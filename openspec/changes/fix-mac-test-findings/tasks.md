@@ -14,10 +14,10 @@ These land before anything else, so the 2026-09-21 session with the tester produ
 
 ## 3. Capture failure accounting (spec: step-capture)
 
-- [ ] 3.1 Add `failed_captures: Arc<AtomicU32>` to `RecordingSession`, increment it in the `Err` arm of the capture thread in `commands/recording.rs`, and include it in the value `stop_recording` returns. Verify with a Rust test that drives the counter directly.
-- [ ] 3.2 Emit `recording:step_failed` with the running failure count when a capture fails; verify by listening for the event in a dev build with a forced capture error.
-- [ ] 3.3 Surface the count in `ReviewScreen` as "N of M steps could not be captured" and add the German copy to `src/i18n/de.ts`. Verify with a TS test asserting the notice renders for `failedSteps=2` and not for `0`.
-- [ ] 3.4 Add the failure count to the error-report settings context in `commands/settings.rs::publish_error_report_context`; verify with a Rust test that a report raised after a failure carries it.
+- [x] 3.1 Add `failed_captures: Arc<AtomicU32>` to `RecordingSession`, increment it in the `Err` arm of the capture thread in `commands/recording.rs`, and include it in the value `stop_recording` returns. Verify with a Rust test that drives the counter directly.
+- [x] 3.2 Emit `recording:step_failed` with the running failure count when a capture fails; verify by listening for the event in a dev build with a forced capture error.
+- [x] 3.3 Surface the count in `ReviewScreen` as "N of M steps could not be captured" and add the German copy to `src/i18n/de.ts`. Verify with a TS test asserting the notice renders for `failedSteps=2` and not for `0`.
+- [x] 3.4 **Done by other means, and the original is not safely shippable.** Two blockers: `publish_error_report_context` takes `&AppSettings` and only runs on save/startup, so it cannot carry live recording state; and the server's report model sets `model_config = {"extra": "forbid"}` (`sop-sorcery/server/routes_client_reports.py:84`), so adding any field to `ErrorReport` or `ReportSettings` would 422 **every** report from the new client against the deployed server. The need is met instead by 3.1's `log::error!`, which names the step, the running failure count and the cause, and lands in the ring buffer that fills `log_tail` — an accepted schema field carrying strictly more than a count. A structured field needs a coordinated server change first; see the handover note.
 
 ## 4. Bounded capture concurrency (spec: step-capture)
 

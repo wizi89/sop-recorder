@@ -24,6 +24,8 @@ interface RecorderScreenProps {
   quota?: Quota | null;
   outputDir: string | null;
   skipPiiCheck?: boolean;
+  /** Captures that failed during the recording just stopped. */
+  failedCaptures?: number;
   micPermission?: MicPermissionState;
   screenRecordingPermission?: ScreenRecordingPermissionState;
   accessibilityPermission?: AccessibilityPermissionState;
@@ -59,6 +61,7 @@ export function RecorderScreen({
   quota,
   outputDir,
   skipPiiCheck,
+  failedCaptures = 0,
   micPermission,
   screenRecordingPermission,
   accessibilityPermission,
@@ -104,6 +107,7 @@ export function RecorderScreen({
         outputDir={outputDir}
         captureCount={captureCount}
         elapsedSec={elapsedSec}
+        failedCaptures={failedCaptures}
         onConfirm={onConfirmGeneration}
         onCancel={onCancelFromReview}
       />

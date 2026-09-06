@@ -139,6 +139,7 @@ pub async fn start_recording(
     // Shared step counter and in-flight tracker
     let step_counter = Arc::new(AtomicU32::new(0));
     let in_flight = Arc::new(AtomicU32::new(0));
+    let failed_captures = Arc::new(AtomicU32::new(0));
 
     // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
@@ -161,6 +162,7 @@ pub async fn start_recording(
     // Start input hooks -- screenshots are captured immediately in the callback
     let counter_clone = step_counter.clone();
     let in_flight_clone = in_flight.clone();
+    let failed_clone = failed_captures.clone();
     let stop_clone = stop_flag.clone();
     let screenshots_dir_clone = screenshots_dir.clone();
     let app_clone = app.clone();
@@ -188,6 +190,7 @@ pub async fn start_recording(
         let dir = screenshots_dir_clone.clone();
         let app = app_clone.clone();
         let flight = in_flight_clone.clone();
+        let failed = failed_clone.clone();
         flight.fetch_add(1, Ordering::SeqCst);
         std::thread::spawn(move || {
             match screenshot::capture_and_save(&dir, step_num, click_pos) {
@@ -213,7 +216,15 @@ pub async fn start_recording(
                     let _ = app.emit("recording:step_captured", step_num);
                 }
                 Err(e) => {
-                    log::error!("Screenshot capture failed: {}", e);
+                    // Counted, not just logged. This is the path that turned 21
+                    // clicks into a one-step guide on 2026-09-03 while the app
+                    // reported nothing at all.
+                    let total = failed.fetch_add(1, Ordering::SeqCst) + 1;
+                    log::error!(
+                        "Screenshot capture failed for step {} ({} failed so far): {}",
+                        step_num, total, e
+                    );
+                    let _ = app.emit("recording:step_failed", total);
                 }
             }
             flight.fetch_sub(1, Ordering::SeqCst);
@@ -230,6 +241,7 @@ pub async fn start_recording(
         stop_flag: Some(stop_flag),
         in_flight: Some(in_flight),
         step_counter: Some(step_counter),
+        failed_captures: Some(failed_captures),
     };
 
     *state.current_session.lock().unwrap() = Some(session);
@@ -244,8 +256,21 @@ pub async fn start_recording(
     Ok(())
 }
 
+/// What a stopped recording leaves behind: where it was written, and how much
+/// of it did not survive. The count travels with the folder rather than only as
+/// an event, so the review screen cannot show a complete-looking recording
+/// because it missed a notification.
+#[derive(serde::Serialize)]
+pub struct StoppedRecording {
+    pub output_dir: String,
+    pub failed_captures: u32,
+}
+
 #[tauri::command]
-pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+pub async fn stop_recording(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StoppedRecording, String> {
     // Set stop flag IMMEDIATELY -- before locking the session mutex.
     // This prevents the race where rdev fires the stop-button click
     // before the session lock is acquired.
@@ -261,7 +286,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
     }
 
     // Extract everything from the session in one scoped block
-    let (in_flight_counter, audio, output_dir_path, guide_title) = {
+    let (in_flight_counter, failed_counter, audio, output_dir_path, guide_title) = {
         let mut session_guard = state.current_session.lock().unwrap();
         let session = session_guard.as_mut().ok_or("No active session")?;
 
@@ -275,6 +300,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
 
         (
             session.in_flight.take(),
+            session.failed_captures.take(),
             session.audio_handle.take(),
             session.output_dir.clone(),
             session.guide_title.clone(),
@@ -323,10 +349,23 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
         .map_err(|e| format!("Failed to write pending marker: {}", e))?;
 
     let output_dir = output_dir_path.to_string_lossy().to_string();
+    // Read after the in-flight wait above, so a capture that failed while the
+    // queue drained is included rather than raced past.
+    let failed_captures = failed_counter
+        .as_ref()
+        .map(|c| c.load(Ordering::SeqCst))
+        .unwrap_or(0);
     let _ = app.emit("recording:stopped", ());
-    log::info!("Recording stopped. Output: {}", output_dir);
+    if failed_captures > 0 {
+        log::warn!(
+            "Recording stopped with {} failed capture(s). Output: {}",
+            failed_captures, output_dir
+        );
+    } else {
+        log::info!("Recording stopped. Output: {}", output_dir);
+    }
 
-    Ok(output_dir)
+    Ok(StoppedRecording { output_dir, failed_captures })
 }
 
 /// Read the raw bytes of a screenshot file. Returns a byte array the
