@@ -16,8 +16,18 @@ permissions:
   contents: read
 
 jobs:
+  # Both platforms, because the defects that only appear on macOS are the ones
+  # this project keeps shipping: the two coordinate spaces that coincide on
+  # Windows, the Keychain that has no Windows analogue, the input hook that
+  # needs a permission there and not here. Windows-only tests could not have
+  # caught any of them.
   test:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
