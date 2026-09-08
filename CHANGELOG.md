@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-08
+
 ### Fixed
 
 - A recording no longer loses every step after one that failed. If a screenshot could not be taken -- which happened under fast clicking, when several full-screen captures ran at once -- the guide stopped at that point and everything after it was silently dropped. In one test 21 clicks became a guide with a single step, with nothing on screen to say so. All the screenshots that were taken now reach the guide, and their narration with them.
@@ -468,7 +470,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/wizi89/sop-recorder/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/wizi89/sop-recorder/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/wizi89/sop-recorder/compare/v0.14.0...v0.15.0
 [0.13.1]: https://github.com/wizi89/sop-recorder/compare/v0.13.0...v0.13.1
