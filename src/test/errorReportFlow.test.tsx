@@ -104,7 +104,6 @@ describe("mode always (design D1)", () => {
             output_dir: "",
             logs_dir: "",
             hide_from_screenshots: true,
-            api_key: null,
             upload_target: null,
             skip_pii_check: false,
             pipeline_version: 1,

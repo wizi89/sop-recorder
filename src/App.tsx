@@ -646,6 +646,7 @@ function MainApp() {
           quota={quotaHook.quota}
           outputDir={recorder.outputDir}
           skipPiiCheck={skipPiiCheck}
+          failedCaptures={recorder.failedCaptures}
           onStart={handleStart}
           onSignOut={auth.logout}
           onOpenSettings={handleOpenSettings}

@@ -25,6 +25,9 @@ interface RecorderState {
   status: RecorderStatus;
   statusMessage: string;
   outputDir: string | null;
+  /// Captures that failed during the recording just stopped. Surfaced on the
+  /// review screen so a recording that lost steps is never presented as whole.
+  failedCaptures: number;
   error: string | null;
   /** The server job the failure belongs to, when the SSE stream named one.
    *  Carried so an error report can be joined to the server's own event for
@@ -39,6 +42,7 @@ export function useRecorder() {
     status: "idle",
     statusMessage: "",
     outputDir: null,
+    failedCaptures: 0,
     error: null,
     errorJobId: null,
     piiFindings: null,
@@ -59,6 +63,7 @@ export function useRecorder() {
         status: "recording",
         statusMessage: "",
         outputDir: null,
+    failedCaptures: 0,
         error: null,
         errorJobId: null,
         piiFindings: null,
@@ -69,6 +74,7 @@ export function useRecorder() {
         status: "error",
         statusMessage: "",
         outputDir: null,
+    failedCaptures: 0,
         error: String(e),
         errorJobId: null,
         piiFindings: null,
@@ -108,11 +114,13 @@ export function useRecorder() {
       rateLimit: null,
     }));
     try {
-      const outputDir = await stopRecording();
+      const { output_dir: outputDir, failed_captures: failedCaptures } =
+        await stopRecording();
       setState((s) => ({
         ...s,
         status: "review",
         outputDir,
+        failedCaptures,
         statusMessage: "",
         error: null,
         errorJobId: null,
@@ -194,6 +202,9 @@ export function useRecorder() {
       ...s,
       status: "review" as const,
       outputDir: dir,
+      // A folder from disk carries no capture failures of its own; without
+      // this the previous session's count would be shown against it.
+      failedCaptures: 0,
       statusMessage: "",
       error: null,
       errorJobId: null,
@@ -212,6 +223,7 @@ export function useRecorder() {
       status: "idle",
       statusMessage: "",
       outputDir: null,
+    failedCaptures: 0,
       error: null,
       errorJobId: null,
       piiFindings: null,
@@ -229,6 +241,7 @@ export function useRecorder() {
       status: "idle",
       statusMessage: "",
       outputDir: null,
+    failedCaptures: 0,
       error: null,
       errorJobId: null,
       piiFindings: null,
@@ -241,6 +254,7 @@ export function useRecorder() {
       status: "idle",
       statusMessage: "",
       outputDir: null,
+    failedCaptures: 0,
       error: null,
       errorJobId: null,
       piiFindings: null,

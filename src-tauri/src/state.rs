@@ -32,6 +32,11 @@ pub struct RecordingSession {
     /// Shared screenshot counter so `delete_last_screenshot` can atomically
     /// decrement when the user undoes a captured step.
     pub step_counter: Option<Arc<AtomicU32>>,
+    /// Captures that failed for this recording. A failure leaves a gap in the
+    /// step numbering, which the upload path now survives -- but the user still
+    /// has to be told the recording is short of what they did, rather than
+    /// finding out from a guide that is missing a step.
+    pub failed_captures: Option<Arc<AtomicU32>>,
 }
 
 pub struct AppState {

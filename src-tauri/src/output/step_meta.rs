@@ -46,32 +46,64 @@ pub fn delete_sidecar(output_dir: &Path, order: u32) -> Result<(), std::io::Erro
     Ok(())
 }
 
-/// Read sidecars `step_01.json`, `step_02.json`, ... in order, stopping at
-/// the first gap. Used by the upload path to derive `metadata.steps`.
-pub fn read_all(output_dir: &Path) -> Vec<StepMeta> {
-    let mut metas = Vec::new();
-    let mut order = 1u32;
-    loop {
-        let path = sidecar_path(output_dir, order);
-        let Ok(content) = fs::read_to_string(&path) else {
-            break;
-        };
-        match serde_json::from_str::<StepMeta>(&content) {
-            Ok(m) => {
-                metas.push(m);
-                order += 1;
-            }
-            Err(e) => {
-                log::warn!(
-                    "step_meta: failed to parse {} ({}); stopping scan",
-                    path.display(),
-                    e
-                );
-                break;
-            }
-        }
+/// The step number a sidecar filename encodes, or `None` if it is not one of
+/// ours. Mirrors the screenshot parser in `commands::generate`.
+fn order_from_filename(name: &str) -> Option<u32> {
+    let digits = name.strip_prefix("step_")?.strip_suffix(".json")?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
     }
-    metas
+    digits.parse().ok()
+}
+
+/// Read every sidecar in the folder, in ascending step order. Used by the
+/// upload path to derive `metadata.steps`.
+///
+/// Scans the directory rather than counting upward from 1. Counting stopped at
+/// the first gap, which paired badly with the screenshot enumeration doing the
+/// same: a capture that failed at step 2 left 20 screenshots and one readable
+/// sidecar, the lengths disagreed, and the upload dropped per-step alignment
+/// for the whole recording. That is the recording losing its narration, so the
+/// gap has to be survivable here too.
+///
+/// A sidecar is only written once its PNG is on disk, so the sidecars are
+/// always a subset of the screenshots. Missing one therefore shows up as a
+/// length mismatch at the call site, which drops alignment -- the safe
+/// direction -- rather than shifting every later step onto the wrong image.
+///
+/// The server pairs `metadata.steps` to the screenshots positionally, by
+/// ascending key, and never reads `order` (`routes_generate.py`). Ascending
+/// order here is what makes that pairing correct across a gap.
+pub fn read_all(output_dir: &Path) -> Vec<StepMeta> {
+    let Ok(entries) = fs::read_dir(output_dir) else {
+        return Vec::new();
+    };
+
+    let mut found: Vec<(u32, StepMeta)> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let path = entry.path();
+            let order = order_from_filename(&path.file_name()?.to_string_lossy())?;
+            let content = fs::read_to_string(&path).ok()?;
+            match serde_json::from_str::<StepMeta>(&content) {
+                Ok(meta) => Some((order, meta)),
+                Err(e) => {
+                    // Skipped, not fatal: one unreadable sidecar costs this
+                    // recording its alignment either way, and abandoning the
+                    // scan would hide how many others were fine.
+                    log::warn!(
+                        "step_meta: failed to parse {} ({}); skipping it",
+                        path.display(),
+                        e
+                    );
+                    None
+                }
+            }
+        })
+        .collect();
+    found.sort_by_key(|(order, _)| *order);
+
+    found.into_iter().map(|(_, meta)| meta).collect()
 }
 
 #[cfg(test)]
@@ -97,12 +129,10 @@ mod tests {
         assert_eq!(all[0], meta);
     }
 
-    #[test]
-    fn read_all_stops_at_first_gap() {
-        let dir = tempdir().unwrap();
-        for order in [1u32, 2, 4] {
+    fn write_orders(dir: &Path, orders: &[u32]) {
+        for &order in orders {
             write_sidecar(
-                dir.path(),
+                dir,
                 &StepMeta {
                     order,
                     timestamp_seconds: order as f64,
@@ -114,11 +144,54 @@ mod tests {
             )
             .unwrap();
         }
+    }
+
+    /// A capture failed at step 3. The sidecars either side of it are still the
+    /// user's recording, and dropping them costs the guide its per-step
+    /// narration -- the scan used to stop here and return only step 1.
+    #[test]
+    fn a_gap_does_not_end_the_scan() {
+        let dir = tempdir().unwrap();
+        write_orders(dir.path(), &[1, 2, 4]);
 
         let all = read_all(dir.path());
-        assert_eq!(all.len(), 2);
-        assert_eq!(all[0].order, 1);
-        assert_eq!(all[1].order, 2);
+        assert_eq!(
+            all.iter().map(|m| m.order).collect::<Vec<_>>(),
+            vec![1, 2, 4],
+        );
+    }
+
+    /// The property the server's positional pairing depends on: ascending
+    /// order, matching the ascending screenshot keys it zips against.
+    #[test]
+    fn sidecars_are_ordered_numerically_not_lexicographically() {
+        let dir = tempdir().unwrap();
+        write_orders(dir.path(), &(1..=21).collect::<Vec<_>>());
+
+        let all = read_all(dir.path());
+        assert_eq!(
+            all.iter().map(|m| m.order).collect::<Vec<_>>(),
+            (1..=21).collect::<Vec<_>>(),
+        );
+    }
+
+    /// One unreadable sidecar costs this recording its alignment either way.
+    /// Skipping it rather than abandoning the scan keeps the count honest, so
+    /// the log says how many were actually readable.
+    #[test]
+    fn an_unparseable_sidecar_is_skipped_not_fatal() {
+        let dir = tempdir().unwrap();
+        write_orders(dir.path(), &[1, 3]);
+        fs::write(dir.path().join("step_02.json"), b"{ not json").unwrap();
+
+        let all = read_all(dir.path());
+        assert_eq!(all.iter().map(|m| m.order).collect::<Vec<_>>(), vec![1, 3]);
+    }
+
+    #[test]
+    fn a_missing_folder_reads_as_no_sidecars() {
+        let dir = tempdir().unwrap();
+        assert!(read_all(&dir.path().join("nope")).is_empty());
     }
 
     #[test]

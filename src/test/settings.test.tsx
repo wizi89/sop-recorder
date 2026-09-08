@@ -8,7 +8,6 @@ const mockSettings = {
   output_dir: "C:\\docs\\workflows",
   logs_dir: "C:\\data\\logs",
   hide_from_screenshots: true,
-  api_key: null,
   upload_target: null,
   skip_pii_check: false,
   error_reports: "ask",

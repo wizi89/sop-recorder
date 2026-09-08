@@ -11,10 +11,59 @@ use tauri_plugin_store::StoreExt;
 
 use crate::capture::audio::AudioHandle;
 use crate::capture::input_hooks;
+use crate::capture::permits::CapturePermits;
 use crate::capture::screenshot;
 use crate::output::pending;
 use crate::output::step_meta::{self, StepMeta};
 use crate::state::{AppState, RecordingSession, RecordingStatus};
+
+/// What one capture's outcome means for the recording.
+///
+/// Separated from the thread that produces it so the counting can be tested:
+/// the closure it came from needs an `AppHandle`, a screen and a live session,
+/// and the thing worth testing is none of those.
+#[derive(Debug, PartialEq)]
+pub enum CaptureOutcome {
+    /// The PNG is on disk. The sidecar describing it still has to be written.
+    Captured(Box<StepMeta>),
+    /// The capture failed. Carries the running failure count for this
+    /// recording, which is what the user is eventually shown.
+    Failed { total: u32 },
+}
+
+/// Record one capture's outcome and count it if it failed.
+///
+/// A failure used to be only a log line. The step counter had already advanced,
+/// so the recording carried a gap nobody could see, and the review screen
+/// counted the screenshots that survived and looked complete -- which is how a
+/// 21-click recording presented itself as a one-step guide on 2026-09-03.
+fn note_capture_outcome(
+    result: Result<Option<screenshot::MarkerBox>, String>,
+    step_num: u32,
+    timestamp_seconds: f64,
+    click_pos: Option<(i32, i32)>,
+    trigger: &str,
+    failed: &AtomicU32,
+) -> CaptureOutcome {
+    match result {
+        Ok(marker_box) => CaptureOutcome::Captured(Box::new(StepMeta {
+            order: step_num,
+            timestamp_seconds,
+            click_x: click_pos.map(|(x, _)| x),
+            click_y: click_pos.map(|(_, y)| y),
+            trigger: trigger.to_string(),
+            marker_box,
+        })),
+        Err(e) => {
+            let total = failed.fetch_add(1, Ordering::SeqCst) + 1;
+            log::error!(
+                "Screenshot capture failed for step {} ({} failed so far): {}",
+                step_num, total, e
+            );
+            CaptureOutcome::Failed { total }
+        }
+    }
+}
 
 fn get_output_dir(app: &tauri::AppHandle) -> PathBuf {
     let name = app.config().product_name.as_deref().unwrap_or("cogniclone");
@@ -139,6 +188,10 @@ pub async fn start_recording(
     // Shared step counter and in-flight tracker
     let step_counter = Arc::new(AtomicU32::new(0));
     let in_flight = Arc::new(AtomicU32::new(0));
+    let failed_captures = Arc::new(AtomicU32::new(0));
+    // Bounds how many full-screen buffers are resident at once. Per recording
+    // rather than global: nothing captures between recordings.
+    let capture_permits = Arc::new(CapturePermits::default());
 
     // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
@@ -161,6 +214,8 @@ pub async fn start_recording(
     // Start input hooks -- screenshots are captured immediately in the callback
     let counter_clone = step_counter.clone();
     let in_flight_clone = in_flight.clone();
+    let failed_clone = failed_captures.clone();
+    let permits_clone = capture_permits.clone();
     let stop_clone = stop_flag.clone();
     let screenshots_dir_clone = screenshots_dir.clone();
     let app_clone = app.clone();
@@ -188,22 +243,30 @@ pub async fn start_recording(
         let dir = screenshots_dir_clone.clone();
         let app = app_clone.clone();
         let flight = in_flight_clone.clone();
+        let failed = failed_clone.clone();
+        let permits = permits_clone.clone();
+        // Incremented before the spawn, so the counter covers a capture that is
+        // still queued for a permit as well as one already running. That is what
+        // `stop_recording` and the generate path wait on, and a queued capture
+        // is exactly the kind they must not race past.
         flight.fetch_add(1, Ordering::SeqCst);
         std::thread::spawn(move || {
-            match screenshot::capture_and_save(&dir, step_num, click_pos) {
-                Ok(marker_box) => {
-                    // Write the sidecar AFTER the PNG has been written so a
-                    // crash between PNG and JSON leaves an unpaired PNG that
-                    // the upload path can detect (and either skip or fail
-                    // loudly), rather than a JSON pointing at a missing PNG.
-                    let meta = StepMeta {
-                        order: step_num,
-                        timestamp_seconds,
-                        click_x: click_pos.map(|(x, _)| x),
-                        click_y: click_pos.map(|(_, y)| y),
-                        trigger: trigger.to_string(),
-                        marker_box,
-                    };
+            // Held for the capture and the sidecar write, released on the way
+            // out of this scope however the capture ends.
+            let _permit = permits.acquire();
+            let outcome = note_capture_outcome(
+                screenshot::capture_and_save(&dir, step_num, click_pos),
+                step_num,
+                timestamp_seconds,
+                click_pos,
+                trigger,
+                &failed,
+            );
+            match outcome {
+                CaptureOutcome::Captured(meta) => {
+                    // Written AFTER the PNG so a crash between the two leaves an
+                    // unpaired PNG the upload path can detect, rather than a
+                    // JSON pointing at a missing image.
                     if let Err(e) = step_meta::write_sidecar(&dir, &meta) {
                         log::error!(
                             "Step sidecar write failed for step {}: {}",
@@ -212,8 +275,8 @@ pub async fn start_recording(
                     }
                     let _ = app.emit("recording:step_captured", step_num);
                 }
-                Err(e) => {
-                    log::error!("Screenshot capture failed: {}", e);
+                CaptureOutcome::Failed { total } => {
+                    let _ = app.emit("recording:step_failed", total);
                 }
             }
             flight.fetch_sub(1, Ordering::SeqCst);
@@ -230,6 +293,7 @@ pub async fn start_recording(
         stop_flag: Some(stop_flag),
         in_flight: Some(in_flight),
         step_counter: Some(step_counter),
+        failed_captures: Some(failed_captures),
     };
 
     *state.current_session.lock().unwrap() = Some(session);
@@ -244,8 +308,21 @@ pub async fn start_recording(
     Ok(())
 }
 
+/// What a stopped recording leaves behind: where it was written, and how much
+/// of it did not survive. The count travels with the folder rather than only as
+/// an event, so the review screen cannot show a complete-looking recording
+/// because it missed a notification.
+#[derive(serde::Serialize)]
+pub struct StoppedRecording {
+    pub output_dir: String,
+    pub failed_captures: u32,
+}
+
 #[tauri::command]
-pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+pub async fn stop_recording(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StoppedRecording, String> {
     // Set stop flag IMMEDIATELY -- before locking the session mutex.
     // This prevents the race where rdev fires the stop-button click
     // before the session lock is acquired.
@@ -261,7 +338,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
     }
 
     // Extract everything from the session in one scoped block
-    let (in_flight_counter, audio, output_dir_path, guide_title) = {
+    let (in_flight_counter, failed_counter, audio, output_dir_path, guide_title) = {
         let mut session_guard = state.current_session.lock().unwrap();
         let session = session_guard.as_mut().ok_or("No active session")?;
 
@@ -275,6 +352,7 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
 
         (
             session.in_flight.take(),
+            session.failed_captures.take(),
             session.audio_handle.take(),
             session.output_dir.clone(),
             session.guide_title.clone(),
@@ -323,10 +401,23 @@ pub async fn stop_recording(app: tauri::AppHandle, state: State<'_, AppState>) -
         .map_err(|e| format!("Failed to write pending marker: {}", e))?;
 
     let output_dir = output_dir_path.to_string_lossy().to_string();
+    // Read after the in-flight wait above, so a capture that failed while the
+    // queue drained is included rather than raced past.
+    let failed_captures = failed_counter
+        .as_ref()
+        .map(|c| c.load(Ordering::SeqCst))
+        .unwrap_or(0);
     let _ = app.emit("recording:stopped", ());
-    log::info!("Recording stopped. Output: {}", output_dir);
+    if failed_captures > 0 {
+        log::warn!(
+            "Recording stopped with {} failed capture(s). Output: {}",
+            failed_captures, output_dir
+        );
+    } else {
+        log::info!("Recording stopped. Output: {}", output_dir);
+    }
 
-    Ok(output_dir)
+    Ok(StoppedRecording { output_dir, failed_captures })
 }
 
 /// Read the raw bytes of a screenshot file. Returns a byte array the
@@ -436,5 +527,132 @@ pub async fn delete_last_screenshot(
             counter.fetch_add(1, Ordering::SeqCst);
             Err(format!("Failed to delete {}: {}", path.display(), e))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capture::screenshot::MarkerBox;
+
+    fn box_at(x0: i32) -> Option<MarkerBox> {
+        Some(MarkerBox { x0, y0: 2, x1: 3, y1: 4 })
+    }
+
+    /// The path the 2026-09-03 recordings took silently: a capture fails, the
+    /// step number has already advanced, and nothing counts the loss.
+    #[test]
+    fn a_failed_capture_is_counted() {
+        let failed = AtomicU32::new(0);
+
+        let outcome = note_capture_outcome(
+            Err("Failed to save screenshot: Permission denied".into()),
+            3,
+            1.5,
+            Some((10, 20)),
+            "mouse_click",
+            &failed,
+        );
+
+        assert_eq!(outcome, CaptureOutcome::Failed { total: 1 });
+        assert_eq!(failed.load(Ordering::SeqCst), 1);
+    }
+
+    /// The count is what the review screen shows, so it has to be the running
+    /// total for the recording, not a per-capture flag.
+    #[test]
+    fn repeated_failures_accumulate() {
+        let failed = AtomicU32::new(0);
+        let totals: Vec<u32> = (1..=3)
+            .map(|step| {
+                match note_capture_outcome(
+                    Err("disk full".into()),
+                    step,
+                    step as f64,
+                    None,
+                    "enter_key",
+                    &failed,
+                ) {
+                    CaptureOutcome::Failed { total } => total,
+                    other => panic!("expected a failure, got {:?}", other),
+                }
+            })
+            .collect();
+
+        assert_eq!(totals, vec![1, 2, 3]);
+        assert_eq!(failed.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn a_successful_capture_does_not_touch_the_failure_count() {
+        let failed = AtomicU32::new(2);
+
+        let outcome = note_capture_outcome(
+            Ok(box_at(1)),
+            7,
+            12.25,
+            Some((100, 200)),
+            "mouse_click",
+            &failed,
+        );
+
+        match outcome {
+            CaptureOutcome::Captured(meta) => {
+                assert_eq!(meta.order, 7);
+                assert_eq!(meta.timestamp_seconds, 12.25);
+                assert_eq!(meta.click_x, Some(100));
+                assert_eq!(meta.click_y, Some(200));
+                assert_eq!(meta.trigger, "mouse_click");
+                assert_eq!(meta.marker_box, box_at(1));
+            }
+            other => panic!("expected a capture, got {:?}", other),
+        }
+        assert_eq!(failed.load(Ordering::SeqCst), 2, "unchanged by a success");
+    }
+
+    /// A keypress carries no cursor position and draws no marker. The server
+    /// reads that absence together with `trigger` to tell "no marker" from
+    /// "marker, position unknown", so it must be absent rather than zeroed.
+    #[test]
+    fn a_keypress_step_records_no_position_and_no_marker() {
+        let failed = AtomicU32::new(0);
+
+        match note_capture_outcome(Ok(None), 1, 0.5, None, "enter_key", &failed) {
+            CaptureOutcome::Captured(meta) => {
+                assert_eq!(meta.click_x, None);
+                assert_eq!(meta.click_y, None);
+                assert_eq!(meta.marker_box, None);
+                assert_eq!(meta.trigger, "enter_key");
+            }
+            other => panic!("expected a capture, got {:?}", other),
+        }
+    }
+
+    /// Failures are counted from capture threads that run concurrently behind
+    /// the permit pool, so the counter has to survive that.
+    #[test]
+    fn concurrent_failures_are_all_counted() {
+        let failed = Arc::new(AtomicU32::new(0));
+
+        let handles: Vec<_> = (1..=16u32)
+            .map(|step| {
+                let failed = failed.clone();
+                std::thread::spawn(move || {
+                    note_capture_outcome(
+                        Err("capture failed".into()),
+                        step,
+                        step as f64,
+                        None,
+                        "mouse_click",
+                        &failed,
+                    );
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(failed.load(Ordering::SeqCst), 16);
     }
 }

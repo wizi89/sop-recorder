@@ -80,8 +80,39 @@ npm install
 ### Run in dev mode
 
 ```bash
-npx tauri dev
+npm run app             # whatever backend Settings says
+npm run app:staging     # against staging, without touching Settings
+npm run app:local       # against a server on localhost:8000
+npm run app:production
 ```
+
+#### Choosing a backend without opening Settings
+
+`--local`, `--staging` and `--production` point the app at that backend for one
+run. They override `upload_target` and leave it alone, so a run started with
+`--staging` does not change what the app does the next time it is opened
+normally. Giving two different backends at once is refused rather than resolved,
+because recording against production while believing you are on staging is the
+confusion these flags exist to remove.
+
+The app says which backend it is on, on the terminal and in the log:
+
+```
+cogniclone: backend overridden on the command line: --staging (https://api.staging.cogniclone.ai)
+```
+
+A packaged build takes the same flags -- useful for testing the real `.app`
+against staging, which is not something Settings can express:
+
+```bash
+/Applications/cogniclone.app/Contents/MacOS/cogniclone --staging
+```
+
+This is a convenience spelling of the `COGNICLONE_API_URL` and
+`COGNICLONE_WEBAPP_URL` variables that already existed, so it grants nothing new
+-- which is why it is not restricted to debug builds. Precedence, highest first:
+the flag, those variables, `config.toml`, then the compile-time default. See
+`src-tauri/src/runtime_config.rs`.
 
 #### macOS: stop the Keychain asking for your password on every rebuild
 
