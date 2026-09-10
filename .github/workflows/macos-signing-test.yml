@@ -1,0 +1,110 @@
+# TEMPORARY. Proves the Developer ID signing and notarization path end to end
+# without publishing anything. Delete once PR #5 is merged and a real tagged
+# release has been verified.
+#
+# Deliberately not a tag trigger: release.yml publishes a non-draft, non-
+# prerelease release, which becomes `latest`, which is exactly what the
+# updater endpoint points at. A test tag would offer this build to every
+# existing user, and would scp a test installer to the production server.
+name: macOS signing test
+
+on:
+  push:
+    branches: ["ci/macos-developer-id-signing"]
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Import the macOS signing certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -A -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Provide the notarization API key
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      # Single arch on purpose: signing and notarization behave identically,
+      # and it halves the wait.
+      - name: Build, sign and notarize
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: npx tauri build --bundles app,dmg --target aarch64-apple-darwin
+
+      - name: Verify
+        run: |
+          set -euo pipefail
+          B=src-tauri/target/aarch64-apple-darwin/release/bundle
+          APP="$B/macos/cogniclone.app"
+          DMG="$(ls "$B"/dmg/*.dmg)"
+
+          echo "::group::codesign -dv"
+          codesign -dv --verbose=4 "$APP" 2>&1
+          echo "::endgroup::"
+
+          echo "::group::codesign --verify"
+          codesign --verify --deep --strict --verbose=2 "$APP" 2>&1
+          echo "::endgroup::"
+
+          echo "== Gatekeeper =="
+          spctl -a -vvv -t exec "$APP" 2>&1
+
+          echo "== stapled ticket on the .app =="
+          xcrun stapler validate "$APP"
+
+          echo "== stapled ticket on the .dmg =="
+          xcrun stapler validate "$DMG" || echo "DMG NOT STAPLED (see docs/macos-signing.md)"
+
+          # The claim that matters: signed by us, notarized by Apple.
+          codesign -dv --verbose=4 "$APP" 2>&1 | grep -q "Authority=Developer ID Application: cogniclone UG" \
+            || { echo "FAIL: not signed with the Developer ID"; exit 1; }
+          spctl -a -vvv -t exec "$APP" 2>&1 | grep -q "source=Notarized Developer ID" \
+            || { echo "FAIL: Gatekeeper does not see a notarized app"; exit 1; }
+          echo "PASS"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-signed-build
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: warn
