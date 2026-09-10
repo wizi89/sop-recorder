@@ -28,6 +28,10 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # This job fails on things unrelated to compilation, and the default
+          # discards the cache on any failure -- which is how the first attempt
+          # cost a second 7-minute build.
+          cache-on-failure: true
 
       - run: npm ci
 
@@ -69,7 +73,23 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          # Tauri signs the updater tarball with minisign at the end of
+          # bundling. Without these it builds everything, notarizes, staples,
+          # and only then fails -- an hour in.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --bundles app,dmg --target aarch64-apple-darwin
+
+      - name: Notarize and staple the DMG
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          DMG=$(ls src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg)
+          xcrun notarytool submit "$DMG" --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "$DMG"
 
       - name: Verify
         run: |
@@ -93,7 +113,15 @@ jobs:
           xcrun stapler validate "$APP"
 
           echo "== stapled ticket on the .dmg =="
-          xcrun stapler validate "$DMG" || echo "DMG NOT STAPLED (see docs/macos-signing.md)"
+          xcrun stapler validate "$DMG"
+          spctl -a -vvv -t open --context context:primary-signature "$DMG" 2>&1 | grep -q "source=Notarized Developer ID" \
+            || { echo "FAIL: a downloaded disk image would be rejected"; exit 1; }
+
+          echo "== updater payload: the path existing users actually take =="
+          U=$(mktemp -d)
+          tar xzf "$B/macos/cogniclone.app.tar.gz" -C "$U"
+          xcrun stapler validate "$U"/cogniclone.app || echo "UPDATER PAYLOAD NOT STAPLED"
+          codesign -dv --verbose=4 "$U"/cogniclone.app 2>&1 | grep -E "^Authority=|^TeamIdentifier=" || true
 
           # The claim that matters: signed by us, notarized by Apple.
           codesign -dv --verbose=4 "$APP" 2>&1 | grep -q "Authority=Developer ID Application: cogniclone UG" \

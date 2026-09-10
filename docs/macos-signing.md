@@ -182,10 +182,30 @@ Also check the updater payload, because that is the path existing users take and
 the one nobody tests: unpack the `.app.tar.gz` from the release and run
 `stapler validate` on the app inside it.
 
-If the **DMG** specifically fails `stapler validate`, add a post-bundle step
-running `xcrun notarytool submit` and `xcrun stapler staple` against it. Tauri
-staples the `.app` reliably, the disk image less so, and an unstapled DMG needs
-a network round-trip to Apple the first time a user opens it.
+### The DMG needs notarizing separately
+
+Tauri notarizes and staples the `.app`, then builds the DMG around it and only
+*signs* the image. That is not enough. Measured on the 0.17.0 test build:
+
+```
+$ spctl -a -vvv -t open --context context:primary-signature cogniclone_0.17.0_aarch64.dmg
+rejected
+source=Unnotarized Developer ID
+```
+
+The app inside is accepted once extracted, but the disk image is the first
+thing a new user double-clicks, and it is rejected outright. `release.yml`
+therefore notarizes and staples the DMG in a step of its own after bundling,
+and replaces the release asset with the stapled copy.
+
+To check a release by hand, quarantine a copy the way a browser would and ask
+Gatekeeper what it thinks:
+
+```bash
+cp downloaded.dmg q.dmg
+xattr -w com.apple.quarantine "0083;$(printf %x $(date +%s));Safari;" q.dmg
+spctl -a -vvv -t open --context context:primary-signature q.dmg   # want: accepted
+```
 
 ## Local development
 

@@ -149,6 +149,30 @@ jobs:
           updaterJsonPreferNsis: true
           args: ${{ matrix.tauri-args }}
 
+      # Tauri notarizes and staples the .app, then builds the DMG around it and
+      # only *signs* that -- so a downloaded disk image is rejected outright
+      # ("source=Unnotarized Developer ID"), which is the very first thing a new
+      # user double-clicks. Verified on the 0.17.0 test build. Notarize and
+      # staple the image too, then replace the asset on the release.
+      - name: Notarize and staple the DMG
+        if: runner.os == 'macOS'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_API_KEY_PATH:-}" ]; then
+            echo "Build was not notarized; nothing to staple."
+            exit 0
+          fi
+          DMG=$(ls src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          xcrun notarytool submit "$DMG" --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          gh release upload "$GITHUB_REF_NAME" "$DMG" --clobber --repo "$GITHUB_REPOSITORY"
+
       - name: Deploy installer to server
         if: runner.os == 'Windows'
         shell: bash
