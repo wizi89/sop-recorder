@@ -19,8 +19,9 @@ user is asked to grant all three permissions again, with switches in System
 Settings that still read as "on" for a version that no longer exists.
 
 So: **do not re-issue the certificate unless it expires.** It is valid until
-**11 September 2031**. The `.p12`, its password, and the original private key
-are in Bitwarden; those three are what let you re-issue without that cost.
+**11 September 2031**. What protects you is `APPLE_SIGNING_PRIVATE_KEY` in
+Bitwarden Secrets Manager: Apple will re-issue a certificate against the same
+key, and the resulting code identity is identical, so nothing re-prompts.
 
 ## Repository secrets
 
@@ -42,6 +43,52 @@ The notarization credentials are an App Store Connect **Team** key, so they are
 not tied to anyone's Apple ID. Only the Account Holder can create one
 (App Store Connect -> Users and Access -> Integrations -> Team Keys), and the
 `.p8` is downloadable exactly once.
+
+## Where the values live
+
+GitHub secrets are write-only -- nothing can be read back out of them. The
+source of truth is the Bitwarden Secrets Manager project `Infrastruktur`,
+reachable with the `bws` wrappers set up in `docs/DEPLOYMENT.md` of the
+sop-sorcery repo:
+
+```bash
+bws-do secret list                       # keys, ids and values as JSON
+```
+
+| Secrets Manager key | Recreatable? |
+| --- | --- |
+| `APPLE_SIGNING_PRIVATE_KEY` | **No.** RSA key behind the certificate. |
+| `APPLE_API_KEY_P8` | **No.** Apple allows one download. |
+| `APPLE_CERTIFICATE` | Yes -- rebuild from the private key, below. |
+| `APPLE_CERTIFICATE_PASSWORD` | Yes -- chosen when the `.p12` is rebuilt. |
+| `APPLE_SIGNING_IDENTITY`, `APPLE_TEAM_ID`, `APPLE_API_KEY`, `APPLE_ISSUER_ID` | Yes -- readable in the Apple portals. |
+| `APPLE_ID`, `APPLE_PASSWORD` | Yes -- the app-specific-password fallback. |
+
+Note the key is `APPLE_ISSUER_ID`, but the variable Tauri reads is
+`APPLE_API_ISSUER`. `bws run` maps a key to a variable of the *same* name, so
+that one has to be renamed by hand for a locally notarized build.
+
+## Recovering everything from Bitwarden
+
+Verified end to end on 10 September 2026: the identity rebuilt this way had the
+same SHA-1 as the original (`77DE5BA9...`), which is what makes it the same code
+identity and costs nobody their permissions.
+
+You need the private key from Bitwarden and a certificate re-downloaded from
+developer.apple.com. **Both.** The Apple account going away is the one scenario
+this does not cover.
+
+```bash
+bws-do secret list | python3 -c "
+import json,sys
+d={s['key']:s['value'] for s in json.load(sys.stdin)}
+v=d['APPLE_SIGNING_PRIVATE_KEY']
+open('developerid.key','w').write(v if v.endswith(chr(10)) else v+chr(10))"
+```
+
+Download the certificate from developer.apple.com/account -> Certificates (an
+issued certificate stays downloadable for its whole life), then follow the
+`.p12` rebuild in the next section from step 2 onward.
 
 ### Fallback: app-specific password
 
@@ -107,8 +154,16 @@ security list-keychains -d user -s $ORIG
 security delete-keychain check.keychain-db
 ```
 
-Then update the secrets, put `developerid.p12`, `developerid.key` and the
-password in Bitwarden, and `rm -rf ~/Desktop/cogniclone-signing`.
+Then push the new values to Secrets Manager -- `--` is required or `bws` reads
+a leading `-----BEGIN` as a flag, and it prints the key material into the error
+when it does:
+
+```bash
+bws-do secret edit <id of APPLE_CERTIFICATE> --value "$(base64 -i developerid.p12 | tr -d '\n')"
+bws-do secret edit <id of APPLE_SIGNING_PRIVATE_KEY> --value "$(cat developerid.key)"
+```
+
+Mirror them to GitHub with `gh secret set`, then `rm -rf ~/Desktop/cogniclone-signing`.
 
 ## Verifying a release
 
