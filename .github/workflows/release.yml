@@ -66,12 +66,13 @@ jobs:
           }
           $config | ConvertTo-Json -Depth 4 | Out-File -FilePath src-tauri/tauri.signing.conf.json -Encoding utf8NoBOM
 
-      # Tauri can import a .p12 itself, but it resolves the identity with
-      # `security find-identity -v -p codesigning`, and `-v` means *valid*: a
-      # self-signed certificate is not valid until it is trusted for code
-      # signing. That import therefore succeeds ("1 identity imported") and the
-      # build then fails with "failed to resolve signing identity". Doing the
-      # keychain work here leaves somewhere to add that trust.
+      # Tauri can import a .p12 itself, but doing the keychain work here keeps
+      # the search list under our control, which is what actually decides
+      # whether the identity resolves. `security find-identity -v` means
+      # *valid*, and validity is a chain evaluation: the Developer ID leaf has
+      # to reach Apple's root through a keychain that is in the search list.
+      # Import alone therefore reports "1 identity imported" and the build
+      # still fails with "failed to resolve signing identity".
       - name: Import the macOS signing certificate
         if: runner.os == 'macOS'
         env:
@@ -96,18 +97,37 @@ jobs:
           # Without this codesign blocks on a UI prompt for the private key.
           security set-key-partition-list -S apple-tool:,apple: \
             -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          # login.keychain-db stays in the list: replacing it outright breaks
+          # unrelated lookups later in the build. The Developer ID chain needs
+          # nothing beyond this -- the G2 intermediate travels inside the .p12
+          # and Apple's root is already trusted on the runner. No
+          # add-trusted-cert: that was only ever needed to make a self-signed
+          # certificate count as valid, and forcing trust on a real Developer
+          # ID would hide a genuinely broken chain until users hit it.
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
 
-          # The trust that makes the identity "valid". System domain, because
-          # the user domain wants a UI confirmation that a runner cannot give.
-          openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -clcerts -nokeys \
-            -passin "pass:$APPLE_CERTIFICATE_PASSWORD" -out "$RUNNER_TEMP/cert.pem"
-          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
-            -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
-
-          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/cert.pem"
+          rm -f "$RUNNER_TEMP/cert.p12"
           echo "Identities now resolvable:"
           security find-identity -v -p codesigning "$KEYCHAIN"
+
+      # notarytool authenticates with an App Store Connect API key, which is
+      # owned by the team rather than by a person, so it survives someone
+      # leaving. The file has to exist on disk and be named for its key ID.
+      - name: Provide the notarization API key
+        if: runner.os == 'macOS'
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_API_KEY_P8}" ]; then
+            echo "No notarization key configured; the build is signed but not notarized."
+            exit 0
+          fi
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0.6
@@ -116,8 +136,11 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # A stable code identity across releases, so an update does not cost
-          # every user their permissions. See scripts/macos-release-cert.sh.
+          # every user their permissions. See docs/macos-signing.md.
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # Notarization. APPLE_API_KEY_PATH is exported by the step above.
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         with:
           tagName: v__VERSION__
           releaseName: "v__VERSION__"
@@ -125,6 +148,30 @@ jobs:
           prerelease: false
           updaterJsonPreferNsis: true
           args: ${{ matrix.tauri-args }}
+
+      # Tauri notarizes and staples the .app, then builds the DMG around it and
+      # only *signs* that -- so a downloaded disk image is rejected outright
+      # ("source=Unnotarized Developer ID"), which is the very first thing a new
+      # user double-clicks. Verified on the 0.17.0 test build. Notarize and
+      # staple the image too, then replace the asset on the release.
+      - name: Notarize and staple the DMG
+        if: runner.os == 'macOS'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_API_KEY_PATH:-}" ]; then
+            echo "Build was not notarized; nothing to staple."
+            exit 0
+          fi
+          DMG=$(ls src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          xcrun notarytool submit "$DMG" --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          gh release upload "$GITHUB_REF_NAME" "$DMG" --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Deploy installer to server
         if: runner.os == 'Windows'

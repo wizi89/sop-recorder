@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The macOS version is signed by cogniclone and approved by Apple. Until now macOS warned that the app came from an unidentified developer and had to be opened through a right-click the first time; it now opens by double-clicking like any other program, and the warning is gone.
+- One-off after installing this version: macOS asks again for permission to record the screen, to see your clicks and key presses, and to use the microphone, and asks once for your login password. Apple ties those permissions to who signed the program, and that has changed. Existing switches under Systemeinstellungen -> Datenschutz & Sicherheit may still show CogniClone as allowed from the previous version -- remove that entry with the minus button if the app keeps asking. Updates after this one leave your permissions alone.
+
 ## [0.17.0] - 2026-09-08
 
 ### Fixed
