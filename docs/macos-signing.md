@@ -14,14 +14,18 @@ way.
 macOS keys a privacy grant (Screen Recording, Accessibility, Microphone) and a
 Keychain ACL to the *code identity* of the program asking. With a real
 certificate that identity is the certificate, not the binary hash, so it
-survives every release. Sign a release with a different certificate and every
-user is asked to grant all three permissions again, with switches in System
-Settings that still read as "on" for a version that no longer exists.
+survives every release.
 
-So: **do not re-issue the certificate unless it expires.** It is valid until
-**11 September 2031**. What protects you is `APPLE_SIGNING_PRIVATE_KEY` in
-Bitwarden Secrets Manager: Apple will re-issue a certificate against the same
-key, and the resulting code identity is identical, so nothing re-prompts.
+What macOS actually records is the *designated requirement*, which for a
+Developer ID app is the bundle identifier plus
+`certificate leaf[subject.OU] = "GU8UU55YUW"` -- the **Team ID**, not the
+individual key. So a new key and a new certificate issued to the same team
+produce the same requirement and cost nobody their permissions. Signing under a
+different team would.
+
+The certificate in use is valid until **13 September 2031**. Re-issuing is
+cheap; keep `APPLE_SIGNING_PRIVATE_KEY` in Bitwarden anyway, because it is what
+lets you rebuild the `.p12` without going back to Apple at all.
 
 ## Repository secrets
 
@@ -57,8 +61,8 @@ bws-do secret list                       # keys, ids and values as JSON
 
 | Secrets Manager key | Recreatable? |
 | --- | --- |
-| `APPLE_SIGNING_PRIVATE_KEY` | **No.** RSA key behind the certificate. |
-| `APPLE_API_KEY_P8` | **No.** Apple allows one download. |
+| `APPLE_SIGNING_PRIVATE_KEY` | Yes -- generate a new one and re-issue. Stored **base64**. |
+| `APPLE_API_KEY_P8` | **No.** Apple allows one download. Stored **base64**. |
 | `APPLE_CERTIFICATE` | Yes -- rebuild from the private key, below. |
 | `APPLE_CERTIFICATE_PASSWORD` | Yes -- chosen when the `.p12` is rebuilt. |
 | `APPLE_SIGNING_IDENTITY`, `APPLE_TEAM_ID`, `APPLE_API_KEY`, `APPLE_ISSUER_ID` | Yes -- readable in the Apple portals. |
@@ -82,8 +86,8 @@ this does not cover.
 bws-do secret list | python3 -c "
 import json,sys
 d={s['key']:s['value'] for s in json.load(sys.stdin)}
-v=d['APPLE_SIGNING_PRIVATE_KEY']
-open('developerid.key','w').write(v if v.endswith(chr(10)) else v+chr(10))"
+import base64
+open('developerid.key','wb').write(base64.b64decode(d['APPLE_SIGNING_PRIVATE_KEY']))"
 ```
 
 Download the certificate from developer.apple.com/account -> Certificates (an
@@ -154,16 +158,30 @@ security list-keychains -d user -s $ORIG
 security delete-keychain check.keychain-db
 ```
 
-Then push the new values to Secrets Manager -- `--` is required or `bws` reads
-a leading `-----BEGIN` as a flag, and it prints the key material into the error
-when it does:
+Then push the new values to Secrets Manager. **Every PEM-shaped secret is
+stored base64.** That is not cosmetic: `bws` reads a leading `-----BEGIN` as a
+flag and prints the key material into the error when it does, which is how
+these values leaked once already.
 
 ```bash
-bws-do secret edit <id of APPLE_CERTIFICATE> --value "$(base64 -i developerid.p12 | tr -d '\n')"
-bws-do secret edit <id of APPLE_SIGNING_PRIVATE_KEY> --value "$(cat developerid.key)"
+bws-do secret edit <id of APPLE_CERTIFICATE> --value "$(base64 -i developerid.p12 | tr -d '
+')"
+bws-do secret edit <id of APPLE_SIGNING_PRIVATE_KEY> --value "$(base64 -i developerid.key | tr -d '
+')"
+bws-do secret edit <id of APPLE_API_KEY_P8> --value "$(base64 -i AuthKey_<key id>.p8 | tr -d '
+')"
 ```
 
-Mirror them to GitHub with `gh secret set`, then `rm -rf ~/Desktop/cogniclone-signing`.
+GitHub is the other way round: CI consumes `APPLE_API_KEY_P8` as raw PEM and
+writes it straight to disk, so mirror the *decoded* value there. `gh secret set`
+takes it on stdin, which sidesteps the flag problem entirely:
+
+```bash
+gh secret set APPLE_CERTIFICATE < cert.b64             # base64, same as Bitwarden
+gh secret set APPLE_API_KEY_P8 < AuthKey_<key id>.p8   # raw PEM, NOT base64
+```
+
+Then `rm -rf ~/cogniclone-signing`.
 
 ## Verifying a release
 
