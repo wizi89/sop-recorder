@@ -114,12 +114,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # Tauri can import a .p12 itself, but it resolves the identity with
-      # `security find-identity -v -p codesigning`, and `-v` means *valid*: a
-      # self-signed certificate is not valid until it is trusted for code
-      # signing. That import therefore succeeds ("1 identity imported") and the
-      # build then fails with "failed to resolve signing identity". Doing the
-      # keychain work here leaves somewhere to add that trust.
+      # Tauri can import a .p12 itself, but doing the keychain work here keeps
+      # the search list under our control, which is what actually decides
+      # whether the identity resolves. `security find-identity -v` means
+      # *valid*, and validity is a chain evaluation: the Developer ID leaf has
+      # to reach Apple's root through a keychain that is in the search list.
+      # Import alone therefore reports "1 identity imported" and the build
+      # still fails with "failed to resolve signing identity".
       - name: Import the macOS signing certificate
         if: runner.os == 'macOS'
         env:
@@ -144,16 +145,17 @@ jobs:
           # Without this codesign blocks on a UI prompt for the private key.
           security set-key-partition-list -S apple-tool:,apple: \
             -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          # login.keychain-db stays in the list: replacing it outright breaks
+          # unrelated lookups later in the build. The Developer ID chain needs
+          # nothing beyond this -- the G2 intermediate travels inside the .p12
+          # and Apple's root is already trusted on the runner. No
+          # add-trusted-cert: `-r trustRoot` says "this is a root", which a
+          # Developer ID leaf issued by Apple's CA is not, so the call fails
+          # outright with SecTrustSettingsSetTrustSettings. It was only ever
+          # there to make the self-signed stopgap count as valid.
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
 
-          # The trust that makes the identity "valid". System domain, because
-          # the user domain wants a UI confirmation that a runner cannot give.
-          openssl pkcs12 -in "$RUNNER_TEMP/cert.p12" -clcerts -nokeys \
-            -passin "pass:$APPLE_CERTIFICATE_PASSWORD" -out "$RUNNER_TEMP/cert.pem"
-          sudo security add-trusted-cert -d -r trustRoot -p codeSign \
-            -k /Library/Keychains/System.keychain "$RUNNER_TEMP/cert.pem"
-
-          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/cert.pem"
+          rm -f "$RUNNER_TEMP/cert.p12"
           echo "Identities now resolvable:"
           security find-identity -v -p codesigning "$KEYCHAIN"
 
