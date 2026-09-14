@@ -1,13 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
-import { check, type Update } from "@tauri-apps/plugin-updater";
 import { invoke } from "@tauri-apps/api/core";
 
 type UpdaterStatus = "idle" | "checking" | "available" | "downloading" | "error";
 
+// The check and the install go through Rust rather than the plugin's own JS
+// `check()`. That one resolves its endpoint from tauri.conf.json, fixed at
+// build time, so it cannot follow the user's channel choice -- CheckOptions
+// carries headers, timeout, proxy and target, but no endpoints.
 export function useUpdater() {
   const [status, setStatus] = useState<UpdaterStatus>("idle");
   const [version, setVersion] = useState<string | null>(null);
-  const [update, setUpdate] = useState<Update | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   const dismiss = useCallback(() => setDismissed(true), []);
@@ -24,11 +26,10 @@ export function useUpdater() {
           setStatus("idle");
           return;
         }
-        const u = await check();
+        const available = await invoke<string | null>("check_for_update");
         if (cancelled) return;
-        if (u) {
-          setUpdate(u);
-          setVersion(u.version);
+        if (available) {
+          setVersion(available);
           setStatus("available");
         } else {
           setStatus("idle");
@@ -44,15 +45,15 @@ export function useUpdater() {
   }, []);
 
   const install = useCallback(async () => {
-    if (!update) return;
+    if (!version) return;
     setStatus("downloading");
     try {
       // On Windows NSIS, this closes the app, installs, and relaunches automatically
-      await update.downloadAndInstall();
+      await invoke("install_update");
     } catch {
       setStatus("error");
     }
-  }, [update]);
+  }, [version]);
 
   return { status, version, install, dismissed, dismiss };
 }

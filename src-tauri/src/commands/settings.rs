@@ -22,6 +22,11 @@ pub struct AppSettings {
     /// rather than as a mode the user never chose.
     #[serde(default = "default_error_reports")]
     pub error_reports: String,
+    /// Opt in to the beta channel. Off means `releases/latest`, which GitHub
+    /// keeps free of prereleases; on means the rolling `beta` release. Read by
+    /// `commands::updater`, which is the only thing that can vary the endpoint.
+    #[serde(default)]
+    pub beta_updates: bool,
 }
 
 /// The value `logs_dir` should be corrected to, or `None` when the stored one
@@ -90,6 +95,7 @@ impl AppSettings {
         store.set("pipeline_version", serde_json::json!(defaults.pipeline_version));
         store.set("generation_model", serde_json::json!(defaults.generation_model));
         store.set("error_reports", serde_json::json!(defaults.error_reports));
+        store.set("beta_updates", serde_json::json!(defaults.beta_updates));
     }
 
     pub fn defaults(app: &tauri::AppHandle) -> Self {
@@ -121,6 +127,7 @@ impl AppSettings {
             pipeline_version: 1,
             generation_model: default_generation_model(),
             error_reports: default_error_reports(),
+            beta_updates: false,
         }
     }
 }
@@ -190,6 +197,11 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         .filter(|mode| matches!(mode.as_str(), "ask" | "always" | "never"))
         .unwrap_or_else(default_error_reports);
 
+    let beta_updates = store
+        .get("beta_updates")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     Ok(AppSettings {
         output_dir,
         logs_dir,
@@ -199,6 +211,7 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         pipeline_version,
         generation_model,
         error_reports,
+        beta_updates,
     })
 }
 
@@ -226,6 +239,7 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     store.set("skip_pii_check", serde_json::json!(settings.skip_pii_check));
     store.set("pipeline_version", serde_json::json!(settings.pipeline_version));
     store.set("generation_model", serde_json::json!(settings.generation_model));
+    store.set("beta_updates", serde_json::json!(settings.beta_updates));
     if matches!(settings.error_reports.as_str(), "ask" | "always" | "never") {
         store.set("error_reports", serde_json::json!(settings.error_reports));
     }

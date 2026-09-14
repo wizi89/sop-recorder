@@ -49,6 +49,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     pipeline_version: 1,
     generation_model: "azure/gpt-4.1",
     error_reports: "ask",
+    beta_updates: false,
   });
   // Until the stored settings arrive, the form shows defaults the user must not
   // be able to act on: the load used to replace the whole form state when it
@@ -206,6 +207,24 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             <span
               className="switch-thumb"
               style={{ left: settings.skip_pii_check ? 21 : 3 }}
+            />
+          </button>
+        </div>
+
+        {/* Beta channel */}
+        <div className="flex items-center justify-between">
+          <label className="label-sm">{t("settings.beta_updates")}</label>
+          <button
+            className="switch-track"
+            data-checked={settings.beta_updates}
+            disabled={!loaded}
+            onClick={() =>
+              setSettings((s) => ({ ...s, beta_updates: !s.beta_updates }))
+            }
+          >
+            <span
+              className="switch-thumb"
+              style={{ left: settings.beta_updates ? 21 : 3 }}
             />
           </button>
         </div>
