@@ -1,0 +1,69 @@
+name: Import the macOS signing certificate
+description: >-
+  Load the Developer ID certificate into a throwaway keychain and put that
+  keychain in the search list, so codesign can resolve the identity.
+
+# This lived twice, once in ci.yml and once in release.yml. The copies drifted:
+# #5 corrected release.yml for the real Developer ID and left ci.yml asserting
+# the certificate was a self-signed root, which broke every macOS build on main
+# and could not fail on a pull request, because the build job is skipped there.
+# One copy, so the next correction cannot reach only half the builds.
+
+inputs:
+  certificate:
+    description: >-
+      Base64-encoded .p12 holding the Developer ID leaf and the G2
+      intermediate. Empty is not an error: the build falls back to the ad-hoc
+      identity in tauri.conf.json, so forks still build.
+    required: true
+  password:
+    description: Export password for that .p12.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Tauri can import a .p12 itself, but doing the keychain work here keeps
+    # the search list under our control, which is what actually decides whether
+    # the identity resolves. `security find-identity -v` means *valid*, and
+    # validity is a chain evaluation: the Developer ID leaf has to reach
+    # Apple's root through a keychain that is in the search list. Import alone
+    # therefore reports "1 identity imported" and the build still fails with
+    # "failed to resolve signing identity".
+    - shell: bash
+      env:
+        APPLE_CERTIFICATE: ${{ inputs.certificate }}
+        APPLE_CERTIFICATE_PASSWORD: ${{ inputs.password }}
+      run: |
+        set -euo pipefail
+        if [ -z "${APPLE_CERTIFICATE}" ]; then
+          echo "No signing certificate configured; the build stays ad-hoc."
+          exit 0
+        fi
+
+        KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+        KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+        echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+        security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+          -P "$APPLE_CERTIFICATE_PASSWORD" -A -T /usr/bin/codesign
+        # Without this codesign blocks on a UI prompt for the private key.
+        security set-key-partition-list -S apple-tool:,apple: \
+          -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+
+        # login.keychain-db stays in the list: replacing it outright breaks
+        # unrelated lookups later in the build. The Developer ID chain needs
+        # nothing beyond this -- the G2 intermediate travels inside the .p12
+        # and Apple's root is already trusted on the runner. No
+        # add-trusted-cert: `-r trustRoot` says "this is a root", which a
+        # Developer ID leaf issued by Apple's CA is not, so the call fails
+        # outright with SecTrustSettingsSetTrustSettings. It was only ever
+        # there to make the self-signed stopgap count as valid.
+        security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+        rm -f "$RUNNER_TEMP/cert.p12"
+        echo "Identities now resolvable:"
+        security find-identity -v -p codesigning "$KEYCHAIN"

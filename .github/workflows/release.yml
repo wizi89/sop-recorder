@@ -66,49 +66,12 @@ jobs:
           }
           $config | ConvertTo-Json -Depth 4 | Out-File -FilePath src-tauri/tauri.signing.conf.json -Encoding utf8NoBOM
 
-      # Tauri can import a .p12 itself, but doing the keychain work here keeps
-      # the search list under our control, which is what actually decides
-      # whether the identity resolves. `security find-identity -v` means
-      # *valid*, and validity is a chain evaluation: the Developer ID leaf has
-      # to reach Apple's root through a keychain that is in the search list.
-      # Import alone therefore reports "1 identity imported" and the build
-      # still fails with "failed to resolve signing identity".
       - name: Import the macOS signing certificate
         if: runner.os == 'macOS'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if [ -z "${APPLE_CERTIFICATE}" ]; then
-            echo "No signing certificate configured; the build stays ad-hoc."
-            exit 0
-          fi
-
-          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
-            -P "$APPLE_CERTIFICATE_PASSWORD" -A -T /usr/bin/codesign
-          # Without this codesign blocks on a UI prompt for the private key.
-          security set-key-partition-list -S apple-tool:,apple: \
-            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
-          # login.keychain-db stays in the list: replacing it outright breaks
-          # unrelated lookups later in the build. The Developer ID chain needs
-          # nothing beyond this -- the G2 intermediate travels inside the .p12
-          # and Apple's root is already trusted on the runner. No
-          # add-trusted-cert: that was only ever needed to make a self-signed
-          # certificate count as valid, and forcing trust on a real Developer
-          # ID would hide a genuinely broken chain until users hit it.
-          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
-
-          rm -f "$RUNNER_TEMP/cert.p12"
-          echo "Identities now resolvable:"
-          security find-identity -v -p codesigning "$KEYCHAIN"
+        uses: ./.github/actions/import-macos-signing-cert
+        with:
+          certificate: ${{ secrets.APPLE_CERTIFICATE }}
+          password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
       # notarytool authenticates with an App Store Connect API key, which is
       # owned by the team rather than by a person, so it survives someone
