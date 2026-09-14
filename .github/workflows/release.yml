@@ -37,17 +37,28 @@ jobs:
         if: runner.os == 'macOS'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
-      - name: Cache Rust
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
+      # No rust-cache here. A cache saved on refs/tags/vX is readable by that
+      # tag alone, so a release restored nothing and still paid a minute to
+      # save. Measured on v0.17.0: 2s restore (miss), 1m save.
 
       - name: Install frontend dependencies
         run: npm ci
 
+      # The prebuilt binary, not `cargo install`, which compiled it from
+      # source on every release: 3m44s on v0.17.0. ~/.cargo/bin is already on
+      # PATH, and the signCommand below invokes the tool by bare name.
+      #
+      # Pinned to 0.10.0, the last release under this name: upstream renamed
+      # the crate to artifact-signing-cli at 0.11.0, following Azure's rename
+      # of the service. The crates.io name we install today is frozen at
+      # 0.10.0, so it takes no more updates -- moving to the new name is a
+      # deliberate step, and the flags have to be re-checked when we take it.
       - name: Install trusted-signing-cli
         if: runner.os == 'Windows'
-        run: cargo install trusted-signing-cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o ~/.cargo/bin/trusted-signing-cli.exe             https://github.com/Levminer/trusted-signing-cli/releases/download/0.10.0/trusted-signing-cli.exe
 
       - name: Generate signing config
         if: runner.os == 'Windows'
@@ -107,8 +118,18 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: "v__VERSION__"
-          releaseDraft: false
-          prerelease: false
+          # Draft until both matrix legs have finished. Each leg uploads its
+          # own assets, so a release published per-leg is visible -- and
+          # reachable by the updater -- while the other platform is still
+          # building, or after it has failed. A draft is excluded from
+          # `releases/latest` exactly as a prerelease is, so the updater keeps
+          # serving the last good version until the publish job flips it.
+          releaseDraft: true
+          # A semver prerelease tag carries a hyphen: v0.19.0-rc.1. GitHub
+          # keeps prereleases out of `releases/latest`, which is the stable
+          # updater endpoint, so a tester's build can never reach a user who
+          # did not opt in.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           updaterJsonPreferNsis: true
           args: ${{ matrix.tauri-args }}
 
@@ -148,8 +169,42 @@ jobs:
             "$EXE_FILE" \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/
 
-  notify:
+  # Both platforms are done and uploaded. Make the release visible, then move
+  # the beta channel onto it.
+  publish:
     needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release edit "$GITHUB_REF_NAME" --draft=false             --repo "$GITHUB_REPOSITORY"
+
+      # The beta channel is one rolling release whose latest.json is replaced
+      # on every tag, stable ones included. Carrying only prereleases would
+      # strand a tester who took 0.19.0-rc.1: 0.19.0 sorts higher under semver,
+      # so the stable build that follows has to appear on this channel too or
+      # the tester is never offered anything again.
+      #
+      # Published after the release above, so a failure here costs beta users a
+      # delay and stable users nothing.
+      - name: Point the beta channel at this build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release download "$GITHUB_REF_NAME" --pattern latest.json             --dir . --clobber --repo "$GITHUB_REPOSITORY"
+          # --prerelease is load-bearing, not cosmetic: it keeps this release
+          # out of `releases/latest`, which is the stable updater endpoint.
+          # Without it the beta channel would eventually become what every
+          # stable user downloads.
+          gh release view beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||             gh release create beta --prerelease --title "Beta channel"               --notes "Rolling pointer for the in-app beta channel. The latest.json here names the newest build, stable or prerelease. Not a download: install from a versioned release."               --repo "$GITHUB_REPOSITORY"
+          gh release upload beta latest.json --clobber             --repo "$GITHUB_REPOSITORY"
+
+  notify:
+    needs: publish
     runs-on: ubuntu-latest
 
     steps:

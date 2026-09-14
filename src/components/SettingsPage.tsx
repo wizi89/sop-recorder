@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getVersion } from "@tauri-apps/api/app";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "../hooks/useTranslation";
@@ -49,6 +50,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     pipeline_version: 1,
     generation_model: "azure/gpt-4.1",
     error_reports: "ask",
+    beta_updates: false,
   });
   // Until the stored settings arrive, the form shows defaults the user must not
   // be able to act on: the load used to replace the whole form state when it
@@ -64,6 +66,12 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
   // who decided -- a disabled control with no explanation reads as a bug.
   const [errorReportsForcedOff, setErrorReportsForcedOff] = useState(false);
   const [advancedSettings, setAdvancedSettings] = useState(false);
+  // The running version, only so the beta note can name it. A prerelease
+  // carries a hyphen: 0.19.0-rc.1.
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => {});
+  }, []);
   const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(
     FALLBACK_GENERATION_SETTINGS,
   );
@@ -209,6 +217,41 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             />
           </button>
         </div>
+
+        {/* Beta channel */}
+        <div className="flex items-center justify-between">
+          <label className="label-sm">{t("settings.beta_updates")}</label>
+          <button
+            className="switch-track"
+            data-checked={settings.beta_updates}
+            disabled={!loaded}
+            onClick={() =>
+              setSettings((s) => ({ ...s, beta_updates: !s.beta_updates }))
+            }
+          >
+            <span
+              className="switch-thumb"
+              style={{ left: settings.beta_updates ? 21 : 3 }}
+            />
+          </button>
+        </div>
+
+        {/* Switching the channel off does not move the installation back down:
+            the updater only ever offers a higher version. Bounded, though --
+            an rc is a semver prerelease of the next stable, so 0.19.0 outranks
+            0.19.0-rc.1 and picks the user up. Said out loud because otherwise
+            the wait reads as a broken updater. */}
+        {!settings.beta_updates && version?.includes("-") && (
+          <p
+            className="text-on-surface-variant leading-snug"
+            style={{ fontSize: "0.625rem", marginTop: "-0.75rem" }}
+          >
+            {t("settings.beta_updates_leaving", {
+              version,
+              stable: version.split("-")[0],
+            })}
+          </p>
+        )}
 
         {/* Pipeline version (advanced orgs only) */}
         {advancedSettings && (

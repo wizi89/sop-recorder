@@ -19,6 +19,8 @@ export interface AppSettings {
   pipeline_version: number;
   generation_model: string;
   error_reports: ErrorReportMode;
+  /** Opt in to the beta channel instead of stable releases. */
+  beta_updates: boolean;
 }
 
 export async function login(

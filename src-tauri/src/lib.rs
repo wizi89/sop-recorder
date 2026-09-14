@@ -172,6 +172,8 @@ pub fn run() {
             settings::get_webapp_url,
             settings::is_updater_enabled,
             settings::are_error_reports_forced_off,
+            commands::updater::check_for_update,
+            commands::updater::install_update,
             commands::error_reports::list_error_reports,
             commands::error_reports::read_error_report,
             commands::error_reports::create_error_report,

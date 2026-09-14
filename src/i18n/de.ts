@@ -89,6 +89,9 @@ const de = {
   "settings.title": "Einstellungen",
   "settings.hide_screenshots": "In Screenshots ausblenden",
   "settings.skip_pii_check": "PII-Prüfung überspringen",
+  "settings.beta_updates": "Beta-Versionen erhalten",
+  "settings.beta_updates_leaving":
+    "Sie bleiben auf {version}, bis {stable} erscheint – ein Update setzt immer eine höhere Version voraus.",
   "settings.reveal": "Anzeigen",
   "settings.loading": "Wird geladen...",
   "settings.save_failed":
