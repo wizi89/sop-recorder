@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-14
+
 ### Changed
 
 - The macOS version is signed by cogniclone and approved by Apple. Until now macOS warned that the app came from an unidentified developer and had to be opened through a right-click the first time; it now opens by double-clicking like any other program, and the warning is gone.
