@@ -37,17 +37,28 @@ jobs:
         if: runner.os == 'macOS'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
-      - name: Cache Rust
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
+      # No rust-cache here. A cache saved on refs/tags/vX is readable by that
+      # tag alone, so a release restored nothing and still paid a minute to
+      # save. Measured on v0.17.0: 2s restore (miss), 1m save.
 
       - name: Install frontend dependencies
         run: npm ci
 
+      # The prebuilt binary, not `cargo install`, which compiled it from
+      # source on every release: 3m44s on v0.17.0. ~/.cargo/bin is already on
+      # PATH, and the signCommand below invokes the tool by bare name.
+      #
+      # Pinned to 0.10.0, the last release under this name: upstream renamed
+      # the crate to artifact-signing-cli at 0.11.0, following Azure's rename
+      # of the service. The crates.io name we install today is frozen at
+      # 0.10.0, so it takes no more updates -- moving to the new name is a
+      # deliberate step, and the flags have to be re-checked when we take it.
       - name: Install trusted-signing-cli
         if: runner.os == 'Windows'
-        run: cargo install trusted-signing-cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o ~/.cargo/bin/trusted-signing-cli.exe             https://github.com/Levminer/trusted-signing-cli/releases/download/0.10.0/trusted-signing-cli.exe
 
       - name: Generate signing config
         if: runner.os == 'Windows'
