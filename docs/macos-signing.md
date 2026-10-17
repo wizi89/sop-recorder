@@ -52,8 +52,8 @@ not tied to anyone's Apple ID. Only the Account Holder can create one
 
 GitHub secrets are write-only -- nothing can be read back out of them. The
 source of truth is the Bitwarden Secrets Manager project `Infrastruktur`,
-reachable with the `bws` wrappers set up in `docs/DEPLOYMENT.md` of the
-sop-sorcery repo:
+reachable with the `bws` wrappers described in the backend's deployment
+documentation:
 
 ```bash
 bws-do secret list                       # keys, ids and values as JSON

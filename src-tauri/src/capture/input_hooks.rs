@@ -167,6 +167,10 @@ pub fn set_excluded_region(region: Option<(i32, i32, i32, i32)>) {
 ///
 /// Split out from the platform hook so it can be tested without a window, a
 /// cursor, or a screen.
+///
+/// Its only non-test caller is the macOS hook, so on every other platform it
+/// is exercised by the tests alone.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn point_is_in_region(point: (i32, i32), region: Option<(i32, i32, i32, i32)>) -> bool {
     let Some((x, y, w, h)) = region else {
         return false;

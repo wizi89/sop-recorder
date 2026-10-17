@@ -1,8 +1,8 @@
 //! Error reports: what the recorder collects when something fails, and the
 //! on-disk queue those reports wait in until the user has decided.
 //!
-//! Design references are to `openspec/changes/recorder-error-reports/design.md`
-//! in the `sop-sorcery` repository.
+//! Design references are to the backend's
+//! `openspec/changes/recorder-error-reports/design.md`.
 //!
 //! - D3 fixes the report's shape and the fields that may never appear in one.
 //!   The type below is that shape; the fields it lacks are the enforcement.

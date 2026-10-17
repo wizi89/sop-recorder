@@ -4,8 +4,8 @@ See `proposal.md` -- Why. This section records only the implementation facts the
 
 - **Recorder login today.** `LoginScreen.tsx` collects email and password and calls `useAuth.login`, which invokes the `login` command (`commands/auth.rs:41`). That calls `net_auth::sign_in` (`network/auth.rs:78`), which POSTs `{email, password}` to `{api_base}/auth/signin`, saves `refresh-token` and `email` to the OS keyring, and returns an `AuthSession { access_token, email }`. The access token lives in `SessionCache` in memory; the refresh token in the keyring under `cogniclone` (release) or `cogniclone-dev` (debug).
 - **Session restore.** `refresh_session` (`network/auth.rs:118`) POSTs the stored refresh token to `/auth/refresh` and re-saves whatever comes back; when the server rejects the token it clears the keyring entry and reports no session, and `useAuth` -- which calls it once on mount -- shows the login screen. It emits nothing. The `auth:session_expired` event that `useAuth` also listens for is emitted elsewhere, on a 401 during generation (`commands/generate.rs:303`, `:327`) and from `SettingsPage.tsx:138`; both paths end at the same login screen.
-- **The API is a Supabase proxy.** `/auth/signin` and `/auth/refresh` (`9_sop-sorcery/server/main.py:310` and `:346`) forward to Supabase's `/auth/v1/token` and return `{access_token, refresh_token, email}`. `/auth/signin` is rate-limited per IP by an in-process deque (`main.py:254`) -- a precedent for short-lived in-process auth state on this server.
-- **The web app already authenticates.** `9_sop-sorcery/web/src/app/login/page.tsx` signs in with `supabase.auth.signInWithPassword` in the browser and redirects to `/dashboard`. A user with a live cookie session is already authenticated when the recorder sends them there.
+- **The API is a Supabase proxy.** `/auth/signin` and `/auth/refresh` (the backend's `server/main.py:310` and `:346`) forward to Supabase's `/auth/v1/token` and return `{access_token, refresh_token, email}`. `/auth/signin` is rate-limited per IP by an in-process deque (`main.py:254`) -- a precedent for short-lived in-process auth state on this server.
+- **The web app already authenticates.** Its `src/app/login/page.tsx` signs in with `supabase.auth.signInWithPassword` in the browser and redirects to `/dashboard`. A user with a live cookie session is already authenticated when the recorder sends them there.
 - **The recorder already opens browser URLs.** `LoginScreen.tsx:69` and `:85` use `tauri-plugin-opener` with `getWebappUrl()` for "forgot password" and "create account". Nothing new is needed to launch the browser.
 - **Constraints.** The app ships Windows (NSIS) and macOS (universal). `url = "2"` and `uuid` (v4) are already dependencies. The Tauri capability set (`src-tauri/capabilities/default.json`) already grants `opener:default`.
 
@@ -153,7 +153,7 @@ Behind a small "sign in without a browser" link, calling the existing `login` co
 
 ## Server contract
 
-**`9_sop-sorcery`, change `desktop-browser-login`, is authoritative for everything server-side** -- the authorize route, how a code is minted and stored, and what session the exchange returns. This section states only the surface the recorder itself touches, and must not be read as a specification of the other two. Where the two documents disagree, that one wins; a contradiction between them is a defect in this one.
+**The backend change `desktop-browser-login` is authoritative for everything server-side** -- the authorize route, how a code is minted and stored, and what session the exchange returns. This section states only the surface the recorder itself touches, and must not be read as a specification of the other two. Where the two documents disagree, that one wins; a contradiction between them is a defect in this one.
 
 **`GET {webapp}/desktop/authorize?redirect_uri&state&code_challenge&code_challenge_method=S256`** -- what the recorder opens. It validates `redirect_uri`, treats `state` as opaque and echoes it byte-for-byte, obtains a code, and `302`s to `{redirect_uri}?code={code}&state={state}`. **When the user declines, or the code cannot be minted, it `302`s to `{redirect_uri}?error=<access_denied|server_error>&state={state}` instead** -- the recorder is waiting on a screen with nothing else to offer, and the only alternative is for it to spin out the full five minutes with no explanation. This is safe because the web app validates `redirect_uri` against its allowlist on **every** request that issues a redirect, the confirmation submission included (that change owns the check), and it is why `parse_callback` handles an `error` parameter (task 2.1) and why `denied` is one of the outcome tokens. A decline with no redirect at all would make both dead code. Whether the user is asked for credentials, and whether they are asked to confirm the sign-in, are decided by that change, not this one; the recorder's behaviour is identical either way.
 
@@ -180,7 +180,7 @@ Behind a small "sign in without a browser" link, calling the existing `login` co
 
 ## Migration Plan
 
-1. Web app and API change lands and deploys to staging (`9_sop-sorcery`, separate change).
+1. Web app and API change lands and deploys to staging (a separate change, server-side).
 2. Recorder change lands behind no flag -- the login screen simply has a button and a fallback link.
 3. Verified against staging (tasks 7.1-7.2), then the API deploys to production before the recorder is tagged.
 4. Existing installs are unaffected: a stored refresh token means the login screen is never reached.
@@ -188,5 +188,5 @@ Behind a small "sign in without a browser" link, calling the existing `login` co
 
 ## Open Questions
 
-- ~~Should `/desktop/authorize` confirm the sign-in with the user before redirecting?~~ **Decided, and in scope** in `9_sop-sorcery`/`desktop-browser-login`: every authorization is confirmed, including when the user is already signed in, because without it any local process can obtain a session with no user interaction at all. The recorder is unaffected either way, but this question must not be reopened from here -- dropping the prompt reinstates a silent local-capture path.
+- ~~Should `/desktop/authorize` confirm the sign-in with the user before redirecting?~~ **Decided, and in scope** in the backend's `desktop-browser-login`: every authorization is confirmed, including when the user is already signed in, because without it any local process can obtain a session with no user interaction at all. The recorder is unaffected either way, but this question must not be reopened from here -- dropping the prompt reinstates a silent local-capture path.
 - Whether the fallback link should be hidden behind a keyboard chord rather than shown to everyone. Left visible for one release, on the grounds that a user who needs it is already locked out and in no state to discover a chord.

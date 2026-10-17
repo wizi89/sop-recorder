@@ -73,13 +73,11 @@ pub fn run() {
     // calls `targets()`, which replaces them, and so has to list it again.
     log_builder = log_builder.target(error_reports::ring_log_target());
     if cfg!(debug_assertions) {
-        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let log_dir = manifest_dir
-            .parent() // sop-recorder
-            .and_then(|p| p.parent()) // parent of both repos
-            .map(|p| p.join("9_sop-sorcery").join(".tmp").join("logs"));
+        // ponytail: an env var, not a hardcoded sibling directory -- the path
+        // is one developer's layout, and the build should not carry it.
+        let log_dir = std::env::var_os("COGNICLONE_DEV_LOG_DIR").map(std::path::PathBuf::from);
         if let Some(dir) = log_dir {
-            if dir.parent().map_or(false, |p| p.exists()) {
+            if dir.parent().is_some_and(|p| p.exists()) {
                 let _ = std::fs::create_dir_all(&dir);
                 log_builder = log_builder
                     .targets([

@@ -22,7 +22,7 @@ Non-goals:
 - **Shipping the custom URL scheme.** Deferred deliberately, with the seam documented. It becomes worth doing when the product wants `cogniclone://` links on the web for their own sake (open a recording, join a workspace); login then moves across for the cost of one function body.
 - **Third-party identity providers.** Google/Microsoft sign-in is a Supabase configuration plus web app work, and the browser handoff is its precondition, not its implementation. Out of scope here.
 - **Changing session storage, refresh, or expiry.** `keyring`, the `SERVICE_NAME` split between dev and release builds, and the refresh path are untouched.
-- **The web app and API changes themselves.** They live in `9_sop-sorcery` and need their own OpenSpec change; that change, `desktop-browser-login`, is authoritative for the server side; design.md's "Server contract" section states only the surface the recorder touches, and this change depends on that one shipping first.
+- **The web app and API changes themselves.** They are server-side and need their own OpenSpec change; that change, `desktop-browser-login`, is authoritative for the server side; design.md's "Server contract" section states only the surface the recorder touches, and this change depends on that one shipping first.
 
 ## Capabilities
 
