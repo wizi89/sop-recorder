@@ -13,26 +13,72 @@ const APP_VERSION = tauriConf.version;
 describe("LoginScreen", () => {
   const defaults = {
     onLogin: vi.fn(),
+    onLoginViaBrowser: vi.fn(),
+    onCancelBrowserLogin: vi.fn(),
+    awaitingBrowser: false,
+    browserUnsupported: false,
     loading: false,
     error: null,
     onOpenSettings: vi.fn(),
     version: APP_VERSION,
   };
 
-  it("renders email and password fields", () => {
+  it("leads with the browser button and no password field", () => {
     render(<LoginScreen {...defaults} />);
-    expect(screen.getByLabelText(/e-mail/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/passwort/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /mit browser anmelden/i }),
+    ).toBeInTheDocument();
+    // The recorder no longer asks for a password up front: a Tauri window is a
+    // webview, so no password manager can fill one here.
+    expect(screen.queryByLabelText(/passwort/i)).not.toBeInTheDocument();
   });
 
-  it("renders sign-in button", () => {
-    render(<LoginScreen {...defaults} />);
-    expect(screen.getByRole("button", { name: /anmelden/i })).toBeInTheDocument();
+  it("invokes the browser sign-in", async () => {
+    const onLoginViaBrowser = vi.fn().mockResolvedValue(undefined);
+    render(<LoginScreen {...defaults} onLoginViaBrowser={onLoginViaBrowser} />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /mit browser anmelden/i }));
+
+    expect(onLoginViaBrowser).toHaveBeenCalled();
   });
 
-  it("disables button when loading", () => {
+  it("disables the browser button while loading", () => {
     render(<LoginScreen {...defaults} loading={true} />);
     expect(screen.getByRole("button", { name: /anmeldung/i })).toBeDisabled();
+  });
+
+  it("renders the waiting state while the browser is open", () => {
+    render(<LoginScreen {...defaults} awaitingBrowser={true} />);
+    expect(screen.getByText(/warte auf die anmeldung im browser/i)).toBeInTheDocument();
+    expect(screen.getByText(/der browser wurde geöffnet/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /abbrechen/i })).toBeInTheDocument();
+  });
+
+  it("cancel in the waiting state invokes the command", async () => {
+    const onCancelBrowserLogin = vi.fn().mockResolvedValue(undefined);
+    render(
+      <LoginScreen
+        {...defaults}
+        awaitingBrowser={true}
+        onCancelBrowserLogin={onCancelBrowserLogin}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /abbrechen/i }));
+
+    expect(onCancelBrowserLogin).toHaveBeenCalled();
+  });
+
+  it("shows a timeout message", () => {
+    render(
+      <LoginScreen
+        {...defaults}
+        error="Die Anmeldung im Browser wurde nicht abgeschlossen. Du kannst es erneut versuchen."
+      />,
+    );
+    expect(screen.getByText(/nicht abgeschlossen/i)).toBeInTheDocument();
   });
 
   it("shows error message", () => {
@@ -40,20 +86,61 @@ describe("LoginScreen", () => {
     expect(screen.getByText("Invalid credentials")).toBeInTheDocument();
   });
 
-  it("calls onLogin with email and password", async () => {
+  it("an unsupported server shows its own message and opens the fallback", () => {
+    // The one login failure whose answer is the fallback rather than a retry:
+    // the user cannot get in by trying again.
+    render(
+      <LoginScreen
+        {...defaults}
+        browserUnsupported={true}
+        error="Dieser Server unterstützt die Anmeldung über den Browser noch nicht. Melde dich bitte ohne Browser an."
+      />,
+    );
+    expect(screen.getByText(/unterstützt die anmeldung über den browser noch nicht/i))
+      .toBeInTheDocument();
+    // The form is already open: no extra click needed to get in.
+    expect(screen.getByLabelText(/e-mail/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/passwort/i)).toBeInTheDocument();
+  });
+
+  it("the fallback form still submits email and password", async () => {
     const onLogin = vi.fn().mockResolvedValue(undefined);
     render(<LoginScreen {...defaults} onLogin={onLogin} />);
 
     const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /ohne browser anmelden/i }));
+
     await user.type(screen.getByLabelText(/e-mail/i), "test@test.com");
     await user.type(screen.getByLabelText(/passwort/i), "password123");
-    await user.click(screen.getByRole("button", { name: /anmelden/i }));
+    await user.click(screen.getByRole("button", { name: /^anmelden$/i }));
 
     expect(onLogin).toHaveBeenCalledWith("test@test.com", "password123");
   });
 
+  it("the fallback can be closed again", async () => {
+    render(<LoginScreen {...defaults} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /ohne browser anmelden/i }));
+    expect(screen.getByLabelText(/passwort/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /stattdessen mit browser/i }));
+    expect(screen.queryByLabelText(/passwort/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the forgot-password and create-account links", () => {
+    render(<LoginScreen {...defaults} />);
+    expect(screen.getByRole("button", { name: /passwort vergessen/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /konto erstellen/i })).toBeInTheDocument();
+  });
+
   it("shows version number", () => {
     render(<LoginScreen {...defaults} />);
+    expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument();
+  });
+
+  it("shows the version in the waiting state too", () => {
+    render(<LoginScreen {...defaults} awaitingBrowser={true} />);
     expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument();
   });
 });

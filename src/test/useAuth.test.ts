@@ -167,4 +167,164 @@ describe("useAuth", () => {
     expect(result.current.loggedIn).toBe(true);
     expect(result.current.error).toBeNull();
   });
+
+  // -- Browser sign-in -------------------------------------------------------
+
+  it("login_via_browser signs the user in", async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "refresh_session") {
+        return Promise.resolve({ logged_in: false, email: null });
+      }
+      if (cmd === "login_via_browser") {
+        return Promise.resolve({ logged_in: true, email: "user@test.com" });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const { result } = renderHook(() => useAuth());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    await act(async () => {
+      await result.current.loginViaBrowser();
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("login_via_browser");
+    expect(result.current.loggedIn).toBe(true);
+    expect(result.current.email).toBe("user@test.com");
+    expect(result.current.awaitingBrowser).toBe(false);
+  });
+
+  it("marks the attempt as awaiting the browser while it runs", async () => {
+    let release: (value: unknown) => void = () => {};
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "refresh_session") {
+        return Promise.resolve({ logged_in: false, email: null });
+      }
+      if (cmd === "login_via_browser") {
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const { result } = renderHook(() => useAuth());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    let pending: Promise<void> = Promise.resolve();
+    await act(async () => {
+      pending = result.current.loginViaBrowser();
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    expect(result.current.awaitingBrowser).toBe(true);
+
+    await act(async () => {
+      release({ logged_in: true, email: "user@test.com" });
+      await pending;
+    });
+    expect(result.current.awaitingBrowser).toBe(false);
+  });
+
+  it("reports a cancelled attempt without an unsupported-server flag", async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "refresh_session") {
+        return Promise.resolve({ logged_in: false, email: null });
+      }
+      if (cmd === "login_via_browser") {
+        return Promise.reject("Die Anmeldung wurde abgebrochen.");
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const { result } = renderHook(() => useAuth());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    await act(async () => {
+      await result.current.loginViaBrowser();
+    });
+
+    expect(result.current.loggedIn).toBe(false);
+    expect(result.current.error).toContain("abgebrochen");
+    expect(result.current.browserUnsupported).toBe(false);
+    expect(result.current.awaitingBrowser).toBe(false);
+  });
+
+  it("flags a server without the endpoint so the UI can offer the fallback", async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "refresh_session") {
+        return Promise.resolve({ logged_in: false, email: null });
+      }
+      if (cmd === "login_via_browser") {
+        return Promise.reject("browser-login-unsupported");
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const { result } = renderHook(() => useAuth());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    await act(async () => {
+      await result.current.loginViaBrowser();
+    });
+
+    expect(result.current.browserUnsupported).toBe(true);
+    // Not the raw token: the user sees a sentence.
+    expect(result.current.error).toContain("Browser");
+    expect(result.current.error).not.toContain("browser-login-unsupported");
+  });
+
+  it("translates a decline and a verification failure distinctly", async () => {
+    for (const [rejection, fragment] of [
+      ["browser-login-denied", "abgelehnt"],
+      ["browser-login-verification", "Sicherheitsgründen"],
+    ]) {
+      mockInvoke.mockImplementation((cmd: string) => {
+        if (cmd === "refresh_session") {
+          return Promise.resolve({ logged_in: false, email: null });
+        }
+        if (cmd === "login_via_browser") return Promise.reject(rejection);
+        return Promise.resolve(undefined);
+      });
+
+      const { result } = renderHook(() => useAuth());
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 50));
+      });
+      await act(async () => {
+        await result.current.loginViaBrowser();
+      });
+
+      expect(result.current.error).toContain(fragment);
+      expect(result.current.browserUnsupported).toBe(false);
+    }
+  });
+
+  it("cancel invokes the command and survives it failing", async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "refresh_session") {
+        return Promise.resolve({ logged_in: false, email: null });
+      }
+      if (cmd === "cancel_browser_login") {
+        // The attempt may already have ended; the command is a no-op then.
+        return Promise.reject("no attempt");
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const { result } = renderHook(() => useAuth());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    await act(async () => {
+      await result.current.cancelBrowserLogin();
+    });
+    expect(mockInvoke).toHaveBeenCalledWith("cancel_browser_login");
+  });
 });

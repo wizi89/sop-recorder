@@ -51,6 +51,13 @@ genpdf = { version = "0.2", features = ["images"] }
 chrono = "0.4"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
+# PKCE: base64url(sha256(verifier)) for the browser sign-in handoff.
+sha2 = "0.10"
+base64 = "0.22"
+# CancellationToken: an attempt-scoped cancel handle. A shared Notify is wrong
+# here -- notify_one() with no waiter stores a permit, and the next attempt
+# would cancel itself on its first poll.
+tokio-util = { version = "0.7", features = ["rt"] }
 futures = "0.3"
 thiserror = "2"
 dirs-next = "2"

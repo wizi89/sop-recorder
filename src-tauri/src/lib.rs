@@ -162,8 +162,11 @@ pub fn run() {
         })
         .manage(state::AppState::default())
         .manage(auth::SessionCache::default())
+        .manage(auth::PendingBrowserLogin::default())
         .invoke_handler(tauri::generate_handler![
             auth::login,
+            auth::login_via_browser,
+            auth::cancel_browser_login,
             auth::logout,
             auth::refresh_session,
             auth::get_session_state,

@@ -601,6 +601,10 @@ function MainApp() {
         <div className="flex-1 min-h-0">
           <LoginScreen
             onLogin={auth.login}
+            onLoginViaBrowser={auth.loginViaBrowser}
+            onCancelBrowserLogin={auth.cancelBrowserLogin}
+            awaitingBrowser={auth.awaitingBrowser}
+            browserUnsupported={auth.browserUnsupported}
             loading={auth.loading}
             error={auth.error}
             version={version}
