@@ -55,7 +55,11 @@ pub async fn consume_sse_stream(
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
         let text = String::from_utf8_lossy(&chunk);
-        log::debug!("SSE chunk ({} bytes): {:?}", chunk.len(), &text[..text.len().min(200)]);
+        log::debug!(
+            "SSE chunk ({} bytes): {:?}",
+            chunk.len(),
+            &text[..text.len().min(200)]
+        );
         buffer.push_str(&text);
 
         // Normalise \r\n to \n so the delimiter search works with any server
@@ -89,9 +93,7 @@ pub async fn consume_sse_stream(
                         log::debug!("SSE heartbeat received, skipping UI update");
                         continue;
                     }
-                    if let Ok(payload) =
-                        serde_json::from_str::<SSEStatusPayload>(&data)
-                    {
+                    if let Ok(payload) = serde_json::from_str::<SSEStatusPayload>(&data) {
                         let _ = app.emit("sse:status", &payload);
                     } else {
                         // Plain text status
@@ -103,21 +105,17 @@ pub async fn consume_sse_stream(
                         );
                     }
                 }
-                "result" => {
-                    match serde_json::from_str::<SSEResultPayload>(&data) {
-                        Ok(payload) => {
-                            let _ = app.emit("sse:result", &payload);
-                            result = Some(payload);
-                        }
-                        Err(e) => {
-                            log::error!("Failed to parse SSE result: {}", e);
-                        }
+                "result" => match serde_json::from_str::<SSEResultPayload>(&data) {
+                    Ok(payload) => {
+                        let _ = app.emit("sse:result", &payload);
+                        result = Some(payload);
                     }
-                }
+                    Err(e) => {
+                        log::error!("Failed to parse SSE result: {}", e);
+                    }
+                },
                 "pii_blocked" => {
-                    if let Ok(payload) =
-                        serde_json::from_str::<SSEPiiBlockedPayload>(&data)
-                    {
+                    if let Ok(payload) = serde_json::from_str::<SSEPiiBlockedPayload>(&data) {
                         let _ = app.emit("sse:pii_blocked", &payload);
                         return Err("PII blocked".into());
                     }
@@ -142,9 +140,7 @@ pub async fn consume_sse_stream(
                     }
                 }
                 "resume_resubmit" => {
-                    if let Ok(payload) =
-                        serde_json::from_str::<SSEResumeResubmitPayload>(&data)
-                    {
+                    if let Ok(payload) = serde_json::from_str::<SSEResumeResubmitPayload>(&data) {
                         log::info!("SSE resume_resubmit: job_id={}", payload.job_id);
                         let _ = app.emit("sse:resume_resubmit", &payload);
                     }
@@ -156,14 +152,19 @@ pub async fn consume_sse_stream(
         }
     }
 
-    log::info!("SSE stream ended. buffer_remaining={} has_result={}", buffer.len(), result.is_some());
+    log::info!(
+        "SSE stream ended. buffer_remaining={} has_result={}",
+        buffer.len(),
+        result.is_some()
+    );
     if !buffer.trim().is_empty() {
-        log::debug!("SSE leftover buffer: {:?}", &buffer[..buffer.len().min(500)]);
+        log::debug!(
+            "SSE leftover buffer: {:?}",
+            &buffer[..buffer.len().min(500)]
+        );
     }
 
     let _ = url; // suppress unused warning
 
-    result.ok_or_else(|| {
-        "Server closed connection without sending a result".to_string()
-    })
+    result.ok_or_else(|| "Server closed connection without sending a result".to_string())
 }

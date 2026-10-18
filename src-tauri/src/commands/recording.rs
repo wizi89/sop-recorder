@@ -58,7 +58,9 @@ fn note_capture_outcome(
             let total = failed.fetch_add(1, Ordering::SeqCst) + 1;
             log::error!(
                 "Screenshot capture failed for step {} ({} failed so far): {}",
-                step_num, total, e
+                step_num,
+                total,
+                e
             );
             CaptureOutcome::Failed { total }
         }
@@ -268,10 +270,7 @@ pub async fn start_recording(
                     // unpaired PNG the upload path can detect, rather than a
                     // JSON pointing at a missing image.
                     if let Err(e) = step_meta::write_sidecar(&dir, &meta) {
-                        log::error!(
-                            "Step sidecar write failed for step {}: {}",
-                            step_num, e
-                        );
+                        log::error!("Step sidecar write failed for step {}: {}", step_num, e);
                     }
                     let _ = app.emit("recording:step_captured", step_num);
                 }
@@ -364,7 +363,9 @@ pub async fn stop_recording(
 
     // Stop audio immediately
     if let Some(audio) = audio {
-        audio.stop().map_err(|e| format!("Audio stop failed: {}", e))?;
+        audio
+            .stop()
+            .map_err(|e| format!("Audio stop failed: {}", e))?;
     }
 
     // Wait for any in-flight screenshot captures to finish writing to disk
@@ -411,13 +412,17 @@ pub async fn stop_recording(
     if failed_captures > 0 {
         log::warn!(
             "Recording stopped with {} failed capture(s). Output: {}",
-            failed_captures, output_dir
+            failed_captures,
+            output_dir
         );
     } else {
         log::info!("Recording stopped. Output: {}", output_dir);
     }
 
-    Ok(StoppedRecording { output_dir, failed_captures })
+    Ok(StoppedRecording {
+        output_dir,
+        failed_captures,
+    })
 }
 
 /// Read the raw bytes of a screenshot file. Returns a byte array the
@@ -484,9 +489,7 @@ pub async fn delete_last_screenshot(
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
     let session_guard = state.current_session.lock().unwrap();
-    let session = session_guard
-        .as_ref()
-        .ok_or("Keine aktive Aufnahme.")?;
+    let session = session_guard.as_ref().ok_or("Keine aktive Aufnahme.")?;
 
     // Refuse if a capture is currently being written to disk.
     if let Some(flight) = session.in_flight.as_ref() {
@@ -536,7 +539,12 @@ mod tests {
     use crate::capture::screenshot::MarkerBox;
 
     fn box_at(x0: i32) -> Option<MarkerBox> {
-        Some(MarkerBox { x0, y0: 2, x1: 3, y1: 4 })
+        Some(MarkerBox {
+            x0,
+            y0: 2,
+            x1: 3,
+            y1: 4,
+        })
     }
 
     /// The path the 2026-09-03 recordings took silently: a capture fails, the

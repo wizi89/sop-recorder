@@ -132,7 +132,11 @@ mod tests {
             "peak concurrency was {}",
             peak.load(Ordering::SeqCst),
         );
-        assert_eq!(completed.load(Ordering::SeqCst), 20, "every capture must run");
+        assert_eq!(
+            completed.load(Ordering::SeqCst),
+            20,
+            "every capture must run"
+        );
     }
 
     /// A capture that panics has to give its permit back. Without this the pool

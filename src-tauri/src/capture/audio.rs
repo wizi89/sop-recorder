@@ -98,7 +98,10 @@ impl AudioHandle {
         };
 
         // Resampling state shared with the callback via Arc<Mutex<>>
-        let resample_state = Arc::new(Mutex::new(ResampleState::new(device_rate, TARGET_SAMPLE_RATE)));
+        let resample_state = Arc::new(Mutex::new(ResampleState::new(
+            device_rate,
+            TARGET_SAMPLE_RATE,
+        )));
         let resample_clone = resample_state.clone();
 
         // Per-callback helper: compute peak abs level over a mono slice and
@@ -139,7 +142,8 @@ impl AudioHandle {
                             {
                                 if let Some(ref mut w) = *guard {
                                     for sample in rs.process(&mono) {
-                                        let pcm = (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                                        let pcm =
+                                            (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
                                         let _ = w.write_sample(pcm);
                                     }
                                 }
@@ -171,7 +175,8 @@ impl AudioHandle {
                             {
                                 if let Some(ref mut w) = *guard {
                                     for sample in rs.process(&mono) {
-                                        let pcm = (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                                        let pcm =
+                                            (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
                                         let _ = w.write_sample(pcm);
                                     }
                                 }
@@ -231,9 +236,9 @@ impl AudioHandle {
 /// Simple linear resampler that converts from one sample rate to another.
 /// Maintains fractional position across calls for seamless resampling.
 struct ResampleState {
-    ratio: f64,         // input_rate / output_rate
-    fractional: f64,    // accumulated fractional position
-    last_sample: f32,   // previous sample for interpolation
+    ratio: f64,       // input_rate / output_rate
+    fractional: f64,  // accumulated fractional position
+    last_sample: f32, // previous sample for interpolation
 }
 
 impl ResampleState {
@@ -258,8 +263,16 @@ impl ResampleState {
             let frac = (self.fractional - idx as f64) as f32;
 
             // Linear interpolation between adjacent samples
-            let s0 = if idx == 0 { self.last_sample } else { input[idx - 1] };
-            let s1 = if idx < input.len() { input[idx] } else { *input.last().unwrap() };
+            let s0 = if idx == 0 {
+                self.last_sample
+            } else {
+                input[idx - 1]
+            };
+            let s1 = if idx < input.len() {
+                input[idx]
+            } else {
+                *input.last().unwrap()
+            };
             let interpolated = s0 + (s1 - s0) * frac;
 
             output.push(interpolated);
@@ -288,8 +301,11 @@ mod tests {
         let output = rs.process(&input);
 
         // Should produce roughly 160 samples (ratio 3:1)
-        assert!(output.len() >= 158 && output.len() <= 162,
-            "Expected ~160 samples, got {}", output.len());
+        assert!(
+            output.len() >= 158 && output.len() <= 162,
+            "Expected ~160 samples, got {}",
+            output.len()
+        );
     }
 
     #[test]
@@ -340,15 +356,21 @@ mod tests {
 
         // Total sample count should match
         let total_separate = out1.len() + out2.len();
-        assert!((total_separate as i32 - out_combined.len() as i32).abs() <= 1,
-            "Chunk processing produced {} vs combined {}", total_separate, out_combined.len());
+        assert!(
+            (total_separate as i32 - out_combined.len() as i32).abs() <= 1,
+            "Chunk processing produced {} vs combined {}",
+            total_separate,
+            out_combined.len()
+        );
     }
 
     #[test]
     fn resample_output_stays_in_range() {
         let mut rs = ResampleState::new(48000, 16000);
         // Feed max/min values
-        let input: Vec<f32> = (0..480).map(|i| if i % 2 == 0 { 1.0 } else { -1.0 }).collect();
+        let input: Vec<f32> = (0..480)
+            .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
+            .collect();
         let output = rs.process(&input);
 
         for s in &output {

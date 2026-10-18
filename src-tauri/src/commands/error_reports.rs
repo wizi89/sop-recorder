@@ -29,7 +29,10 @@ pub async fn list_error_reports() -> Result<Vec<ErrorReport>, String> {
     if !reports.is_empty() {
         // The queue depth, so a dialog that "came back" can be told apart from
         // the next report in a backlog.
-        log::info!("{} Fehlerbericht(e) warten auf eine Entscheidung", reports.len());
+        log::info!(
+            "{} Fehlerbericht(e) warten auf eine Entscheidung",
+            reports.len()
+        );
     }
     Ok(reports)
 }
@@ -154,11 +157,7 @@ pub async fn submit_error_reports(
             Err(err) => {
                 // Kept on disk deliberately: the next sign-in retries it with
                 // the same id, so the number the user copied still finds it.
-                log::warn!(
-                    "Fehlerbericht {} bleibt liegen: {}",
-                    report.number(),
-                    err
-                );
+                log::warn!("Fehlerbericht {} bleibt liegen: {}", report.number(), err);
             }
         }
     }
@@ -218,17 +217,15 @@ pub async fn debug_trigger_failure(kind: String, app: tauri::AppHandle) -> Resul
                 Ok(())
             }
             "background_panic" => {
-                let done = std::thread::spawn(|| {
-                    panic!("Absichtlicher Testpanic (Hintergrund-Thread)")
-                });
+                let done =
+                    std::thread::spawn(|| panic!("Absichtlicher Testpanic (Hintergrund-Thread)"));
                 // Wait for the hook to have written the file, so the refresh
                 // the webview does next actually finds it.
                 let _ = done.join();
                 Ok(())
             }
             "command_error" => Err(
-                "Upload fehlgeschlagen: 500 - {\"error\":\"absichtlicher Testfehler\"}"
-                    .to_string(),
+                "Upload fehlgeschlagen: 500 - {\"error\":\"absichtlicher Testfehler\"}".to_string(),
             ),
             // The other half of D6: a failure the UI can already explain must
             // produce no report at all. Suppression is the easier half to

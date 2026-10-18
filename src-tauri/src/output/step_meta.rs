@@ -213,7 +213,12 @@ mod tests {
                 click_x: Some(10),
                 click_y: Some(20),
                 trigger: "mouse_click".into(),
-                marker_box: Some(MarkerBox { x0: 1, y0: 2, x1: 3, y1: 4 }),
+                marker_box: Some(MarkerBox {
+                    x0: 1,
+                    y0: 2,
+                    x1: 3,
+                    y1: 4,
+                }),
             },
         )
         .unwrap();

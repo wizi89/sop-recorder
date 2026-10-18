@@ -520,7 +520,9 @@ mod tests {
     #[test]
     fn access_denied_is_a_decline() {
         assert_eq!(
-            parse_callback(&url("http://127.0.0.1:1/callback?error=access_denied&state=x")),
+            parse_callback(&url(
+                "http://127.0.0.1:1/callback?error=access_denied&state=x"
+            )),
             Err(CallbackError::Denied)
         );
     }
@@ -528,7 +530,9 @@ mod tests {
     #[test]
     fn server_error_is_its_own_variant() {
         assert_eq!(
-            parse_callback(&url("http://127.0.0.1:1/callback?error=server_error&state=x")),
+            parse_callback(&url(
+                "http://127.0.0.1:1/callback?error=server_error&state=x"
+            )),
             Err(CallbackError::ServerError)
         );
     }
@@ -550,10 +554,14 @@ mod tests {
             "http://127.0.0.1:1/callback?code=&state=xyz",
             "http://127.0.0.1:1/callback?code=abc&state=",
         ] {
-            assert_eq!(parse_callback(&url(u)), Err(CallbackError::Malformed), "{}", u);
+            assert_eq!(
+                parse_callback(&url(u)),
+                Err(CallbackError::Malformed),
+                "{}",
+                u
+            );
         }
     }
-
 
     // -- complete() against real HTTP responses (task 3.1) ------------------
 
@@ -573,7 +581,9 @@ mod tests {
     async fn stub_server(response: Option<&'static str>) -> String {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
         let port = listener.local_addr().unwrap().port();
 
         tokio::spawn(async move {
@@ -652,7 +662,12 @@ mod tests {
         // What an API deployed before this change answers. `sign_in` would
         // have surfaced it as an ordinary failed login.
         let base = stub_server(Some(Box::leak(
-            http("404 Not Found", "application/json", r#"{"detail":"Not Found"}"#).into_boxed_str(),
+            http(
+                "404 Not Found",
+                "application/json",
+                r#"{"detail":"Not Found"}"#,
+            )
+            .into_boxed_str(),
         )))
         .await;
         let (p, _) = begin();
@@ -669,7 +684,10 @@ mod tests {
         .await;
         let (p, _) = begin();
 
-        assert_eq!(err_of(complete(&p, "the-code", &base).await), UNSUPPORTED_SERVER);
+        assert_eq!(
+            err_of(complete(&p, "the-code", &base).await),
+            UNSUPPORTED_SERVER
+        );
     }
 
     #[tokio::test]
@@ -687,7 +705,10 @@ mod tests {
         .await;
         let (p, _) = begin();
 
-        assert_eq!(err_of(complete(&p, "the-code", &base).await), UNSUPPORTED_SERVER);
+        assert_eq!(
+            err_of(complete(&p, "the-code", &base).await),
+            UNSUPPORTED_SERVER
+        );
     }
 
     #[tokio::test]
@@ -718,7 +739,10 @@ mod tests {
             complete_within(&p, "the-code", &base, std::time::Duration::from_millis(150)).await,
         );
 
-        assert!(started.elapsed() < std::time::Duration::from_secs(5), "it hung");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "it hung"
+        );
         assert!(err.contains("zu lange"), "{}", err);
     }
 
@@ -726,7 +750,9 @@ mod tests {
     async fn the_exchange_sends_the_code_and_the_verifier_and_nothing_else() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
         let port = listener.local_addr().unwrap().port();
         let seen = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
         let captured = seen.clone();
@@ -756,7 +782,11 @@ mod tests {
             .unwrap();
 
         let request = seen.lock().unwrap().clone();
-        assert!(request.contains("POST /auth/desktop/exchange"), "{}", request);
+        assert!(
+            request.contains("POST /auth/desktop/exchange"),
+            "{}",
+            request
+        );
         assert!(request.contains("\"code\":\"the-code\""), "{}", request);
         assert!(request.contains(&format!("\"code_verifier\":\"{}\"", p.verifier)));
         // The challenge stays on this side of the wire: the server already has

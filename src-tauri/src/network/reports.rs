@@ -85,7 +85,9 @@ pub async fn submit_report(
             .json(&payload)
             .send()
             .await
-            .map_err(|e| SubmitError::Failed(format!("Fehlerbericht konnte nicht gesendet werden: {}", e)))?;
+            .map_err(|e| {
+                SubmitError::Failed(format!("Fehlerbericht konnte nicht gesendet werden: {}", e))
+            })?;
 
         let status = response.status();
         if status.as_u16() == 401 && !refreshed {
@@ -104,7 +106,10 @@ pub async fn submit_report(
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
             log::warn!("Fehlerbericht abgelehnt: {} - {}", status, text);
-            return Err(SubmitError::Failed(format!("Server hat mit {} geantwortet", status)));
+            return Err(SubmitError::Failed(format!(
+                "Server hat mit {} geantwortet",
+                status
+            )));
         }
 
         let parsed: serde_json::Value = response

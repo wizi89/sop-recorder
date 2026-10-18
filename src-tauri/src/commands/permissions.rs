@@ -201,8 +201,15 @@ pub fn get_screen_recording_permission_state() -> String {
     #[cfg(target_os = "macos")]
     {
         let granted = unsafe { CGPreflightScreenCaptureAccess() };
-        log::info!("Screen recording permission: {}", if granted { "granted" } else { "denied" });
-        return if granted { "granted".to_string() } else { "denied".to_string() };
+        log::info!(
+            "Screen recording permission: {}",
+            if granted { "granted" } else { "denied" }
+        );
+        return if granted {
+            "granted".to_string()
+        } else {
+            "denied".to_string()
+        };
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -227,13 +234,15 @@ fn request_microphone_access() {
         return;
     };
     let handler = RcBlock::new(|granted: Bool| {
-        log::info!("Mic permission dialog answered: granted={}", granted.as_bool());
+        log::info!(
+            "Mic permission dialog answered: granted={}",
+            granted.as_bool()
+        );
     });
     unsafe {
         AVCaptureDevice::requestAccessForMediaType_completionHandler(media_type, &handler);
     }
 }
-
 
 /// Open the System Settings pane where a refused permission can be restored.
 ///
@@ -326,14 +335,22 @@ pub fn request_permission(which: String) -> Result<String, String> {
             // Shows the system dialog when undetermined, no-op once decided.
             "screen" => {
                 let granted = unsafe { CGRequestScreenCaptureAccess() };
-                Ok(if granted { "granted".into() } else { "denied".into() })
+                Ok(if granted {
+                    "granted".into()
+                } else {
+                    "denied".into()
+                })
             }
             // Granted in System Settings rather than in the dialog, so this
             // reads denied on the run that first prompts. That is the honest
             // report: the hook cannot be installed until the user comes back.
             "accessibility" => {
                 let granted = accessibility_trusted(true);
-                Ok(if granted { "granted".into() } else { "denied".into() })
+                Ok(if granted {
+                    "granted".into()
+                } else {
+                    "denied".into()
+                })
             }
             other => Err(format!("Unknown permission: {}", other)),
         }

@@ -5,7 +5,12 @@ use genpdf::{Alignment, Document, Element, SimplePageDecorator};
 use std::path::Path;
 
 /// Try to load a font family from individual files.
-fn load_font_family(regular: &str, bold: &str, italic: &str, bold_italic: &str) -> Option<fonts::FontFamily<fonts::FontData>> {
+fn load_font_family(
+    regular: &str,
+    bold: &str,
+    italic: &str,
+    bold_italic: &str,
+) -> Option<fonts::FontFamily<fonts::FontData>> {
     let regular = fonts::FontData::new(std::fs::read(regular).ok()?, None).ok()?;
     let bold = fonts::FontData::new(std::fs::read(bold).ok()?, None).ok()?;
     let italic = fonts::FontData::new(std::fs::read(italic).ok()?, None).ok()?;
@@ -142,9 +147,7 @@ pub fn generate_pdf(
                 if trimmed.is_empty() {
                     doc.push(Break::new(0.2));
                 } else {
-                    doc.push(
-                        Paragraph::new(trimmed).styled(Style::new().with_font_size(11)),
-                    );
+                    doc.push(Paragraph::new(trimmed).styled(Style::new().with_font_size(11)));
                 }
             }
             doc.push(Break::new(0.5));
@@ -177,7 +180,11 @@ pub fn generate_pdf(
 
         // Warnings (skip empty strings)
         if let Some(warnings) = step.get("warnings").and_then(|v| v.as_array()) {
-            for w in warnings.iter().filter_map(|v| v.as_str()).filter(|w| !w.trim().is_empty()) {
+            for w in warnings
+                .iter()
+                .filter_map(|v| v.as_str())
+                .filter(|w| !w.trim().is_empty())
+            {
                 doc.push(Break::new(0.3));
                 doc.push(
                     Paragraph::new(format!("Warnung: {}", strip_markdown(w)))
@@ -188,7 +195,11 @@ pub fn generate_pdf(
 
         // Notes (skip empty strings)
         if let Some(notes) = step.get("notes").and_then(|v| v.as_array()) {
-            for n in notes.iter().filter_map(|v| v.as_str()).filter(|n| !n.trim().is_empty()) {
+            for n in notes
+                .iter()
+                .filter_map(|v| v.as_str())
+                .filter(|n| !n.trim().is_empty())
+            {
                 doc.push(Break::new(0.3));
                 doc.push(
                     Paragraph::new(format!("Hinweis: {}", strip_markdown(n)))

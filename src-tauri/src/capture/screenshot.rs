@@ -91,10 +91,7 @@ pub fn monitor_for_click(
 /// on none of them. Split out from `monitor_for_click` so a caller can tell a
 /// deliberate choice from a fallback -- which is worth saying in the log,
 /// because a step captured on the wrong display looks like nothing else.
-pub fn monitor_containing(
-    point: Option<(i32, i32)>,
-    bounds: &[MonitorBounds],
-) -> Option<usize> {
+pub fn monitor_containing(point: Option<(i32, i32)>, bounds: &[MonitorBounds]) -> Option<usize> {
     let (px, py) = point?;
     bounds
         .iter()
@@ -111,9 +108,7 @@ pub fn monitor_containing(
 /// desktop coordinates lands correctly on an image that starts at that origin,
 /// and its own geometry-to-capture ratio, so a Retina display still draws a
 /// marker sized for its pixels.
-fn capture_one_monitor(
-    monitor: &Monitor,
-) -> Result<(RgbaImage, VirtualScreen), String> {
+fn capture_one_monitor(monitor: &Monitor) -> Result<(RgbaImage, VirtualScreen), String> {
     let x = monitor
         .x()
         .map_err(|e| format!("Failed to read monitor x position: {}", e))?;
@@ -132,7 +127,13 @@ fn capture_one_monitor(
     // question without a per-platform branch. See `canvas_scale`.
     let scale = canvas_scale(&[(geometry_w, img.width())]);
 
-    Ok((img, VirtualScreen { origin: (x, y), scale }))
+    Ok((
+        img,
+        VirtualScreen {
+            origin: (x, y),
+            scale,
+        },
+    ))
 }
 
 const CLICK_MARKER_RADIUS: i32 = 18;
@@ -332,7 +333,10 @@ mod tests {
 
     #[test]
     fn a_monitor_left_of_the_primary_is_found_at_negative_coordinates() {
-        assert_eq!(monitor_for_click(Some((-1000, 500)), &LEFT_OF_PRIMARY, 1), 0);
+        assert_eq!(
+            monitor_for_click(Some((-1000, 500)), &LEFT_OF_PRIMARY, 1),
+            0
+        );
         assert_eq!(monitor_for_click(Some((-1, 0)), &LEFT_OF_PRIMARY, 1), 0);
         assert_eq!(monitor_for_click(Some((0, 0)), &LEFT_OF_PRIMARY, 1), 1);
     }
@@ -351,7 +355,10 @@ mod tests {
     #[test]
     fn no_position_and_an_off_screen_position_both_fall_back_to_primary() {
         assert_eq!(monitor_for_click(None, &LAPTOP_PLUS_4K, 1), 1);
-        assert_eq!(monitor_for_click(Some((99_999, 99_999)), &LAPTOP_PLUS_4K, 1), 1);
+        assert_eq!(
+            monitor_for_click(Some((99_999, 99_999)), &LAPTOP_PLUS_4K, 1),
+            1
+        );
         assert_eq!(monitor_for_click(Some((0, -5)), &LAPTOP_PLUS_4K, 0), 0);
     }
 
@@ -359,7 +366,10 @@ mod tests {
     /// can say which happened; `monitor_for_click` collapses the two.
     #[test]
     fn containment_is_reported_separately_from_the_fallback() {
-        assert_eq!(monitor_containing(Some((2000, 900)), &LAPTOP_PLUS_4K), Some(1));
+        assert_eq!(
+            monitor_containing(Some((2000, 900)), &LAPTOP_PLUS_4K),
+            Some(1)
+        );
         assert_eq!(monitor_containing(Some((99_999, 0)), &LAPTOP_PLUS_4K), None);
         assert_eq!(monitor_containing(None, &LAPTOP_PLUS_4K), None);
     }
@@ -393,7 +403,11 @@ mod tests {
         let single = saved_width(3840, 2160);
 
         assert_eq!(composited, 960, "the behaviour being replaced");
-        assert!(single >= 1600, "one monitor should survive the cap: {}", single);
+        assert!(
+            single >= 1600,
+            "one monitor should survive the cap: {}",
+            single
+        );
         // Exactly double the linear resolution, so four times the pixels on the
         // display the user was actually looking at.
         assert_eq!(single, composited * 2);
@@ -434,7 +448,11 @@ mod tests {
         // Outermost pixel is the white hairline; the red stroke is just inside
         // it. Both are part of the ring, and neither is the ground colour.
         assert_eq!(*img.get_pixel(200 + radius, 200), MARKER_WHITE, "halo");
-        assert_eq!(*img.get_pixel(200 + radius - 1, 200), MARKER_RED, "red stroke");
+        assert_eq!(
+            *img.get_pixel(200 + radius - 1, 200),
+            MARKER_RED,
+            "red stroke"
+        );
     }
 
     /// The interior between the click point and the ring stays readable too --
@@ -463,11 +481,21 @@ mod tests {
     fn marker_geometry_is_unchanged_by_the_ring() {
         assert_eq!(
             marker_box_at(100, 100, 1.0),
-            MarkerBox { x0: 82, y0: 82, x1: 118, y1: 124 },
+            MarkerBox {
+                x0: 82,
+                y0: 82,
+                x1: 118,
+                y1: 124
+            },
         );
         assert_eq!(
             marker_box_at(100, 100, 2.0),
-            MarkerBox { x0: 64, y0: 64, x1: 136, y1: 148 },
+            MarkerBox {
+                x0: 64,
+                y0: 64,
+                x1: 136,
+                y1: 148
+            },
         );
     }
 
@@ -480,7 +508,11 @@ mod tests {
         render_click_overlay(&mut img, 200, 200, &screen((0, 0), 2.0));
 
         let radius = scaled_radius(2.0) as u32;
-        assert_eq!(*img.get_pixel(400 + radius, 400), MARKER_WHITE, "outer halo");
+        assert_eq!(
+            *img.get_pixel(400 + radius, 400),
+            MARKER_WHITE,
+            "outer halo"
+        );
         assert_eq!(
             *img.get_pixel(400 + radius - 5, 400),
             MARKER_RED,
@@ -665,10 +697,14 @@ fn capture_active_monitor(
     let mut primary = 0usize;
     for (i, m) in monitors.iter().enumerate() {
         bounds.push((
-            m.x().map_err(|e| format!("Failed to read monitor x position: {}", e))?,
-            m.y().map_err(|e| format!("Failed to read monitor y position: {}", e))?,
-            m.width().map_err(|e| format!("Failed to read monitor width: {}", e))?,
-            m.height().map_err(|e| format!("Failed to read monitor height: {}", e))?,
+            m.x()
+                .map_err(|e| format!("Failed to read monitor x position: {}", e))?,
+            m.y()
+                .map_err(|e| format!("Failed to read monitor y position: {}", e))?,
+            m.width()
+                .map_err(|e| format!("Failed to read monitor width: {}", e))?,
+            m.height()
+                .map_err(|e| format!("Failed to read monitor height: {}", e))?,
         ));
         if m.is_primary().unwrap_or(false) {
             primary = i;
@@ -733,7 +769,13 @@ pub fn capture_and_save(
         let scale = f64::min(max_w as f64 / w as f64, max_h as f64 / h as f64);
         let new_w = (w as f64 * scale) as u32;
         let new_h = (h as f64 * scale) as u32;
-        log::info!("Resizing screenshot from {}x{} to {}x{}", w, h, new_w, new_h);
+        log::info!(
+            "Resizing screenshot from {}x{} to {}x{}",
+            w,
+            h,
+            new_w,
+            new_h
+        );
         (
             dynamic.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3),
             scale,
@@ -741,8 +783,8 @@ pub fn capture_and_save(
     } else {
         (dynamic, 1.0)
     };
-    let saved_marker = marker
-        .and_then(|m| m.scaled(scale).clamped(resized.width(), resized.height()));
+    let saved_marker =
+        marker.and_then(|m| m.scaled(scale).clamped(resized.width(), resized.height()));
     let rgb_img = resized.to_rgb8();
     rgb_img
         .save(&path)

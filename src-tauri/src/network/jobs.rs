@@ -36,7 +36,10 @@ pub async fn poll_job_result(
         // a slow generation from a flapping connection.
         log::info!(
             "Poll attempt {} of {} for job {} (waited {}s)",
-            attempt + 1, max_attempts, job_id, delay,
+            attempt + 1,
+            max_attempts,
+            job_id,
+            delay,
         );
 
         let response = client
@@ -45,7 +48,11 @@ pub async fn poll_job_result(
             .send()
             .await
             .map_err(|e| {
-                log::warn!("Poll attempt {} failed to reach the server: {}", attempt + 1, e);
+                log::warn!(
+                    "Poll attempt {} failed to reach the server: {}",
+                    attempt + 1,
+                    e
+                );
                 format!("Poll failed: {}", e)
             })?;
 
@@ -66,7 +73,12 @@ pub async fn poll_job_result(
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            log::warn!("Poll attempt {} -- server returned {} {}", attempt + 1, status, body);
+            log::warn!(
+                "Poll attempt {} -- server returned {} {}",
+                attempt + 1,
+                status,
+                body
+            );
             continue;
         }
 
@@ -108,7 +120,11 @@ pub async fn poll_job_result(
                 });
             }
             "processing" => {
-                log::info!("Poll: job {} still processing (attempt {})", job_id, attempt + 1);
+                log::info!(
+                    "Poll: job {} still processing (attempt {})",
+                    job_id,
+                    attempt + 1
+                );
             }
             "failed" | "partial" => {
                 let error = body

@@ -30,14 +30,11 @@ impl Default for SessionCache {
 }
 
 pub fn get_api_base(app: &tauri::AppHandle) -> &'static str {
-    let target = app
-        .store("settings.json")
-        .ok()
-        .and_then(|store| {
-            store
-                .get("upload_target")
-                .and_then(|v| v.as_str().map(String::from))
-        });
+    let target = app.store("settings.json").ok().and_then(|store| {
+        store
+            .get("upload_target")
+            .and_then(|v| v.as_str().map(String::from))
+    });
     net_auth::api_url_for_target(target.as_deref())
 }
 
@@ -91,9 +88,7 @@ pub async fn refresh_session(
 }
 
 #[tauri::command]
-pub async fn get_session_state(
-    session: State<'_, SessionCache>,
-) -> Result<SessionState, String> {
+pub async fn get_session_state(session: State<'_, SessionCache>) -> Result<SessionState, String> {
     let token = session.access_token.lock().unwrap().clone();
     let email = session.email.lock().unwrap().clone();
     Ok(SessionState {
@@ -409,15 +404,20 @@ mod tests {
 
     #[test]
     fn urlencode_escapes_what_a_query_value_must_not_carry() {
-        assert_eq!(urlencode("http://127.0.0.1:53124/callback"),
-                   "http%3A%2F%2F127.0.0.1%3A53124%2Fcallback");
+        assert_eq!(
+            urlencode("http://127.0.0.1:53124/callback"),
+            "http%3A%2F%2F127.0.0.1%3A53124%2Fcallback"
+        );
         assert_eq!(urlencode("s=&?+"), "s%3D%26%3F%2B");
         assert_eq!(urlencode("abc-_.~123"), "abc-_.~123");
     }
 
     #[test]
     fn an_unsupported_server_gets_its_own_reason_token() {
-        assert_eq!(outcome_for(net_auth::UNSUPPORTED_SERVER), Outcome::Unsupported);
+        assert_eq!(
+            outcome_for(net_auth::UNSUPPORTED_SERVER),
+            Outcome::Unsupported
+        );
         assert_eq!(outcome_for("anything else"), Outcome::Error);
     }
 
@@ -431,7 +431,10 @@ mod tests {
         assert!(!first.is_cancelled());
 
         pending.install(second.clone());
-        assert!(first.is_cancelled(), "the superseded attempt was not cancelled");
+        assert!(
+            first.is_cancelled(),
+            "the superseded attempt was not cancelled"
+        );
         assert!(!second.is_cancelled(), "the new attempt cancelled itself");
     }
 
@@ -450,19 +453,28 @@ mod tests {
 
         let second = CancellationToken::new();
         let second_id = pending.install(second.clone());
-        assert!(!second.is_cancelled(), "retry after a cancel cancelled itself");
+        assert!(
+            !second.is_cancelled(),
+            "retry after a cancel cancelled itself"
+        );
 
         // ended by a timeout (the attempt releases its own token)
         pending.release(second_id);
         let third = CancellationToken::new();
         let third_id = pending.install(third.clone());
-        assert!(!third.is_cancelled(), "retry after a timeout cancelled itself");
+        assert!(
+            !third.is_cancelled(),
+            "retry after a timeout cancelled itself"
+        );
 
         // ended by a failed exchange
         pending.release(third_id);
         let fourth = CancellationToken::new();
         pending.install(fourth.clone());
-        assert!(!fourth.is_cancelled(), "retry after a failed exchange cancelled itself");
+        assert!(
+            !fourth.is_cancelled(),
+            "retry after a failed exchange cancelled itself"
+        );
     }
 
     #[test]
@@ -478,7 +490,6 @@ mod tests {
         pending.install(next.clone());
         assert!(!next.is_cancelled());
     }
-
 
     // -- resolve_attempt: the sequencing (5.1d, 5.1g, 5.1h, 5.1i) ----------
 
@@ -571,7 +582,10 @@ mod tests {
             got,
             Err(ExchangeError::Callback(net_auth::CallbackError::Malformed))
         ));
-        assert!(!called.load(Ordering::SeqCst), "the code was exchanged anyway");
+        assert!(
+            !called.load(Ordering::SeqCst),
+            "the code was exchanged anyway"
+        );
         assert!(store.lock().unwrap().is_empty());
     }
 
@@ -579,10 +593,9 @@ mod tests {
     async fn a_decline_survives_as_a_decline() {
         let store = Arc::new(Mutex::new(Vec::new()));
         let cancel = CancellationToken::new();
-        let url = url::Url::parse(
-            "http://127.0.0.1:1/callback?error=access_denied&state=the-state",
-        )
-        .unwrap();
+        let url =
+            url::Url::parse("http://127.0.0.1:1/callback?error=access_denied&state=the-state")
+                .unwrap();
 
         let got = resolve_attempt(
             &url,
@@ -620,7 +633,10 @@ mod tests {
         .await;
 
         assert!(matches!(got, Err(ExchangeError::Exchange(_))));
-        assert!(store.lock().unwrap().is_empty(), "a timed-out attempt stored a credential");
+        assert!(
+            store.lock().unwrap().is_empty(),
+            "a timed-out attempt stored a credential"
+        );
     }
 
     #[tokio::test]
@@ -651,7 +667,10 @@ mod tests {
         .await;
 
         assert!(matches!(got, Err(ExchangeError::Cancelled)));
-        assert!(store.lock().unwrap().is_empty(), "a cancelled attempt stored a credential");
+        assert!(
+            store.lock().unwrap().is_empty(),
+            "a cancelled attempt stored a credential"
+        );
         assert!(
             !answered.load(Ordering::SeqCst),
             "the exchange future outlived the cancelled attempt"

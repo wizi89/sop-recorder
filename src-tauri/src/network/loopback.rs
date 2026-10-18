@@ -82,7 +82,8 @@ impl Reply {
             let location = outcome.location(&self.webapp);
             // Bounded: if the browser has gone away, this must not hold the
             // command open.
-            let _ = tokio::time::timeout(FINISH_BOUND, write_redirect(&mut stream, &location)).await;
+            let _ =
+                tokio::time::timeout(FINISH_BOUND, write_redirect(&mut stream, &location)).await;
         }
     }
 
@@ -147,10 +148,7 @@ pub async fn start_loopback(webapp: &str) -> Result<Callback, String> {
     let listener = TcpListener::bind(("127.0.0.1", 0))
         .await
         .map_err(|e| format!("Could not open the local callback port: {}", e))?;
-    let port = listener
-        .local_addr()
-        .map_err(|e| e.to_string())?
-        .port();
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
 
     Ok(Callback {
         redirect_uri: format!("http://127.0.0.1:{}/callback", port),
@@ -370,7 +368,10 @@ mod tests {
         // Nothing has been answered yet: the outcome is not known.
         let mut peek = [0u8; 1];
         let got = tokio::time::timeout(Duration::from_millis(300), client.read(&mut peek)).await;
-        assert!(got.is_err(), "the browser was answered before the outcome was known");
+        assert!(
+            got.is_err(),
+            "the browser was answered before the outcome was known"
+        );
 
         reply.finish(&Outcome::Success).await;
         let response = read_response(&mut client).await;
@@ -506,8 +507,7 @@ mod tests {
         assert!(response.contains("400"), "{}", response);
 
         // Still pending: the attempt was not consumed.
-        let settled =
-            tokio::time::timeout(Duration::from_millis(300), &mut task).await;
+        let settled = tokio::time::timeout(Duration::from_millis(300), &mut task).await;
         assert!(settled.is_err(), "a malformed request resolved the attempt");
         task.abort();
     }
@@ -544,7 +544,10 @@ mod tests {
 
         // The port is free again: rebinding it proves the listener was dropped.
         let rebound = TcpListener::bind(addr).await;
-        assert!(rebound.is_ok(), "the port was still bound after the timeout");
+        assert!(
+            rebound.is_ok(),
+            "the port was still bound after the timeout"
+        );
     }
 
     #[tokio::test]
@@ -562,7 +565,10 @@ mod tests {
         let started = tokio::time::Instant::now();
         let result = cb.recv(Duration::from_secs(300), &cancel).await;
         assert!(result.is_err());
-        assert!(started.elapsed() < Duration::from_secs(5), "cancel did not take effect");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "cancel did not take effect"
+        );
         assert!(TcpListener::bind(addr).await.is_ok());
     }
 

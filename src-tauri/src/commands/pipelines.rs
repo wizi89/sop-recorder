@@ -42,7 +42,10 @@ pub async fn get_pipelines(
             Ok(pipelines)
         }
         Err(e) => {
-            log::warn!("Pipeline catalogue fetch failed: {} -- serving last good", e);
+            log::warn!(
+                "Pipeline catalogue fetch failed: {} -- serving last good",
+                e
+            );
             Ok(last_good(&app))
         }
     }
@@ -51,7 +54,10 @@ pub async fn get_pipelines(
 /// Remember the user's choice so it can be preselected next time. An empty
 /// string clears it.
 #[tauri::command]
-pub async fn set_selected_pipeline(app: tauri::AppHandle, pipeline_id: String) -> Result<(), String> {
+pub async fn set_selected_pipeline(
+    app: tauri::AppHandle,
+    pipeline_id: String,
+) -> Result<(), String> {
     let store = app.store(STORE_FILENAME).map_err(|e| e.to_string())?;
     if pipeline_id.is_empty() {
         store.delete(SELECTED_KEY);

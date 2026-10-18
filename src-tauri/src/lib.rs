@@ -79,14 +79,14 @@ pub fn run() {
         if let Some(dir) = log_dir {
             if dir.parent().is_some_and(|p| p.exists()) {
                 let _ = std::fs::create_dir_all(&dir);
-                log_builder = log_builder
-                    .targets([
-                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                        tauri_plugin_log::Target::new(
-                            tauri_plugin_log::TargetKind::Folder { path: dir, file_name: Some("recorder".into()) },
-                        ),
-                        error_reports::ring_log_target(),
-                    ]);
+                log_builder = log_builder.targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                        path: dir,
+                        file_name: Some("recorder".into()),
+                    }),
+                    error_reports::ring_log_target(),
+                ]);
             }
         }
     }

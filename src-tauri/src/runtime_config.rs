@@ -159,7 +159,11 @@ pub fn init(backend: Option<Backend>) {
 
 pub fn runtime() -> &'static RuntimeOverride {
     RUNTIME.get_or_init(|| {
-        load_from(default_config_path().as_deref(), |k| std::env::var(k).ok(), None)
+        load_from(
+            default_config_path().as_deref(),
+            |k| std::env::var(k).ok(),
+            None,
+        )
     })
 }
 
@@ -289,8 +293,8 @@ mod tests {
     /// believing you are on staging -- the confusion the flag exists to remove.
     #[test]
     fn two_different_backends_are_refused() {
-        let error = parse_backend_flag(&args(&["cogniclone", "--staging", "--production"]))
-            .unwrap_err();
+        let error =
+            parse_backend_flag(&args(&["cogniclone", "--staging", "--production"])).unwrap_err();
         assert!(error.contains("staging"), "{}", error);
         assert!(error.contains("production"), "{}", error);
     }
@@ -319,11 +323,7 @@ mod tests {
     fn a_flag_beats_the_environment_and_the_file() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("config.toml");
-        std::fs::write(
-            &path,
-            "[endpoints]\napi_url = \"https://file.example\"\n",
-        )
-        .unwrap();
+        std::fs::write(&path, "[endpoints]\napi_url = \"https://file.example\"\n").unwrap();
 
         let out = load_from(
             Some(&path),
@@ -412,7 +412,11 @@ api_url = "https://file.example"
 
     #[test]
     fn updater_env_parses_truthy_values() {
-        let out = load_from(None, env_from(&[("COGNICLONE_UPDATER_ENABLED", "false")]), None);
+        let out = load_from(
+            None,
+            env_from(&[("COGNICLONE_UPDATER_ENABLED", "false")]),
+            None,
+        );
         assert_eq!(out.updater_enabled, Some(false));
 
         let out = load_from(None, env_from(&[("COGNICLONE_UPDATER_ENABLED", "1")]), None);
