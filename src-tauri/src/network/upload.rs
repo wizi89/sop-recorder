@@ -8,6 +8,10 @@ const UPLOAD_TIMEOUT_SECS: u64 = 300;
 
 /// Upload audio + screenshots to the generation endpoint.
 /// Returns the SSE stream URL or response.
+// ponytail: eleven real parameters, not an abstraction waiting to happen.
+// Bundling them into a struct would move the same list one line up and touch
+// every caller of the upload path for a lint; revisit if a twelfth appears.
+#[allow(clippy::too_many_arguments)]
 pub async fn upload_multipart(
     access_token: &str,
     openai_key: Option<&str>,
@@ -134,6 +138,10 @@ pub async fn upload_multipart(
 }
 
 /// Retry logic with exponential backoff for transient errors.
+// ponytail: eleven real parameters, not an abstraction waiting to happen.
+// Bundling them into a struct would move the same list one line up and touch
+// every caller of the upload path for a lint; revisit if a twelfth appears.
+#[allow(clippy::too_many_arguments)]
 pub async fn upload_with_retry(
     access_token: &str,
     openai_key: Option<&str>,

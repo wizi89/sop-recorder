@@ -6,19 +6,14 @@ use std::sync::{Arc, Mutex};
 use crate::capture::audio::AudioHandle;
 use crate::capture::input_hooks::InputHookHandle;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub enum RecordingStatus {
+    #[default]
     Idle,
     Recording,
     Processing,
     Done,
     Error(String),
-}
-
-impl Default for RecordingStatus {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 pub struct RecordingSession {

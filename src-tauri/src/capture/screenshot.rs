@@ -23,7 +23,7 @@ pub struct VirtualScreen {
 
 impl VirtualScreen {
     /// Where a click lands on the composited canvas.
-    fn to_canvas(&self, click_x: i32, click_y: i32) -> (i32, i32) {
+    fn to_canvas(self, click_x: i32, click_y: i32) -> (i32, i32) {
         (
             ((click_x - self.origin.0) as f64 * self.scale).round() as i32,
             ((click_y - self.origin.1) as f64 * self.scale).round() as i32,
@@ -303,6 +303,134 @@ pub fn render_click_overlay(
     draw_ring(radius - stroke - 1, white);
 
     marker_box_at(cx, cy, screen.scale)
+}
+
+/// Capture the monitor the action happened on.
+///
+/// Reads `Monitor::all()` once, so the index `monitor_for_click` returns and
+/// the monitor that gets captured come from the same list -- asking twice
+/// invites a different answer if a display is unplugged between the calls.
+///
+/// A key press carries no click position, so the cursor stands in for it. The
+/// cursor is where the user is working even when the keyboard is what they
+/// used, which is a better answer than the primary display and a much better
+/// one than every display at once.
+fn capture_active_monitor(
+    click_position: Option<(i32, i32)>,
+) -> Result<(RgbaImage, VirtualScreen), String> {
+    let monitors = Monitor::all().map_err(|e| format!("Failed to enumerate monitors: {}", e))?;
+    if monitors.is_empty() {
+        return Err("No monitors found".into());
+    }
+
+    let mut bounds: Vec<MonitorBounds> = Vec::with_capacity(monitors.len());
+    let mut primary = 0usize;
+    for (i, m) in monitors.iter().enumerate() {
+        bounds.push((
+            m.x()
+                .map_err(|e| format!("Failed to read monitor x position: {}", e))?,
+            m.y()
+                .map_err(|e| format!("Failed to read monitor y position: {}", e))?,
+            m.width()
+                .map_err(|e| format!("Failed to read monitor width: {}", e))?,
+            m.height()
+                .map_err(|e| format!("Failed to read monitor height: {}", e))?,
+        ));
+        if m.is_primary().unwrap_or(false) {
+            primary = i;
+        }
+    }
+
+    let point = click_position.or_else(super::input_hooks::get_cursor_position);
+    let containing = monitor_containing(point, &bounds);
+    let chosen = containing.unwrap_or(primary);
+
+    // Logged for a single display too, not only for several. "Which screen did
+    // this step come from" is the first question when a guide shows the wrong
+    // one, and a line that appears only on multi-monitor machines is missing
+    // from exactly the recordings that need it. One line per step, beside the
+    // one the save already writes.
+    let why = match (containing, point) {
+        (Some(_), _) => "",
+        (None, None) => " (no position available; fell back to the primary display)",
+        (None, Some(_)) => " (point is on no display; fell back to the primary display)",
+    };
+    log::info!(
+        "Capturing monitor {} of {} at {:?} for point {:?}{}",
+        chosen + 1,
+        monitors.len(),
+        bounds[chosen],
+        point,
+        why,
+    );
+
+    capture_one_monitor(&monitors[chosen])
+}
+
+/// Capture a screenshot and save it as a numbered PNG.
+///
+/// Returns the marker box in the coordinate space of the **saved** image, or
+/// `None` when no marker was drawn. The scale factor and the virtual-screen
+/// offset are known only here, so this is the only place the box can be
+/// expressed in the pixels the server will actually receive.
+pub fn capture_and_save(
+    output_dir: &Path,
+    step_number: u32,
+    click_position: Option<(i32, i32)>,
+) -> Result<Option<MarkerBox>, String> {
+    // Timed and dimensioned on every step, because the one question the
+    // 2026-09-03 test could not answer from the logs was which capture failed
+    // and how big the canvas was when it did.
+    let started = std::time::Instant::now();
+    let (mut img, screen) = capture_active_monitor(click_position)?;
+    let captured_in = started.elapsed();
+
+    let marker = click_position.map(|(x, y)| render_click_overlay(&mut img, x, y, &screen));
+
+    let filename = format!("step_{:02}.png", step_number);
+    let path = output_dir.join(&filename);
+
+    // Convert RGBA to RGB and resize if needed to stay under Azure OpenAI's 4MB limit
+    let dynamic = DynamicImage::ImageRgba8(img);
+    let (w, h) = (dynamic.width(), dynamic.height());
+    let max_w = 1920u32;
+    let max_h = 1080u32;
+    let (resized, scale) = if w > max_w || h > max_h {
+        let scale = f64::min(max_w as f64 / w as f64, max_h as f64 / h as f64);
+        let new_w = (w as f64 * scale) as u32;
+        let new_h = (h as f64 * scale) as u32;
+        log::info!(
+            "Resizing screenshot from {}x{} to {}x{}",
+            w,
+            h,
+            new_w,
+            new_h
+        );
+        (
+            dynamic.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3),
+            scale,
+        )
+    } else {
+        (dynamic, 1.0)
+    };
+    let saved_marker =
+        marker.and_then(|m| m.scaled(scale).clamped(resized.width(), resized.height()));
+    let rgb_img = resized.to_rgb8();
+    rgb_img
+        .save(&path)
+        .map_err(|e| format!("Failed to save screenshot: {}", e))?;
+
+    log::info!(
+        "Screenshot saved: {} (canvas {}x{}, saved {}x{}, capture {} ms, total {} ms)",
+        path.display(),
+        w,
+        h,
+        rgb_img.width(),
+        rgb_img.height(),
+        captured_in.as_millis(),
+        started.elapsed().as_millis(),
+    );
+    Ok(saved_marker)
 }
 
 #[cfg(test)]
@@ -673,132 +801,4 @@ mod tests {
             }
         }
     }
-}
-
-/// Capture the monitor the action happened on.
-///
-/// Reads `Monitor::all()` once, so the index `monitor_for_click` returns and
-/// the monitor that gets captured come from the same list -- asking twice
-/// invites a different answer if a display is unplugged between the calls.
-///
-/// A key press carries no click position, so the cursor stands in for it. The
-/// cursor is where the user is working even when the keyboard is what they
-/// used, which is a better answer than the primary display and a much better
-/// one than every display at once.
-fn capture_active_monitor(
-    click_position: Option<(i32, i32)>,
-) -> Result<(RgbaImage, VirtualScreen), String> {
-    let monitors = Monitor::all().map_err(|e| format!("Failed to enumerate monitors: {}", e))?;
-    if monitors.is_empty() {
-        return Err("No monitors found".into());
-    }
-
-    let mut bounds: Vec<MonitorBounds> = Vec::with_capacity(monitors.len());
-    let mut primary = 0usize;
-    for (i, m) in monitors.iter().enumerate() {
-        bounds.push((
-            m.x()
-                .map_err(|e| format!("Failed to read monitor x position: {}", e))?,
-            m.y()
-                .map_err(|e| format!("Failed to read monitor y position: {}", e))?,
-            m.width()
-                .map_err(|e| format!("Failed to read monitor width: {}", e))?,
-            m.height()
-                .map_err(|e| format!("Failed to read monitor height: {}", e))?,
-        ));
-        if m.is_primary().unwrap_or(false) {
-            primary = i;
-        }
-    }
-
-    let point = click_position.or_else(super::input_hooks::get_cursor_position);
-    let containing = monitor_containing(point, &bounds);
-    let chosen = containing.unwrap_or(primary);
-
-    // Logged for a single display too, not only for several. "Which screen did
-    // this step come from" is the first question when a guide shows the wrong
-    // one, and a line that appears only on multi-monitor machines is missing
-    // from exactly the recordings that need it. One line per step, beside the
-    // one the save already writes.
-    let why = match (containing, point) {
-        (Some(_), _) => "",
-        (None, None) => " (no position available; fell back to the primary display)",
-        (None, Some(_)) => " (point is on no display; fell back to the primary display)",
-    };
-    log::info!(
-        "Capturing monitor {} of {} at {:?} for point {:?}{}",
-        chosen + 1,
-        monitors.len(),
-        bounds[chosen],
-        point,
-        why,
-    );
-
-    capture_one_monitor(&monitors[chosen])
-}
-
-/// Capture a screenshot and save it as a numbered PNG.
-///
-/// Returns the marker box in the coordinate space of the **saved** image, or
-/// `None` when no marker was drawn. The scale factor and the virtual-screen
-/// offset are known only here, so this is the only place the box can be
-/// expressed in the pixels the server will actually receive.
-pub fn capture_and_save(
-    output_dir: &Path,
-    step_number: u32,
-    click_position: Option<(i32, i32)>,
-) -> Result<Option<MarkerBox>, String> {
-    // Timed and dimensioned on every step, because the one question the
-    // 2026-09-03 test could not answer from the logs was which capture failed
-    // and how big the canvas was when it did.
-    let started = std::time::Instant::now();
-    let (mut img, screen) = capture_active_monitor(click_position)?;
-    let captured_in = started.elapsed();
-
-    let marker = click_position.map(|(x, y)| render_click_overlay(&mut img, x, y, &screen));
-
-    let filename = format!("step_{:02}.png", step_number);
-    let path = output_dir.join(&filename);
-
-    // Convert RGBA to RGB and resize if needed to stay under Azure OpenAI's 4MB limit
-    let dynamic = DynamicImage::ImageRgba8(img);
-    let (w, h) = (dynamic.width(), dynamic.height());
-    let max_w = 1920u32;
-    let max_h = 1080u32;
-    let (resized, scale) = if w > max_w || h > max_h {
-        let scale = f64::min(max_w as f64 / w as f64, max_h as f64 / h as f64);
-        let new_w = (w as f64 * scale) as u32;
-        let new_h = (h as f64 * scale) as u32;
-        log::info!(
-            "Resizing screenshot from {}x{} to {}x{}",
-            w,
-            h,
-            new_w,
-            new_h
-        );
-        (
-            dynamic.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3),
-            scale,
-        )
-    } else {
-        (dynamic, 1.0)
-    };
-    let saved_marker =
-        marker.and_then(|m| m.scaled(scale).clamped(resized.width(), resized.height()));
-    let rgb_img = resized.to_rgb8();
-    rgb_img
-        .save(&path)
-        .map_err(|e| format!("Failed to save screenshot: {}", e))?;
-
-    log::info!(
-        "Screenshot saved: {} (canvas {}x{}, saved {}x{}, capture {} ms, total {} ms)",
-        path.display(),
-        w,
-        h,
-        rgb_img.width(),
-        rgb_img.height(),
-        captured_in.as_millis(),
-        started.elapsed().as_millis(),
-    );
-    Ok(saved_marker)
 }

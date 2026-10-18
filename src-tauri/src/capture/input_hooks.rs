@@ -844,11 +844,4 @@ mod tests {
     fn the_first_keypress_is_never_suppressed() {
         assert!(!gate_keypress(&mut KeyState::default(), Instant::now()));
     }
-
-    #[test]
-    fn the_window_cannot_exceed_the_rule_it_replaces() {
-        // The spec bound: a wider window would drop same-position events that
-        // the previous time-only rule captured. Also enforced at compile time.
-        assert!(SUPPRESSION_WINDOW_MS <= 300);
-    }
 }

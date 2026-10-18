@@ -6,7 +6,7 @@
 //! desktop-wallpaper screenshot when Screen Recording is denied).
 //!
 //! Microphone (both platforms): heuristic via `cpal::default_input_device()`
-//! + `default_input_config()`. Avoids linking Windows.Media; on macOS this
+//! and `default_input_config()`. Avoids linking Windows.Media; on macOS this
 //! also triggers the system permission prompt on first call after a fresh
 //! install.
 //!

@@ -46,7 +46,7 @@ pub fn find_pending(workflows_dir: &Path) -> Option<std::path::PathBuf> {
         .collect();
 
     // Sort by name descending (timestamps sort lexicographically)
-    entries.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
+    entries.sort_by_key(|e| std::cmp::Reverse(e.file_name()));
     entries.first().map(|e| e.path())
 }
 
