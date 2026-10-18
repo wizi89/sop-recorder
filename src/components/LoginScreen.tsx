@@ -197,14 +197,19 @@ export function LoginScreen({
 
             {links}
 
-            <button
-              type="button"
-              className="bg-transparent border-none cursor-pointer text-on-surface-variant hover:text-on-surface"
-              style={{ fontSize: "0.6875rem", transition: "color 0.15s" }}
-              onClick={() => setShowFallback(false)}
-            >
-              {t("login.with_browser_instead")}
-            </button>
+            {/* Not offered when the server has no browser path: the click
+                could not take effect, and a control that does nothing reads
+                as the app being broken rather than the server being old. */}
+            {!browserUnsupported && (
+              <button
+                type="button"
+                className="bg-transparent border-none cursor-pointer text-on-surface-variant hover:text-on-surface"
+                style={{ fontSize: "0.6875rem", transition: "color 0.15s" }}
+                onClick={() => setShowFallback(false)}
+              >
+                {t("login.with_browser_instead")}
+              </button>
+            )}
           </>
         )}
       </div>

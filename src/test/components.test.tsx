@@ -101,6 +101,9 @@ describe("LoginScreen", () => {
     // The form is already open: no extra click needed to get in.
     expect(screen.getByLabelText(/e-mail/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/passwort/i)).toBeInTheDocument();
+    // And no way back to a path this server does not have: the click could
+    // not take effect, so the control is not offered.
+    expect(screen.queryByText(/stattdessen mit browser/i)).not.toBeInTheDocument();
   });
 
   it("the fallback form still submits email and password", async () => {

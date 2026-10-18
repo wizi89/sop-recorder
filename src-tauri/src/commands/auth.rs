@@ -189,7 +189,16 @@ pub async fn login_via_browser(
     let cancel = CancellationToken::new();
     let attempt_id = pending.install(cancel.clone());
 
-    let callback = loopback::start_loopback(&webapp).await?;
+    let callback = match loopback::start_loopback(&webapp).await {
+        Ok(callback) => callback,
+        // Installed before the bind so a cancel arriving during it is not
+        // lost; that means the slot has to be cleared by hand when the bind
+        // is what fails, exactly as the `open_url` arm below does.
+        Err(e) => {
+            pending.release(attempt_id);
+            return Err(e);
+        }
+    };
     log::info!(
         "Browser sign-in: listening on {}",
         callback

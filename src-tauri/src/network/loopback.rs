@@ -40,8 +40,6 @@ pub enum Outcome {
     Verification,
     /// The user declined on the consent screen.
     Denied,
-    /// The code was expired or already used.
-    Expired,
     /// The server does not support browser sign-in.
     Unsupported,
     /// Anything else, including a keyring failure and a cancelled attempt.
@@ -54,7 +52,6 @@ impl Outcome {
             Outcome::Success => None,
             Outcome::Verification => Some("verification"),
             Outcome::Denied => Some("denied"),
-            Outcome::Expired => Some("expired"),
             Outcome::Unsupported => Some("unsupported"),
             Outcome::Error => Some("error"),
         }
@@ -414,7 +411,6 @@ mod tests {
         for (outcome, token) in [
             (Outcome::Verification, "verification"),
             (Outcome::Denied, "denied"),
-            (Outcome::Expired, "expired"),
             (Outcome::Unsupported, "unsupported"),
             (Outcome::Error, "error"),
         ] {
