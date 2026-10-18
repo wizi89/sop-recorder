@@ -448,12 +448,10 @@ fn install_os_hook() -> Result<(), String> {
                 CGEventType::KeyDown | CGEventType::KeyUp => {
                     let code = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
                     let down = matches!(event_type, CGEventType::KeyDown);
-                    RETURN_KEY_CODES.contains(&code).then(|| {
-                        if down {
-                            RawEvent::ReturnPress
-                        } else {
-                            RawEvent::ReturnRelease
-                        }
+                    RETURN_KEY_CODES.contains(&code).then_some(if down {
+                        RawEvent::ReturnPress
+                    } else {
+                        RawEvent::ReturnRelease
                     })
                 }
                 _ => None,

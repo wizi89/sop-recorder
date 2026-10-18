@@ -118,11 +118,11 @@ pub fn get_accessibility_permission_state() -> String {
             "Accessibility permission: {}",
             if granted { "granted" } else { "denied" }
         );
-        return if granted {
+        if granted {
             "granted".to_string()
         } else {
             "denied".to_string()
-        };
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -205,11 +205,11 @@ pub fn get_screen_recording_permission_state() -> String {
             "Screen recording permission: {}",
             if granted { "granted" } else { "denied" }
         );
-        return if granted {
+        if granted {
             "granted".to_string()
         } else {
             "denied".to_string()
-        };
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -292,7 +292,7 @@ pub fn open_privacy_settings(pane: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Could not open System Settings: {}", e))?;
         log::info!("Opened System Settings at {}", anchor);
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(target_os = "macos"))]
