@@ -23,7 +23,7 @@ export function useAudioLevel(): number {
       setLevel(event.payload);
     }).then((fn) => {
       if (cancelled) {
-        fn();
+        safeUnlisten(fn);
       } else {
         unlisten = fn;
       }

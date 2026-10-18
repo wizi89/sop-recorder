@@ -63,7 +63,6 @@ staging Supabase project** with the real smoke account:
 
 These need a person at a desktop, and in one case a Mac:
 
-- **7.2** -- macOS, in full. (**7.1 passed on Windows**; see below.)
 - **7.1b** -- Firefox and Safari. Brave is done (see below); whether the `302`
   from an `https` page to `127.0.0.1` goes through silently, prompts, or is
   blocked still has to be checked on a Gecko and a WebKit browser. **Any
@@ -86,7 +85,8 @@ These need a person at a desktop, and in one case a Mac:
 |---|---|
 | **Brave** (Chromium, shields on by default), Windows, 2026-10-17 | The `302` from the `https` page to `127.0.0.1` was followed **silently** -- no prompt, no block, no Local-Network-Access interstitial. |
 | Chrome, Edge | Not tested. Brave is the strictest Chromium of the three by default, so a silent pass there is weak but real evidence for the others. |
-| Firefox (Gecko), Safari (WebKit) | Not tested, and not predicted by the Brave result -- different engines, different local-network policies. |
+| **Safari** (WebKit), macOS 26.6.2, 2026-10-18 | Followed **silently** -- no prompt, no block. |
+| Firefox (Gecko) | Not tested, and not predicted by the other results -- a different engine with its own local-network policy. |
 
 **Task 8.2 is not triggered by anything observed.** The loopback listener
 stays; the deep-link switch stays on the shelf with its cost written down
@@ -120,3 +120,20 @@ Wording that puts the account inside the decision (a confirm button reading
 "Als <account> anmelden") was written and then reverted: the maintainer looked
 at it against the live page and chose to keep the current copy. Recorded here
 so the question is not reopened as if it had never been asked.
+
+## The macOS pass (task 7.2)
+
+macOS 26.6.2, `tauri dev --staging`, Safari, 2026-10-18: sign-in, logout and
+a second sign-in all completed, the Keychain held the credentials, and a
+restart went straight to the recorder. `cargo clippy -D warnings` had only
+ever run on Windows and failed on the `cfg(target_os = "macos")` arms; fixed.
+
+**Every sign-in filed an error report.** Not a crash: the screen switch after
+sign-in tears down Tauri event listeners while some are still registering,
+Tauri's unlisten rejects asynchronously, and the global `unhandledrejection`
+handler files that as a `ui_error`. `safeUnlisten` already existed for this;
+three hooks called the late-path unlisten raw instead, and two
+`onFocusChanged` subscriptions could not be protected at all, because the
+combined unlisten it returns discards the promises of the two it wraps. Those
+now listen to `TauriEvent.WINDOW_FOCUS` directly. Pre-existing on `main`, but
+the browser sign-in is what made it fire on every sign-in.
