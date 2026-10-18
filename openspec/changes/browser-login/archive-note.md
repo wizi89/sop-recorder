@@ -63,12 +63,12 @@ staging Supabase project** with the real smoke account:
 
 These need a person at a desktop, and in one case a Mac:
 
-- **7.1 / 7.2** -- a full windowed sign-in on Windows and macOS against
-  staging, including the keyring and a restart with no login screen.
-- **7.1b** -- the browser matrix (Chrome, Edge, Firefox, Safari): whether the
-  `302` from an `https` page to `127.0.0.1` goes through silently, prompts, or
-  is blocked. **Any prompt or block is the trigger for task 8.2**, and the
-  result belongs in this note with the browser and version.
+- **7.2** -- macOS, in full. (**7.1 passed on Windows**; see below.)
+- **7.1b** -- Firefox and Safari. Brave is done (see below); whether the `302`
+  from an `https` page to `127.0.0.1` goes through silently, prompts, or is
+  blocked still has to be checked on a Gecko and a WebKit browser. **Any
+  prompt or block is the trigger for task 8.2**, and the result belongs in
+  this note with the browser and version.
 - **5.1b** -- that the window actually comes to the front (and that a flashing
   taskbar button on Windows is what happens when foreground-lock rules apply).
 - **7.3 / 7.4 / 7.4b / 7.4c** -- the already-signed-in path, the failure paths
@@ -79,3 +79,44 @@ These need a person at a desktop, and in one case a Mac:
   still owed.
 - Staging was never pointed at either branch: Coolify rejected the stored API
   token with 401.
+
+## The browser matrix, so far (task 7.1b)
+
+| Browser | Result |
+|---|---|
+| **Brave** (Chromium, shields on by default), Windows, 2026-10-17 | The `302` from the `https` page to `127.0.0.1` was followed **silently** -- no prompt, no block, no Local-Network-Access interstitial. |
+| Chrome, Edge | Not tested. Brave is the strictest Chromium of the three by default, so a silent pass there is weak but real evidence for the others. |
+| Firefox (Gecko), Safari (WebKit) | Not tested, and not predicted by the Brave result -- different engines, different local-network policies. |
+
+**Task 8.2 is not triggered by anything observed.** The loopback listener
+stays; the deep-link switch stays on the shelf with its cost written down
+above.
+
+## The full windowed pass (task 7.1)
+
+Windows, against deployed staging, 2026-10-17, in Brave: the browser opened,
+**a password manager filled the form** -- the entire reason this change
+exists -- the recorder landed on the recorder screen, the keyring held
+`refresh-token` and `email`, and a restart went straight to the recorder with
+no login screen.
+
+## The wrong-account case, as it actually behaves (task 7.4b)
+
+Exercised on 2026-10-17: signed out of the recorder, started a browser
+sign-in, and the browser held a different account. The consent step named
+that account and offered "Nicht du? Konto wechseln", which is what the design
+specifies.
+
+What the run established, and what it rules out: **the page cannot warn about
+a mismatch, and neither can the recorder.** Signing out clears both keyring
+entries, so at the moment the consent screen is shown the recorder holds no
+account at all -- there is nothing on either side to compare against. Passing
+the recorder's account as a hint would do nothing for the ordinary path,
+where the user signs out first. The consent screen naming the account is
+therefore not one defence of several; it is the only one, and the recorder's
+main screen showing the signed-in email is the sole check after the fact.
+
+Wording that puts the account inside the decision (a confirm button reading
+"Als <account> anmelden") was written and then reverted: the maintainer looked
+at it against the live page and chose to keep the current copy. Recorded here
+so the question is not reopened as if it had never been asked.
