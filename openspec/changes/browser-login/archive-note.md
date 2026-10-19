@@ -117,11 +117,6 @@ staging Supabase project** with the real smoke account:
 
 These need a person at a desktop, and in one case a Mac:
 
-- **7.1b** -- Firefox and Safari. Brave is done (see below); whether the `302`
-  from an `https` page to `127.0.0.1` goes through silently, prompts, or is
-  blocked still has to be checked on a Gecko and a WebKit browser. **Any
-  prompt or block is the trigger for task 8.2**, and the result belongs in
-  this note with the browser and version.
 - **5.1b** -- that the window actually comes to the front (and that a flashing
   taskbar button on Windows is what happens when foreground-lock rules apply).
 - **7.3 / 7.4 / 7.4b / 7.4c** -- the already-signed-in path, the failure paths
@@ -140,9 +135,9 @@ These need a person at a desktop, and in one case a Mac:
 | **Brave** (Chromium, shields on by default), Windows, 2026-10-17 | The `302` from the `https` page to `127.0.0.1` was followed **silently** -- no prompt, no block, no Local-Network-Access interstitial. |
 | Chrome, Edge | Not tested. Brave is the strictest Chromium of the three by default, so a silent pass there is weak but real evidence for the others. |
 | **Safari** (WebKit), macOS 26.6.2, 2026-10-18 | Followed **silently** -- no prompt, no block. |
-| Firefox (Gecko) | Not tested, and not predicted by the other results -- a different engine with its own local-network policy. |
+| **Firefox 158.0** (Gecko), macOS 26.6.2, 2026-10-19 | Followed **silently** -- no prompt, no block. First start, no saved session; the sign-in completed and no error report followed. |
 
-**Task 8.2 is not triggered by anything observed.** The loopback listener
+**Task 8.2 is not triggered by anything observed, on all three engines.** The loopback listener
 stays; the deep-link switch stays on the shelf with its cost written down
 above.
 
