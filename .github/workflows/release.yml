@@ -52,7 +52,7 @@ jobs:
             fi
           }
 
-          # Browser sign-in (openspec/changes/browser-login).
+          # Browser sign-in (openspec/specs/user-authentication).
           api_post /auth/desktop/exchange
           web_get /desktop/authorize
 

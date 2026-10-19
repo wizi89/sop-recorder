@@ -6,7 +6,8 @@
 //! `tauri-plugin-deep-link`'s `on_open_url`, with a `Reply` whose `finish`
 //! does nothing -- under a scheme the browser has no connection waiting on the
 //! app. Nothing in `network/auth.rs`, the command, the server or the UI
-//! changes. See `openspec/changes/browser-login/tasks.md`, task 8.2.
+//! changes. See "What the deep-link switch costs" in
+//! `openspec/changes/archive/2026-10-19-browser-login/archive-note.md`.
 //!
 //! It is ~200 lines over `tokio::net::TcpListener` rather than a web
 //! framework: its whole job is to parse one request line, in code scheduled

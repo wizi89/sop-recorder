@@ -2,7 +2,7 @@
 
 How a user proves who they are to the recorder: where credentials may be entered, what the application is allowed to accept back from outside itself, and what the user is told when that exchange fails, is cancelled, or is tampered with.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Credentials are entered in the user's browser
 
@@ -201,6 +201,18 @@ Where the server does not support the browser sign-in exchange, the recorder SHA
 - **THEN** the user is told the server does not support browser sign-in
 - **AND** the message is distinguishable from a failed authentication
 - **AND** the user is directed to the in-app credential form
+
+#### Scenario: The unsupported server is recognised before the browser opens
+
+- **WHEN** the user starts a browser sign-in against a server whose exchange endpoint does not exist
+- **THEN** the recorder reports the unsupported server without opening the browser
+- **AND** the user is not left waiting for a callback that a server without the endpoint can never produce
+
+#### Scenario: Whether the server supports browser sign-in cannot be determined
+
+- **WHEN** the recorder cannot reach the server, or gets no answer in time, while checking for the exchange endpoint
+- **THEN** the browser sign-in proceeds as if the endpoint exists
+- **AND** the user is NOT told the server does not support browser sign-in
 
 #### Scenario: The exchange refuses an otherwise supported request
 
