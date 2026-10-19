@@ -521,8 +521,10 @@ function MainApp() {
     }
   }, [recorder, t]);
 
-  // Loading state
-  if (auth.loading) {
+  // Loading state. Not the browser wait: that has its own screen on
+  // LoginScreen, with the hint and the cancel button, and this gate would
+  // swallow it for the whole five minutes and leave only "...".
+  if (auth.loading && !auth.awaitingBrowser) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#14181C" }}>
         <p style={{ fontSize: 13, color: "#6B7780" }}>...</p>
