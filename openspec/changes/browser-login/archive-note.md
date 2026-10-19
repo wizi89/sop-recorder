@@ -75,6 +75,32 @@ thing:
 Both needed a real browser and a real window. The first also needed the
 browser's own retry, which no test client performs.
 
+## The failure paths, as they actually behave (task 7.4)
+
+Run on Windows against deployed staging, 2026-10-19:
+
+- **Cancel** ends the attempt at once and the tab gets the failure page.
+- **Timeout** was run against a temporarily shortened bound (60s rather than
+  300s, reverted straight after): the attempt ended by itself at 61 seconds
+  with "Die Anmeldung im Browser wurde nicht abgeschlossen", and `netstat`
+  showed the port unbound. What this does not prove is the value 300 itself,
+  only the path it leads to.
+- **Closing the tab does nothing, and nothing is what it can do.** No
+  connection is ever made to the loopback port, so the recorder has no signal
+  to react to; it waits out the bound. The user's way out is the cancel
+  button, which is why the screen it lives on mattered more than it looked.
+- **A tampered callback** (`state=wrong`, opened by hand while an attempt was
+  pending) left the recorder signed out with the verification message, sent
+  the tab to `sign-in-failed?reason=verification`, and the API log shows no
+  exchange at all -- the forged code was never offered upstream.
+
+**A stale tab can still mint a code.** Confirming in a tab whose attempt has
+already failed issues a fresh code and redirects to a port nobody is listening
+on: the server cannot know the recorder gave up. The code is single-use, lives
+60 seconds, and is bound to a PKCE verifier that only the dead attempt ever
+held, so it is unusable by anyone including the user. Recorded so it is not
+rediscovered as a suspected leak.
+
 ## Verified against a real stack
 
 The server side was run locally (`uvicorn` + `next dev`) against the **real
