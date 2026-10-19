@@ -134,7 +134,7 @@ These need a person at a desktop, and in one case a Mac:
 |---|---|
 | **Brave** (Chromium, shields on by default), Windows, 2026-10-17 | The `302` from the `https` page to `127.0.0.1` was followed **silently** -- no prompt, no block, no Local-Network-Access interstitial. |
 | Chrome, Edge | Not tested. Brave is the strictest Chromium of the three by default, so a silent pass there is weak but real evidence for the others. |
-| **Safari** (WebKit), macOS 26.6.2, 2026-10-18 | Followed **silently** -- no prompt, no block. |
+| **Safari 26.6.2** (WebKit), macOS 26.6.2, 2026-10-19 | Followed **silently** -- no prompt, no block. Default browser confirmed before the run; no error report followed. |
 | **Firefox 158.0** (Gecko), macOS 26.6.2, 2026-10-19 | Followed **silently** -- no prompt, no block. First start, no saved session; the sign-in completed and no error report followed. |
 
 **Task 8.2 is not triggered by anything observed, on all three engines.** The loopback listener
@@ -172,10 +172,13 @@ so the question is not reopened as if it had never been asked.
 
 ## The macOS pass (task 7.2)
 
-macOS 26.6.2, `tauri dev --staging`, Safari, 2026-10-18: sign-in, logout and
+macOS 26.6.2, `tauri dev --staging`, 2026-10-18: sign-in, logout and
 a second sign-in all completed, the Keychain held the credentials, and a
 restart went straight to the recorder. `cargo clippy -D warnings` had only
 ever run on Windows and failed on the `cfg(target_os = "macos")` arms; fixed.
+Which browser that run used was not recorded with certainty -- the system
+default turned out to be Brave -- so Safari was run again on its own on
+2026-10-19.
 
 **Every sign-in filed an error report.** Not a crash: the screen switch after
 sign-in tears down Tauri event listeners while some are still registering,
