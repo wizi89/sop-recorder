@@ -296,18 +296,11 @@ async fn complete_within(
         })?;
 
     let status = res.status();
-    if status.as_u16() == 404 || status.as_u16() == 405 {
+    let body = res.text().await.map_err(|e| e.to_string())?;
+    if lacks_exchange(status, &body) {
         return Err(UNSUPPORTED_SERVER.to_string());
     }
-
-    let body = res.text().await.map_err(|e| e.to_string())?;
-    let data: SignInResponse = match serde_json::from_str(&body) {
-        Ok(data) => data,
-        // Not JSON at all: an HTML error page from a proxy, or a plain-text
-        // gateway error. Indistinguishable from an API that predates the
-        // endpoint, and the same answer helps the user either way.
-        Err(_) => return Err(UNSUPPORTED_SERVER.to_string()),
-    };
+    let data: SignInResponse = serde_json::from_str(&body).expect("checked by lacks_exchange");
 
     let access_token = data.access_token.ok_or_else(|| {
         data.message
@@ -320,6 +313,64 @@ async fn complete_within(
         refresh_token: data.refresh_token.unwrap_or_default(),
         email: data.email,
     })
+}
+
+/// Whether a response to `/auth/desktop/exchange` says the endpoint is not
+/// there. 404 or 405 is an API deployed before it; a body that is not JSON at
+/// all is an HTML error page from a proxy, or a plain-text gateway error --
+/// indistinguishable from an API that predates the endpoint, and the same
+/// answer helps the user either way. Shared by `complete` and
+/// `probe_exchange`, so the two cannot disagree about what "unsupported" is.
+fn lacks_exchange(status: reqwest::StatusCode, body: &str) -> bool {
+    status.as_u16() == 404
+        || status.as_u16() == 405
+        || serde_json::from_str::<SignInResponse>(body).is_err()
+}
+
+/// The probe's deadline. Short, because the user has just clicked and is
+/// waiting for a browser to open; an inconclusive probe is not a failure.
+pub const PROBE_TIMEOUT_SECS: u64 = 5;
+
+/// Ask the API whether it has the exchange endpoint, before the browser opens.
+///
+/// Without this the old-server case is only detected at the exchange, which
+/// never happens: the web app predating the change has no `/desktop/authorize`
+/// either, so the browser lands on a 404 page, no callback arrives, and the
+/// attempt ends in a timeout five minutes later instead of pointing the user
+/// at the password form. That is the state everyone is in if a recorder
+/// release ships before the server, or the server is rolled back.
+///
+/// An empty body is safe to send: there is no code to consume, and a server
+/// that has the endpoint refuses it with a JSON `invalid_code`. Only a
+/// definite "not there" is reported. A network failure or timeout returns
+/// `Ok` and the attempt goes ahead as it did before, because nothing about
+/// the probe failing says which way the exchange will go.
+pub async fn probe_exchange(api_base: &str) -> Result<(), String> {
+    probe_exchange_within(api_base, std::time::Duration::from_secs(PROBE_TIMEOUT_SECS)).await
+}
+
+async fn probe_exchange_within(api_base: &str, timeout: std::time::Duration) -> Result<(), String> {
+    let Ok(client) = reqwest::Client::builder().timeout(timeout).build() else {
+        return Ok(());
+    };
+    let res = client
+        .post(format!("{}/auth/desktop/exchange", api_base))
+        .header("Content-Type", "application/json")
+        .body("{}")
+        .send()
+        .await;
+    let Ok(res) = res else {
+        return Ok(());
+    };
+    let status = res.status();
+    let Ok(body) = res.text().await else {
+        return Ok(());
+    };
+    if lacks_exchange(status, &body) {
+        Err(UNSUPPORTED_SERVER.to_string())
+    } else {
+        Ok(())
+    }
 }
 
 /// Persist what the exchange returned, exactly as `sign_in` does.
@@ -709,6 +760,50 @@ mod tests {
             err_of(complete(&p, "the-code", &base).await),
             UNSUPPORTED_SERVER
         );
+    }
+
+    #[tokio::test]
+    async fn the_probe_reports_an_api_without_the_endpoint() {
+        let base = stub_server(Some(Box::leak(
+            http(
+                "404 Not Found",
+                "application/json",
+                r#"{"detail":"Not Found"}"#,
+            )
+            .into_boxed_str(),
+        )))
+        .await;
+
+        assert_eq!(probe_exchange(&base).await.unwrap_err(), UNSUPPORTED_SERVER);
+    }
+
+    #[tokio::test]
+    async fn the_probe_passes_an_api_that_refuses_the_empty_body() {
+        // What staging answers: the endpoint is there and wants a code.
+        let base = stub_server(Some(Box::leak(
+            http(
+                "400 Bad Request",
+                "application/json",
+                r#"{"error":"invalid_code","message":"The sign-in code is invalid or has expired."}"#,
+            )
+            .into_boxed_str(),
+        )))
+        .await;
+
+        assert!(probe_exchange(&base).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn the_probe_does_not_block_sign_in_when_it_cannot_tell() {
+        // Silence and an unreachable host both say nothing about the
+        // endpoint, so the attempt goes ahead exactly as it did before.
+        let silent = stub_server(None).await;
+        assert!(
+            probe_exchange_within(&silent, std::time::Duration::from_millis(200))
+                .await
+                .is_ok()
+        );
+        assert!(probe_exchange("http://127.0.0.1:1").await.is_ok());
     }
 
     #[tokio::test]

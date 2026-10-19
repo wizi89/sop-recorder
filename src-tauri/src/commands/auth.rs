@@ -179,6 +179,14 @@ pub async fn login_via_browser(
     let api_base = get_api_base(&app);
     let webapp = get_webapp_base(&app);
 
+    // Before anything is bound or opened: against an API without the
+    // endpoint the browser would only find a 404 page and the attempt would
+    // run into its timeout. See `probe_exchange`.
+    if let Err(e) = net_auth::probe_exchange(api_base).await {
+        log::info!("Browser sign-in: server does not support it");
+        return Err(e);
+    }
+
     let (attempt, challenge) = net_auth::begin();
 
     let cancel = CancellationToken::new();

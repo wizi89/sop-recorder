@@ -189,3 +189,25 @@ three hooks called the late-path unlisten raw instead, and two
 combined unlisten it returns discards the promises of the two it wraps. Those
 now listen to `TauriEvent.WINDOW_FOCUS` directly. Pre-existing on `main`, but
 the browser sign-in is what made it fire on every sign-in.
+
+## Before merging: the old-server case was detected too late
+
+Checked against production on 2026-10-19: neither `/auth/desktop/exchange` on
+the API nor `/desktop/authorize` on the web app exists there yet (both 404).
+The unsupported-server message (task 7.7) only fired at the exchange, and the
+exchange never happens against an old server: the browser lands on the web
+app's 404 page, no callback arrives, and the attempt ends in a timeout five
+minutes later. Two changes close that:
+
+- **`probe_exchange`** posts an empty body to the exchange endpoint before
+  anything is bound or opened. A server with it refuses that with a JSON
+  `invalid_code`; one without it answers 404. The user gets the
+  unsupported-server message and the password form at once. The probe shares
+  `lacks_exchange` with `complete`, and anything inconclusive -- no network, a
+  timeout -- lets the attempt go ahead as before.
+- **`release.yml` has a `server-contract` job** that every release, beta
+  included, has to pass: it reads the production URLs from `config.rs` and
+  fails if either endpoint is missing. "The server must ship first" is now
+  enforced at the tag rather than remembered. New server dependencies get one
+  line there.
+
