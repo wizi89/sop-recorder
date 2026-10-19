@@ -33,6 +33,18 @@ describe("i18n", () => {
       "login.signing_in",
       "login.forgot_password",
       "login.sign_out",
+      // Browser sign-in
+      "login.browser_sign_in",
+      "login.browser_waiting",
+      "login.browser_waiting_hint",
+      "login.browser_cancel",
+      "login.browser_cancelled",
+      "login.browser_timeout",
+      "login.browser_verification",
+      "login.browser_denied",
+      "login.browser_unsupported",
+      "login.without_browser",
+      "login.with_browser_instead",
       // Recording
       "status.ready",
       "status.start",

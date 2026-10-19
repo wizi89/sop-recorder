@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Signing in now happens in your own web browser instead of a form inside the app, so your password manager can fill it in, and if you are already signed in on the website you only confirm. The app never sees your password. The old form is still there for one more version, behind "Ohne Browser anmelden", in case the browser cannot reach the app on your computer.
+
 ## [0.18.0] - 2026-09-14
 
 ### Changed

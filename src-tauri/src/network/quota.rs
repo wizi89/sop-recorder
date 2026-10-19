@@ -54,10 +54,7 @@ pub async fn fetch_quota(access_token: &str, api_url: Option<&str>) -> Result<Qu
         .map_err(|e| format!("Quota fetch failed: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!(
-            "Quota fetch returned HTTP {}",
-            response.status()
-        ));
+        return Err(format!("Quota fetch returned HTTP {}", response.status()));
     }
 
     response

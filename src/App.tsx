@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen, TauriEvent } from "@tauri-apps/api/event";
 import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -166,13 +166,13 @@ function MainApp() {
   // window closes, or after the admin tops up the user's quota externally).
   // NOTE: must NOT depend on `quotaHook` -- it changes identity every render.
   useEffect(() => {
-    const appWindow = getCurrentWindow();
-    const unlisten = appWindow.onFocusChanged(({ payload: focused }) => {
-      if (focused) {
-        loadSettings();
-        if (auth.loggedIn) {
-          void refreshQuotaRef.current();
-        }
+    // Not `onFocusChanged`: its combined unlisten drops the promises of the
+    // two it wraps, so a teardown race rejects where nothing can catch it and
+    // the global handler files it as an error report. Only focus matters here.
+    const unlisten = getCurrentWindow().listen(TauriEvent.WINDOW_FOCUS, () => {
+      loadSettings();
+      if (auth.loggedIn) {
+        void refreshQuotaRef.current();
       }
     });
     return () => { void unlisten.then(safeUnlisten); };
@@ -290,16 +290,15 @@ function MainApp() {
     let cancelled = false;
     let stop: (() => void) | null = null;
     const off = () => {
-      try {
-        stop?.();
-      } catch {
-        // Already torn down.
-      }
+      // Tauri's unlisten rejects asynchronously, so a try/catch here cannot
+      // see the throw; it reaches the global handler as a report.
+      safeUnlisten(stop);
       stop = null;
     };
+    // WINDOW_FOCUS rather than onFocusChanged, for the reason given above.
     void getCurrentWindow()
-      .onFocusChanged(({ payload: focused }) => {
-        if (focused) void setErrorReportPhase(phase, true);
+      .listen(TauriEvent.WINDOW_FOCUS, () => {
+        void setErrorReportPhase(phase, true);
       })
       .then((fn) => {
         stop = fn;
@@ -522,8 +521,10 @@ function MainApp() {
     }
   }, [recorder, t]);
 
-  // Loading state
-  if (auth.loading) {
+  // Loading state. Not the browser wait: that has its own screen on
+  // LoginScreen, with the hint and the cancel button, and this gate would
+  // swallow it for the whole five minutes and leave only "...".
+  if (auth.loading && !auth.awaitingBrowser) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#14181C" }}>
         <p style={{ fontSize: 13, color: "#6B7780" }}>...</p>
@@ -601,6 +602,10 @@ function MainApp() {
         <div className="flex-1 min-h-0">
           <LoginScreen
             onLogin={auth.login}
+            onLoginViaBrowser={auth.loginViaBrowser}
+            onCancelBrowserLogin={auth.cancelBrowserLogin}
+            awaitingBrowser={auth.awaitingBrowser}
+            browserUnsupported={auth.browserUnsupported}
             loading={auth.loading}
             error={auth.error}
             version={version}

@@ -9,7 +9,57 @@ permissions:
   contents: write
 
 jobs:
+  # Every release, beta included, talks to production. A recorder that needs an
+  # endpoint production does not serve yet ships a feature that cannot work --
+  # browser sign-in against a server without it opens a 404 page. The server
+  # has to deploy first, and this is where that order is enforced rather than
+  # remembered. When the app starts depending on a new endpoint, add a line.
+  server-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Production serves what this build needs
+        run: |
+          set -euo pipefail
+          # Read from the app itself, so the check cannot drift from what ships.
+          API=$(sed -n 's/^pub const API_URL_PROD: &str = "\(.*\)";$/\1/p' src-tauri/src/config.rs)
+          WEB=$(sed -n 's/^pub const WEBAPP_URL_PROD: &str = "\(.*\)";$/\1/p' src-tauri/src/config.rs)
+          [ -n "$API" ] && [ -n "$WEB" ] || { echo "::error::Could not read the production URLs from config.rs"; exit 1; }
+          FAILED=0
+
+          # An API with the endpoint refuses an empty body with a JSON error;
+          # one without it answers 404 or 405. The same rule the app's
+          # probe_exchange applies.
+          api_post() {
+            local path="$1" code body
+            body=$(curl -sS -m 20 -o - -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' -d '{}' "$API$path")
+            code=${body##*$'\n'}; body=${body%$'\n'*}
+            if [ "$code" = 404 ] || [ "$code" = 405 ] || ! jq -e . >/dev/null 2>&1 <<<"$body"; then
+              echo "::error::$API$path is missing (HTTP $code). Deploy the server first."; FAILED=1
+            else
+              echo "ok  POST $API$path -> $code"
+            fi
+          }
+          web_get() {
+            local path="$1" code
+            code=$(curl -sS -m 20 -o /dev/null -w '%{http_code}' "$WEB$path")
+            if [ "$code" = 404 ]; then
+              echo "::error::$WEB$path is missing (HTTP $code). Deploy the web app first."; FAILED=1
+            else
+              echo "ok  GET  $WEB$path -> $code"
+            fi
+          }
+
+          # Browser sign-in (openspec/changes/browser-login).
+          api_post /auth/desktop/exchange
+          web_get /desktop/authorize
+
+          exit $FAILED
+
   release:
+    needs: server-contract
     strategy:
       fail-fast: false
       matrix:

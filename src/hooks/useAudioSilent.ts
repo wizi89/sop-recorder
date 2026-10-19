@@ -32,7 +32,7 @@ export function useAudioSilent(recording: boolean): boolean {
     let cancelled = false;
 
     void listen("recording:audio_silent", () => setSilent(true)).then((fn) => {
-      if (cancelled) fn();
+      if (cancelled) safeUnlisten(fn);
       else unlisten = fn;
     });
 

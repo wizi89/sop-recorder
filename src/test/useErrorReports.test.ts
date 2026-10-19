@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
+import type { InvokeArgs } from "@tauri-apps/api/core";
 import { useErrorReports } from "../hooks/useErrorReports";
 import type { ErrorReport } from "../lib/tauri";
 
@@ -257,5 +258,54 @@ describe("useErrorReports", () => {
     const back = renderHook(() => useErrorReports({ loggedIn: true, mode: "ask" }));
     await waitFor(() => expect(submitted).toEqual(["aaaaaaaa-0000-0000-0000-000000000000"]));
     expect(back.result.current.current).toBeNull();
+  });
+
+  it("a sweep arriving mid-grant cannot carry off the number", async () => {
+    // The race the serialisation exists for, held still. Submitting takes
+    // *everything* granted, so a sweep landing between this grant's decide and
+    // its own submit sends the report and leaves the grant with nothing to
+    // report back -- the user is told nothing about a report that did go.
+    // Found as a flaky test; this is the same thing with the timing nailed
+    // down. It fails if the queue in useErrorReports is removed.
+    stored = [report()];
+
+    let granted!: () => void;
+    const decideReached = new Promise<void>((resolve) => {
+      granted = resolve;
+    });
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const realInvoke = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: InvokeArgs) => {
+      const out = await realInvoke(cmd, args);
+      if (cmd === "decide_error_report") {
+        // The consent is on disk now; the send has not happened yet. This is
+        // the window the sweep used to slip through.
+        granted();
+        await held;
+      }
+      return out;
+    });
+
+    const { result, rerender } = renderHook(
+      ({ loggedIn }) => useErrorReports({ loggedIn, mode: "ask" }),
+      { initialProps: { loggedIn: false } },
+    );
+    await waitFor(() => expect(result.current.current).not.toBeNull());
+
+    const grant = result.current.grant(result.current.current!);
+    await decideReached;
+
+    // Signing in is what triggers the sweep, right inside that window.
+    rerender({ loggedIn: true });
+    release();
+
+    const sent = await grant;
+    expect(sent, "the grant lost its report to the sweep").not.toBeNull();
+    expect(sent!.number).toBe("11111111");
+    expect(submitted).toEqual(["11111111-2222-3333-4444-555555555555"]);
   });
 });

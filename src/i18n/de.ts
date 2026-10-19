@@ -8,6 +8,22 @@ const de = {
   "login.forgot_password": "Passwort vergessen?",
   "login.create_account": "Konto erstellen",
   "login.sign_out": "Abmelden",
+  "login.browser_sign_in": "Mit Browser anmelden",
+  "login.browser_waiting": "Warte auf die Anmeldung im Browser...",
+  "login.browser_waiting_hint":
+    "Der Browser wurde geöffnet. Melde dich dort an und bestätige die Anmeldung. Danach kommst du automatisch hierher zurück.",
+  "login.browser_cancel": "Abbrechen",
+  "login.browser_cancelled": "Die Anmeldung wurde abgebrochen.",
+  "login.browser_timeout":
+    "Die Anmeldung im Browser wurde nicht abgeschlossen. Du kannst es erneut versuchen.",
+  "login.browser_verification":
+    "Die Antwort aus dem Browser konnte nicht überprüft werden. Die Anmeldung wurde aus Sicherheitsgründen abgebrochen. Bitte versuche es erneut.",
+  "login.browser_denied":
+    "Die Anmeldung wurde im Browser abgelehnt. Du kannst es erneut versuchen.",
+  "login.browser_unsupported":
+    "Dieser Server unterstützt die Anmeldung über den Browser noch nicht. Melde dich bitte ohne Browser an.",
+  "login.without_browser": "Ohne Browser anmelden",
+  "login.with_browser_instead": "Stattdessen mit Browser anmelden",
 
   // Recording
   "status.ready": "Bereit",

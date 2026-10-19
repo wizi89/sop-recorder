@@ -30,6 +30,20 @@ export async function login(
   return invoke("login", { email, password });
 }
 
+/**
+ * Open the web app's login in the user's real browser and wait for the
+ * callback. Resolves when the recorder has a session, rejects with a message
+ * key or text on every other ending (cancel, timeout, verification failure,
+ * a server without the endpoint).
+ */
+export async function loginViaBrowser(): Promise<SessionState> {
+  return invoke("login_via_browser");
+}
+
+export async function cancelBrowserLogin(): Promise<void> {
+  return invoke("cancel_browser_login");
+}
+
 export async function logout(): Promise<void> {
   return invoke("logout");
 }

@@ -41,6 +41,8 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
@@ -56,6 +58,17 @@ jobs:
       - name: Rust tests
         working-directory: src-tauri
         run: cargo test --lib
+
+      # Gated, not advisory: the lints were clean once and had drifted back to
+      # a dozen by the time anyone looked, because nothing failed a build over
+      # them.
+      - name: Rust format
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: TypeScript check
         run: npx tsc --noEmit

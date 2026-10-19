@@ -32,7 +32,7 @@ export function useCaptureCount(recording: boolean): number {
       setCount(event.payload);
     }).then((fn) => {
       if (cancelled) {
-        fn();
+        safeUnlisten(fn);
       } else {
         unlistenCaptured = fn;
       }
@@ -43,7 +43,7 @@ export function useCaptureCount(recording: boolean): number {
       setCount(event.payload);
     }).then((fn) => {
       if (cancelled) {
-        fn();
+        safeUnlisten(fn);
       } else {
         unlistenDeleted = fn;
       }

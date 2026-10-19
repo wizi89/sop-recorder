@@ -1,8 +1,8 @@
 //! Error reports: what the recorder collects when something fails, and the
 //! on-disk queue those reports wait in until the user has decided.
 //!
-//! Design references are to `openspec/changes/recorder-error-reports/design.md`
-//! in the `sop-sorcery` repository.
+//! Design references are to the backend's
+//! `openspec/changes/recorder-error-reports/design.md`.
 //!
 //! - D3 fixes the report's shape and the fields that may never appear in one.
 //!   The type below is that shape; the fields it lacks are the enforcement.
@@ -231,9 +231,13 @@ fn probe_os_version() -> String {
     // No new dependency for this: the platform's own version command is the
     // only source, and a report without it is still a usable report.
     #[cfg(target_os = "macos")]
-    let probe = std::process::Command::new("sw_vers").arg("-productVersion").output();
+    let probe = std::process::Command::new("sw_vers")
+        .arg("-productVersion")
+        .output();
     #[cfg(target_os = "windows")]
-    let probe = std::process::Command::new("cmd").args(["/C", "ver"]).output();
+    let probe = std::process::Command::new("cmd")
+        .args(["/C", "ver"])
+        .output();
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     let probe = std::process::Command::new("uname").arg("-r").output();
 
@@ -356,7 +360,11 @@ impl Scrubber {
     pub fn new(home: Option<PathBuf>, output_dir: Option<String>) -> Self {
         Self {
             home: home
-                .map(|p| p.to_string_lossy().trim_end_matches(['/', '\\']).to_string())
+                .map(|p| {
+                    p.to_string_lossy()
+                        .trim_end_matches(['/', '\\'])
+                        .to_string()
+                })
                 .filter(|s| !s.is_empty()),
             output_dir: output_dir
                 .map(|s| s.trim_end_matches(['/', '\\']).to_string())
@@ -402,9 +410,7 @@ impl Scrubber {
                 Some((_, sep)) if sep == '/' || sep == '\\' => {
                     out.push(sep);
                     let tail = &after[sep.len_utf8()..];
-                    let end = tail
-                        .find(['/', '\\', ' ', '"', '\''])
-                        .unwrap_or(tail.len());
+                    let end = tail.find(['/', '\\', ' ', '"', '\'']).unwrap_or(tail.len());
                     if end > 0 {
                         out.push_str("<Aufnahme>");
                     }
@@ -441,7 +447,9 @@ fn looks_like_email(token: &str) -> bool {
         && domain.contains('.')
         && !domain.starts_with('.')
         && !domain.ends_with('.')
-        && domain.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-')
+        && domain
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '.' || c == '-')
 }
 
 fn split_keeping_separators(line: &str) -> Vec<&str> {
@@ -614,10 +622,7 @@ pub fn context() -> Option<ReportContext> {
 }
 
 pub fn scrubber() -> Scrubber {
-    Scrubber::new(
-        dirs_next::home_dir(),
-        context().and_then(|c| c.output_dir),
-    )
+    Scrubber::new(dirs_next::home_dir(), context().and_then(|c| c.output_dir))
 }
 
 /// Where reports are written. Set once at startup from `reports_dir()`; the
@@ -710,11 +715,7 @@ fn breadcrumb(stage: &str) {
     if std::fs::create_dir_all(&dir).is_err() {
         return;
     }
-    let line = format!(
-        "{} {}\n",
-        chrono::Utc::now().to_rfc3339(),
-        stage,
-    );
+    let line = format!("{} {}\n", chrono::Utc::now().to_rfc3339(), stage,);
     // One line per launch plus four per panic, appended forever, in a
     // directory that otherwise empties itself. Start over rather than grow
     // without limit; the recent past is the only part anyone reads.
@@ -783,8 +784,7 @@ fn write_panic_report(info: &std::panic::PanicHookInfo<'_>) {
 /// Where reports wait. Resolved without an `AppHandle` so the panic hook,
 /// which is installed before the Tauri builder runs (D5), can reach it.
 pub fn reports_dir() -> Option<PathBuf> {
-    dirs_next::data_local_dir()
-        .map(|p| p.join("com.cogniclone.recorder").join("error-reports"))
+    dirs_next::data_local_dir().map(|p| p.join("com.cogniclone.recorder").join("error-reports"))
 }
 
 /// Write a report and announce it.
@@ -813,8 +813,7 @@ pub fn write_report(dir: &Path, report: &ErrorReport) -> Result<PathBuf, std::io
 fn persist(dir: &Path, report: &ErrorReport) -> Result<PathBuf, std::io::Error> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(report.file_name());
-    let json = serde_json::to_string_pretty(report)
-        .map_err(std::io::Error::other)?;
+    let json = serde_json::to_string_pretty(report).map_err(std::io::Error::other)?;
     std::fs::write(&path, json)?;
     Ok(path)
 }
@@ -1067,8 +1066,13 @@ mod breadcrumb_isolation {
         breadcrumb("test marker");
 
         let trail = dir.path().join("panic-trail.log");
-        assert!(trail.exists(), "the trail must land in the active directory");
-        assert!(std::fs::read_to_string(&trail).unwrap().contains("test marker"));
+        assert!(
+            trail.exists(),
+            "the trail must land in the active directory"
+        );
+        assert!(std::fs::read_to_string(&trail)
+            .unwrap()
+            .contains("test marker"));
 
         let real = dirs_next::data_local_dir()
             .map(|p| p.join("com.cogniclone.recorder").join("panic-trail.log"));
@@ -1159,13 +1163,7 @@ mod tests {
     #[test]
     fn message_is_capped_without_splitting_a_character() {
         let long = "ü".repeat(MESSAGE_MAX_BYTES);
-        let report = ErrorReport::new(
-            ReportKind::UiError,
-            Phase::Idle,
-            long,
-            None,
-            Vec::new(),
-        );
+        let report = ErrorReport::new(ReportKind::UiError, Phase::Idle, long, None, Vec::new());
         assert!(report.message.len() <= MESSAGE_MAX_BYTES);
         assert!(report.message.chars().all(|c| c == 'ü'));
     }
@@ -1227,10 +1225,7 @@ mod tests {
         // capture/audio.rs:198, when the output dir has been moved elsewhere.
         let line = "Audio recording started: /Users/anna/Library/Caches/rec.wav";
         let out = scrubber().scrub(line);
-        assert_eq!(
-            out,
-            "Audio recording started: ~/Library/Caches/rec.wav"
-        );
+        assert_eq!(out, "Audio recording started: ~/Library/Caches/rec.wav");
     }
 
     #[test]
@@ -1332,7 +1327,10 @@ mod tests {
         assert_eq!(report.consent, Consent::Pending);
         assert!(report.message.contains("Bildschirmfoto"));
         let location = report.location.as_deref().expect("panic location");
-        assert!(location.contains("error_reports.rs"), "location was {location}");
+        assert!(
+            location.contains("error_reports.rs"),
+            "location was {location}"
+        );
     }
 
     #[test]
@@ -1384,7 +1382,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(granted.consent, Consent::Granted);
-        assert_eq!(granted.comment.as_deref(), Some("Ich wollte die Aufnahme stoppen"));
+        assert_eq!(
+            granted.comment.as_deref(),
+            Some("Ich wollte die Aufnahme stoppen")
+        );
 
         let on_disk = &list_reports(dir.path())[0];
         assert_eq!(on_disk.consent, Consent::Granted);

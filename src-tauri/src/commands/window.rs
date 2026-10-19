@@ -137,7 +137,11 @@ pub fn set_display_affinity(app: tauri::AppHandle, hide: bool) -> Result<(), Str
 
         // Get the native HWND
         let hwnd = window.hwnd().map_err(|e| e.to_string())?;
-        let affinity = if hide { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE };
+        let affinity = if hide {
+            WDA_EXCLUDEFROMCAPTURE
+        } else {
+            WDA_NONE
+        };
 
         unsafe {
             SetWindowDisplayAffinity(HWND(hwnd.0 as *mut _), affinity)

@@ -47,7 +47,9 @@ const KEY_RELEASE_ASSUMED_MS: u64 = 1_000;
 pub enum CaptureEvent {
     /// `pos` is the cursor position at capture time. `None` only when the OS
     /// refused to report it, which is rare and never a reason to drop a step.
-    MouseClick { pos: Option<(i32, i32)> },
+    MouseClick {
+        pos: Option<(i32, i32)>,
+    },
     EnterKey,
 }
 
@@ -59,7 +61,10 @@ pub enum CaptureEvent {
 /// interval. A keypress, an unknown position, or no previous capture all mean
 /// "capture" -- a surplus step costs attention, a missing one costs the
 /// recording.
-pub fn should_suppress(event: &CaptureEvent, mouse_baseline: Option<((i32, i32), Duration)>) -> bool {
+pub fn should_suppress(
+    event: &CaptureEvent,
+    mouse_baseline: Option<((i32, i32), Duration)>,
+) -> bool {
     match (event, mouse_baseline) {
         (CaptureEvent::MouseClick { pos: Some(pos) }, Some((baseline, since))) => {
             *pos == baseline && since < Duration::from_millis(SUPPRESSION_WINDOW_MS)
@@ -167,6 +172,10 @@ pub fn set_excluded_region(region: Option<(i32, i32, i32, i32)>) {
 ///
 /// Split out from the platform hook so it can be tested without a window, a
 /// cursor, or a screen.
+///
+/// Its only non-test caller is the macOS hook, so on every other platform it
+/// is exercised by the tests alone.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn point_is_in_region(point: (i32, i32), region: Option<(i32, i32, i32, i32)>) -> bool {
     let Some((x, y, w, h)) = region else {
         return false;
@@ -213,10 +222,7 @@ fn end_session() {
 /// Start listening for global mouse clicks and Enter key. Calls `on_event`
 /// directly in the listener thread for each captured event. Screenshots are
 /// taken immediately -- no queuing.
-pub fn start_listener_with_callback<F>(
-    exclude_hwnd: Option<isize>,
-    on_event: F,
-) -> InputHookHandle
+pub fn start_listener_with_callback<F>(exclude_hwnd: Option<isize>, on_event: F) -> InputHookHandle
 where
     F: Fn(CaptureEvent) + Send + Sync + 'static,
 {
@@ -283,7 +289,8 @@ fn dispatch(event: RawEvent) {
                 let (x, y) = get_cursor_position().unwrap_or_default();
                 log::info!(
                     "input_hooks: ignored click at ({}, {}), landed on the recorder window",
-                    x, y,
+                    x,
+                    y,
                 );
                 return;
             }
@@ -441,12 +448,10 @@ fn install_os_hook() -> Result<(), String> {
                 CGEventType::KeyDown | CGEventType::KeyUp => {
                     let code = event.get_integer_value_field(EventField::KEYBOARD_EVENT_KEYCODE);
                     let down = matches!(event_type, CGEventType::KeyDown);
-                    RETURN_KEY_CODES.contains(&code).then(|| {
-                        if down {
-                            RawEvent::ReturnPress
-                        } else {
-                            RawEvent::ReturnRelease
-                        }
+                    RETURN_KEY_CODES.contains(&code).then_some(if down {
+                        RawEvent::ReturnPress
+                    } else {
+                        RawEvent::ReturnRelease
                     })
                 }
                 _ => None,
@@ -487,8 +492,10 @@ fn install_os_hook() -> Result<(), String> {
 /// then walks up the parent chain to see if it belongs to the excluded window.
 #[cfg(windows)]
 fn is_click_on_excluded_window(exclude_hwnd: Option<isize>) -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, WindowFromPoint, GetAncestor, GA_ROOT};
     use windows::Win32::Foundation::POINT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetAncestor, GetCursorPos, WindowFromPoint, GA_ROOT,
+    };
 
     let hwnd = match exclude_hwnd {
         Some(h) => HWND(h as *mut _),
@@ -530,8 +537,8 @@ fn is_click_on_excluded_window(_exclude_hwnd: Option<isize>) -> bool {
 /// Get the current mouse cursor position (Windows).
 #[cfg(windows)]
 pub fn get_cursor_position() -> Option<(i32, i32)> {
-    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
     use windows::Win32::Foundation::POINT;
+    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
     let mut point = POINT::default();
     unsafe {
@@ -585,7 +592,9 @@ mod tests {
     /// failed assertion in one test must report as that test failing, not as
     /// every later test panicking on the lock.
     fn global_session_guard() -> std::sync::MutexGuard<'static, ()> {
-        GLOBAL_SESSION_TESTS.lock().unwrap_or_else(|e| e.into_inner())
+        GLOBAL_SESSION_TESTS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     /// The leak this guards: `rdev::listen` was called once per recording, so
@@ -628,7 +637,14 @@ mod tests {
 
         begin_session(None, Arc::new(|_| {}));
         assert!(
-            SESSION.lock().unwrap().as_ref().unwrap().baseline.mouse.is_none(),
+            SESSION
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .baseline
+                .mouse
+                .is_none(),
             "a click at the previous recording's last position must not be suppressed",
         );
         end_session();
@@ -642,15 +658,24 @@ mod tests {
         // The bar as anchored bottom-right: 240x34 at (1218, 840).
         let bar = Some((1218, 840, 240, 34));
         assert!(point_is_in_region((1408, 843), bar), "the Stop button");
-        assert!(point_is_in_region((1218, 840), bar), "top-left corner is in");
+        assert!(
+            point_is_in_region((1218, 840), bar),
+            "top-left corner is in"
+        );
     }
 
     #[test]
     fn a_click_outside_the_recorder_bar_is_a_real_step() {
         let bar = Some((1218, 840, 240, 34));
-        assert!(!point_is_in_region((1217, 843), bar), "one pixel left of it");
+        assert!(
+            !point_is_in_region((1217, 843), bar),
+            "one pixel left of it"
+        );
         assert!(!point_is_in_region((1408, 839), bar), "one pixel above it");
-        assert!(!point_is_in_region((829, 318), bar), "the far side of the screen");
+        assert!(
+            !point_is_in_region((829, 318), bar),
+            "the far side of the screen"
+        );
     }
 
     /// The far edges are exclusive: a window at x..x+w does not own the pixel
@@ -682,7 +707,10 @@ mod tests {
 
     #[test]
     fn same_position_inside_the_window_is_suppressed() {
-        assert!(should_suppress(&click(400, 300), Some(((400, 300), ms(50)))));
+        assert!(should_suppress(
+            &click(400, 300),
+            Some(((400, 300), ms(50)))
+        ));
     }
 
     #[test]
@@ -691,7 +719,10 @@ mod tests {
             &click(400, 300),
             Some(((400, 300), ms(SUPPRESSION_WINDOW_MS)))
         ));
-        assert!(!should_suppress(&click(400, 300), Some(((400, 300), ms(2_000)))));
+        assert!(!should_suppress(
+            &click(400, 300),
+            Some(((400, 300), ms(2_000)))
+        ));
     }
 
     #[test]
@@ -810,12 +841,5 @@ mod tests {
     #[test]
     fn the_first_keypress_is_never_suppressed() {
         assert!(!gate_keypress(&mut KeyState::default(), Instant::now()));
-    }
-
-    #[test]
-    fn the_window_cannot_exceed_the_rule_it_replaces() {
-        // The spec bound: a wider window would drop same-position events that
-        // the previous time-only rule captured. Also enforced at compile time.
-        assert!(SUPPRESSION_WINDOW_MS <= 300);
     }
 }

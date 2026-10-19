@@ -68,11 +68,14 @@ impl AppSettings {
         // Corrected here rather than only on the next save, so the file and the
         // application never disagree about where the logs are.
         if store.get("output_dir").is_some() {
-            let stored = store.get("logs_dir").and_then(|v| v.as_str().map(String::from));
+            let stored = store
+                .get("logs_dir")
+                .and_then(|v| v.as_str().map(String::from));
             if let Some(correction) = logs_dir_correction(stored.as_deref(), &defaults.logs_dir) {
                 log::info!(
                     "Correcting the stored log directory from {:?} to {}",
-                    stored, correction,
+                    stored,
+                    correction,
                 );
                 store.set("logs_dir", serde_json::json!(correction));
             }
@@ -90,10 +93,19 @@ impl AppSettings {
 
         store.set("output_dir", serde_json::json!(defaults.output_dir));
         store.set("logs_dir", serde_json::json!(defaults.logs_dir));
-        store.set("hide_from_screenshots", serde_json::json!(defaults.hide_from_screenshots));
+        store.set(
+            "hide_from_screenshots",
+            serde_json::json!(defaults.hide_from_screenshots),
+        );
         store.set("skip_pii_check", serde_json::json!(defaults.skip_pii_check));
-        store.set("pipeline_version", serde_json::json!(defaults.pipeline_version));
-        store.set("generation_model", serde_json::json!(defaults.generation_model));
+        store.set(
+            "pipeline_version",
+            serde_json::json!(defaults.pipeline_version),
+        );
+        store.set(
+            "generation_model",
+            serde_json::json!(defaults.generation_model),
+        );
         store.set("error_reports", serde_json::json!(defaults.error_reports));
         store.set("beta_updates", serde_json::json!(defaults.beta_updates));
     }
@@ -112,11 +124,12 @@ impl AppSettings {
         // (`~/Library/Logs/<id>` against `~/Library/Application Support/<id>/logs`),
         // which is why settings.json named a directory that did not exist and
         // only the macOS test caught it.
-        let app_data = app.path().app_log_dir()
-            .unwrap_or_else(|_| dirs_next::data_local_dir()
+        let app_data = app.path().app_log_dir().unwrap_or_else(|_| {
+            dirs_next::data_local_dir()
                 .unwrap_or_else(|| std::path::PathBuf::from("."))
                 .join(name)
-                .join("logs"));
+                .join("logs")
+        });
 
         Self {
             output_dir: docs.to_string_lossy().to_string(),
@@ -237,8 +250,14 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     }
 
     store.set("skip_pii_check", serde_json::json!(settings.skip_pii_check));
-    store.set("pipeline_version", serde_json::json!(settings.pipeline_version));
-    store.set("generation_model", serde_json::json!(settings.generation_model));
+    store.set(
+        "pipeline_version",
+        serde_json::json!(settings.pipeline_version),
+    );
+    store.set(
+        "generation_model",
+        serde_json::json!(settings.generation_model),
+    );
     store.set("beta_updates", serde_json::json!(settings.beta_updates));
     if matches!(settings.error_reports.as_str(), "ask" | "always" | "never") {
         store.set("error_reports", serde_json::json!(settings.error_reports));
@@ -265,14 +284,11 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
 
 #[tauri::command]
 pub async fn get_webapp_url(app: tauri::AppHandle) -> Result<String, String> {
-    let target = app
-        .store(STORE_FILENAME)
-        .ok()
-        .and_then(|store| {
-            store
-                .get("upload_target")
-                .and_then(|v| v.as_str().map(String::from))
-        });
+    let target = app.store(STORE_FILENAME).ok().and_then(|store| {
+        store
+            .get("upload_target")
+            .and_then(|v| v.as_str().map(String::from))
+    });
     Ok(crate::config::webapp_url_for_target(target.as_deref()).to_string())
 }
 
@@ -441,7 +457,7 @@ mod tests {
             "logs_dir": "/Users/anna/Library/Logs/com.cogniclone.recorder",
             "hide_from_screenshots": true,
             "api_key": null
-        });  // an older build's file; the field is ignored now
+        }); // an older build's file; the field is ignored now
 
         let settings: AppSettings = serde_json::from_value(stored).unwrap();
         assert_eq!(settings.error_reports, "ask");

@@ -36,7 +36,10 @@ pub async fn fetch_pipelines(
         .map_err(|e| format!("Pipeline fetch failed: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Pipeline fetch returned HTTP {}", response.status()));
+        return Err(format!(
+            "Pipeline fetch returned HTTP {}",
+            response.status()
+        ));
     }
 
     response

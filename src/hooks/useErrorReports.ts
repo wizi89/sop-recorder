@@ -76,6 +76,22 @@ export function useErrorReports({
     }
   }, []);
 
+  // ponytail: a one-slot queue, not a lock library. Two paths submit -- the
+  // sweep below, and grantAndSend -- and submitting takes *everything*
+  // granted. A sweep landing between grantAndSend's decide and its own submit
+  // carries that report away, so grantAndSend finds no result and the user is
+  // told nothing about a report that was in fact sent. Running them in turn
+  // is the whole fix; nothing here needs real concurrency.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const serialize = useCallback(<T,>(run: () => Promise<T>): Promise<T> => {
+    const next = queue.current.then(run, run);
+    queue.current = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  }, []);
+
   /**
    * Send without asking, for mode `always`. Consent was given once, in the
    * settings or on the checkbox, and re-asking twenty times a day is what
@@ -84,13 +100,15 @@ export function useErrorReports({
   const grantAndSend = useCallback(
     async (report: ErrorReport, comment?: string | null) => {
       answered.current.add(report.report_id);
-      await decideErrorReport(report.report_id, true, comment ?? null);
-      const results = await submit();
-      const mine = results.find((r) => r.report_id === report.report_id) ?? null;
+      const mine = await serialize(async () => {
+        await decideErrorReport(report.report_id, true, comment ?? null);
+        const results = await submit();
+        return results.find((r) => r.report_id === report.report_id) ?? null;
+      });
       await refresh();
       return mine;
     },
-    [refresh, submit],
+    [refresh, submit, serialize],
   );
 
   const decline = useCallback(
@@ -169,10 +187,10 @@ export function useErrorReports({
   // sending everything granted the moment a session exists.
   useEffect(() => {
     if (!loggedIn) return;
-    void submit().then((results) => {
+    void serialize(submit).then((results) => {
       if (results.length > 0) void refresh();
     });
-  }, [loggedIn, submit, refresh]);
+  }, [loggedIn, submit, refresh, serialize]);
 
   // Mode `always`: no dialog, a notice with the number instead.
   useEffect(() => {

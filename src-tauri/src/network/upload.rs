@@ -8,6 +8,10 @@ const UPLOAD_TIMEOUT_SECS: u64 = 300;
 
 /// Upload audio + screenshots to the generation endpoint.
 /// Returns the SSE stream URL or response.
+// ponytail: eleven real parameters, not an abstraction waiting to happen.
+// Bundling them into a struct would move the same list one line up and touch
+// every caller of the upload path for a lint; revisit if a twelfth appears.
+#[allow(clippy::too_many_arguments)]
 pub async fn upload_multipart(
     access_token: &str,
     openai_key: Option<&str>,
@@ -32,8 +36,8 @@ pub async fn upload_multipart(
     let mut form = multipart::Form::new();
 
     // Audio file
-    let audio_bytes = std::fs::read(audio_path)
-        .map_err(|e| format!("Failed to read audio file: {}", e))?;
+    let audio_bytes =
+        std::fs::read(audio_path).map_err(|e| format!("Failed to read audio file: {}", e))?;
     let audio_part = multipart::Part::bytes(audio_bytes)
         .file_name("recording.wav")
         .mime_str("audio/wav")
@@ -103,7 +107,11 @@ pub async fn upload_multipart(
     })?;
 
     let status = response.status();
-    log::info!("Upload response: {} {}", status.as_u16(), status.canonical_reason().unwrap_or(""));
+    log::info!(
+        "Upload response: {} {}",
+        status.as_u16(),
+        status.canonical_reason().unwrap_or("")
+    );
 
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
@@ -130,6 +138,10 @@ pub async fn upload_multipart(
 }
 
 /// Retry logic with exponential backoff for transient errors.
+// ponytail: eleven real parameters, not an abstraction waiting to happen.
+// Bundling them into a struct would move the same list one line up and touch
+// every caller of the upload path for a lint; revisit if a twelfth appears.
+#[allow(clippy::too_many_arguments)]
 pub async fn upload_with_retry(
     access_token: &str,
     openai_key: Option<&str>,

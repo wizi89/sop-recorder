@@ -126,9 +126,12 @@ async fn run_generation_inner(
     let in_flight = state.in_flight_captures.lock().unwrap().take();
     if let Some(counter) = in_flight {
         if counter.load(std::sync::atomic::Ordering::SeqCst) > 0 {
-            let _ = app.emit("sse:status", sse::SSEStatusPayload {
-                message: "Screenshots werden verarbeitet...".into(),
-            });
+            let _ = app.emit(
+                "sse:status",
+                sse::SSEStatusPayload {
+                    message: "Screenshots werden verarbeitet...".into(),
+                },
+            );
             while counter.load(std::sync::atomic::Ordering::SeqCst) > 0 {
                 tokio::time::sleep(std::time::Duration::from_millis(50)).await;
             }
@@ -162,9 +165,7 @@ async fn run_generation_inner(
     };
 
     // Get OpenAI key from keyring
-    let openai_key = net_auth::keyring_load("openai-key")
-        .ok()
-        .flatten();
+    let openai_key = net_auth::keyring_load("openai-key").ok().flatten();
 
     // Collect audio + screenshot paths
     let audio_path = output_path.join("recording.wav");
@@ -199,7 +200,11 @@ async fn run_generation_inner(
 
     // Get guide title from pending.json or dirname
     let guide_title = pending::read_pending(&output_path)
-        .and_then(|meta| meta.get("guide_title").and_then(|v| v.as_str()).map(String::from))
+        .and_then(|meta| {
+            meta.get("guide_title")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
         .unwrap_or_else(|| {
             output_path
                 .file_name()
@@ -243,7 +248,11 @@ async fn run_generation_inner(
     let generation_model: String = app
         .store("settings.json")
         .ok()
-        .and_then(|store| store.get("generation_model").and_then(|v| v.as_str().map(String::from)))
+        .and_then(|store| {
+            store
+                .get("generation_model")
+                .and_then(|v| v.as_str().map(String::from))
+        })
         .unwrap_or_else(|| "azure/gpt-4.1".to_string());
 
     // The user's pipeline choice from the review screen. Independent of the
@@ -350,15 +359,19 @@ async fn run_generation_inner(
                 log::warn!(
                     "SSE stream dropped ({}); job_id={} is still running, \
                      polling for its result",
-                    e, job_id
+                    e,
+                    job_id
                 );
                 let _ = app.emit(
                     "sse:status",
                     sse::SSEStatusPayload {
-                        message: "Verbindung wird wiederhergestellt -- die Verarbeitung läuft weiter...".into(),
+                        message:
+                            "Verbindung wird wiederhergestellt -- die Verarbeitung läuft weiter..."
+                                .into(),
                     },
                 );
-                jobs::poll_job_result(&access_token, job_id, api_url.as_deref(), api_base, 40).await?
+                jobs::poll_job_result(&access_token, job_id, api_url.as_deref(), api_base, 40)
+                    .await?
             } else {
                 return Err(e);
             }
@@ -380,11 +393,17 @@ async fn run_generation_inner(
     let pdf_saved = if let Some(ref pdf_url) = result.pdf_url {
         match download_pdf(pdf_url, &output_path).await {
             Ok(()) => {
-                log::info!("Server PDF downloaded to {}", output_path.join("guide.pdf").display());
+                log::info!(
+                    "Server PDF downloaded to {}",
+                    output_path.join("guide.pdf").display()
+                );
                 true
             }
             Err(e) => {
-                log::warn!("Server PDF download failed ({}), falling back to local generation", e);
+                log::warn!(
+                    "Server PDF download failed ({}), falling back to local generation",
+                    e
+                );
                 false
             }
         }
@@ -400,8 +419,13 @@ async fn run_generation_inner(
                 message: "PDF wird lokal erstellt...".into(),
             },
         );
-        pdf::generate_pdf(&output_path, &guide_title, &result.enriched, &screenshot_paths)
-            .map_err(|e| format!("PDF generation failed: {}", e))?;
+        pdf::generate_pdf(
+            &output_path,
+            &guide_title,
+            &result.enriched,
+            &screenshot_paths,
+        )
+        .map_err(|e| format!("PDF generation failed: {}", e))?;
     }
 
     // Clear pending marker
@@ -422,7 +446,10 @@ async fn download_pdf(url: &str, output_dir: &Path) -> Result<(), String> {
         .map_err(|e| format!("PDF download request failed: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("PDF download returned status {}", response.status()));
+        return Err(format!(
+            "PDF download returned status {}",
+            response.status()
+        ));
     }
 
     let bytes = response
@@ -431,8 +458,7 @@ async fn download_pdf(url: &str, output_dir: &Path) -> Result<(), String> {
         .map_err(|e| format!("Failed to read PDF response body: {}", e))?;
 
     let pdf_path = output_dir.join("guide.pdf");
-    std::fs::write(&pdf_path, &bytes)
-        .map_err(|e| format!("Failed to write PDF file: {}", e))?;
+    std::fs::write(&pdf_path, &bytes).map_err(|e| format!("Failed to write PDF file: {}", e))?;
 
     Ok(())
 }

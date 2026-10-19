@@ -73,22 +73,20 @@ pub fn run() {
     // calls `targets()`, which replaces them, and so has to list it again.
     log_builder = log_builder.target(error_reports::ring_log_target());
     if cfg!(debug_assertions) {
-        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let log_dir = manifest_dir
-            .parent() // sop-recorder
-            .and_then(|p| p.parent()) // parent of both repos
-            .map(|p| p.join("9_sop-sorcery").join(".tmp").join("logs"));
+        // ponytail: an env var, not a hardcoded sibling directory -- the path
+        // is one developer's layout, and the build should not carry it.
+        let log_dir = std::env::var_os("COGNICLONE_DEV_LOG_DIR").map(std::path::PathBuf::from);
         if let Some(dir) = log_dir {
-            if dir.parent().map_or(false, |p| p.exists()) {
+            if dir.parent().is_some_and(|p| p.exists()) {
                 let _ = std::fs::create_dir_all(&dir);
-                log_builder = log_builder
-                    .targets([
-                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                        tauri_plugin_log::Target::new(
-                            tauri_plugin_log::TargetKind::Folder { path: dir, file_name: Some("recorder".into()) },
-                        ),
-                        error_reports::ring_log_target(),
-                    ]);
+                log_builder = log_builder.targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                        path: dir,
+                        file_name: Some("recorder".into()),
+                    }),
+                    error_reports::ring_log_target(),
+                ]);
             }
         }
     }
@@ -162,8 +160,11 @@ pub fn run() {
         })
         .manage(state::AppState::default())
         .manage(auth::SessionCache::default())
+        .manage(auth::PendingBrowserLogin::default())
         .invoke_handler(tauri::generate_handler![
             auth::login,
+            auth::login_via_browser,
+            auth::cancel_browser_login,
             auth::logout,
             auth::refresh_session,
             auth::get_session_state,
