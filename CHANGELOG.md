@@ -7,9 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-19
+
+### Added
+
+- Beta versions on request: switch on **Beta-Versionen erhalten** under Einstellungen to receive new versions before everyone else. Switching it off again keeps your current version until the next regular version is higher -- an update never goes backwards.
+
 ### Changed
 
 - Signing in now happens in your own web browser instead of a form inside the app, so your password manager can fill it in, and if you are already signed in on the website you only confirm. The app never sees your password. The old form is still there for one more version, behind "Ohne Browser anmelden", in case the browser cannot reach the app on your computer.
+
+### Fixed
+
+- After an error report was sent automatically, the "Fehlerbericht gesendet" notice with its number sometimes did not appear, although the report had arrived.
+- Switching screens, for example right after signing in, could make the app raise an error report about itself.
 
 ## [0.18.0] - 2026-09-14
 
@@ -481,7 +492,9 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/wizi89/sop-recorder/compare/v0.18.0...v0.19.0
+[0.18.0]: https://github.com/wizi89/sop-recorder/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/wizi89/sop-recorder/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/wizi89/sop-recorder/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/wizi89/sop-recorder/compare/v0.14.0...v0.15.0
