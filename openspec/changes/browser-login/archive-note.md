@@ -47,6 +47,34 @@ exactly that. The web app's allowlist already accepts
   attempt finishing last would clear the live attempt's token, and a later
   cancel would do nothing.
 
+## What the windowed runs found that no test could (2026-10-19)
+
+Two defects that every automated check passed over, both found by using the
+thing:
+
+- **The browser kept the code and lost the answer.** `read_request_line` parses
+  the request line and stops, so the browser's headers stayed unread in the
+  receive buffer. Closing a socket with data queued sends an RST rather than a
+  FIN; on a reset the browser discards the 302 it has already read and retries
+  the navigation, and by then `recv` has dropped the listener -- so the tab
+  showed `ERR_CONNECTION_REFUSED` while the app signed in normally. Whether it
+  bit depended on how much was still unread at close, which is why it
+  intermittently worked. Measured against Chromium before changing anything: a
+  server that stops at the request line gets `ERR_CONNECTION_RESET`, the same
+  server draining first follows the redirect. The connection is now drained
+  after it is answered, and the regression test fails without that
+  (`WSAECONNRESET` 10054).
+- **The wait had no screen.** `loginViaBrowser` sets `loading` as well as
+  `awaitingBrowser`, and App's loading gate returns before `LoginScreen` is
+  reached, so the five-minute wait showed only "...". The hint and the cancel
+  button existed and were rendered nowhere -- the only way out was the timeout.
+  The `LoginScreen` tests pass `awaitingBrowser` straight in and so could not
+  see it; the test that now covers it drives App with `login_via_browser` left
+  pending.
+
+Both needed a real browser and a real window. The first also needed the
+browser's own retry, which no test client performs.
+
 ## Verified against a real stack
 
 The server side was run locally (`uvicorn` + `next dev`) against the **real
