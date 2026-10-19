@@ -10,34 +10,27 @@ Download the latest installer from [GitHub Releases](https://github.com/wizi89/s
 
 ### First run on macOS
 
-macOS builds are not yet signed with an Apple Developer ID, which makes the first
-run more awkward than it should be. Three things to expect, none of them faults
-in the app:
-
-**Gatekeeper blocks the first launch.** The app is not notarized, so macOS
-refuses to open it and offers no way past in the dialog. Go to **System Settings
--> Privacy & Security**, find the message about CogniClone near the bottom, and
-click **Open Anyway**.
+The macOS app is signed with cogniclone's Apple Developer ID and notarized by
+Apple, so it opens by double-clicking like any other program.
 
 **Three permissions are needed, and the app asks for them on first run.** The
 microphone is granted in a dialog; Screen Recording and Accessibility are
-switches in System Settings, and the app links straight to each pane.
+switches in System Settings, and the app links straight to each pane. Screen
+Recording is the one permission macOS reports only to a freshly started
+process, so the app keeps showing it as missing until you use **App neu
+starten** -- the button is on the permission screen for exactly this.
 
-**CogniClone will probably not be in the Screen Recording list**, so add it by
-hand: click **+** at the bottom of that list and choose CogniClone in your
-Applications folder. macOS 15 and later require an Apple-issued Developer ID
-certificate -- one carrying a Team ID -- before screen capture permission
-registers properly, and neither an ad-hoc build nor a self-signed certificate
-qualifies. Permission still works once added by hand; only the automatic
-listing is affected. Screen Recording is also the one permission macOS reports only
-to a freshly started process, so the app keeps showing it as missing until you
-use **App neu starten** -- the button is on the permission screen for exactly
-this.
+**Permissions survive updates.** macOS ties them to the certificate that signed
+the app, and every release is signed with the same one. If CogniClone is ever
+missing from the Screen Recording list, add it by hand with **+** at the bottom
+of that list.
 
-**Permissions are lost on every update**, for the same underlying reason: with
-no certificate, the app's identity is its binary hash, so each new version looks
-like a different program to macOS and has to be granted again. A Developer ID
-certificate fixes all of the above and is being obtained.
+### Signing in
+
+**Mit Browser anmelden** opens your web browser, where your password manager can fill in
+the form -- or, if you are already signed in on the website, you only confirm.
+The app never sees your password. For one more version the old form is still
+available behind **Ohne Browser anmelden**.
 
 ## How it works
 
@@ -54,9 +47,9 @@ certificate fixes all of the above and is being obtained.
 - Audio recording (16kHz mono WAV, resampled from device native rate)
 - Server-side AI pipeline with SSE progress streaming
 - Local PDF + markdown generation
-- Supabase authentication (via server proxy)
+- Sign-in through the user's browser (loopback redirect with PKCE), session in the OS keyring
 - Crash recovery (pending.json retry)
-- Auto-updater via GitHub Releases
+- Auto-updater via GitHub Releases, with an opt-in beta channel
 - System tray integration
 - German UI (i18n)
 - Per-user NSIS installer on Windows (no admin rights)
@@ -186,8 +179,8 @@ src-tauri/              Rust backend
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Runs on push to `main`, `feature/**`, pull requests, and manual dispatch. Tests run every time, on both Windows and macOS; the installers do not, because a macOS bundle takes about ten minutes and most commits cannot affect packaging. Installers are built on `main`, on a manual run, or on any commit whose message contains `[build]`, and are uploaded as artifacts
-- **Release** (`release.yml`): Runs on `v*` tags -- Windows/macOS release builds + GitHub Release with auto-updater manifest
+- **CI** (`ci.yml`): Runs on push to `main`, `feature/**`, pull requests, and manual dispatch. Tests, `cargo fmt --check`, clippy with `-D warnings` and the TypeScript check run every time, on both Windows and macOS; the installers do not, because a macOS bundle takes about ten minutes and most commits cannot affect packaging. Installers are built on `main`, on a manual run, or on any commit whose message contains `[build]`, and are uploaded as artifacts
+- **Release** (`release.yml`): Runs on `v*` tags -- Windows/macOS release builds + GitHub Release with auto-updater manifest. A `server-contract` job runs first and refuses the release while production does not serve an endpoint the build depends on, so the server is always deployed before a recorder that needs it
 
 ## License
 
