@@ -31,6 +31,9 @@ const READ_DEADLINE: Duration = Duration::from_secs(5);
 /// signed in.
 const FINISH_BOUND: Duration = Duration::from_secs(20);
 
+/// How long the answered connection is drained before it is closed.
+const DRAIN_BOUND: Duration = Duration::from_secs(1);
+
 /// What the browser is told, as a fixed token. Never a server message: nothing
 /// user- or token-derived may land in browser history.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,7 +123,9 @@ async fn write_redirect(stream: &mut TcpStream, location: &str) -> std::io::Resu
         location
     );
     stream.write_all(response.as_bytes()).await?;
-    stream.flush().await
+    stream.flush().await?;
+    drain(stream).await;
+    Ok(())
 }
 
 async fn write_bad_request(stream: &mut TcpStream) {
@@ -128,6 +133,29 @@ async fn write_bad_request(stream: &mut TcpStream) {
         .write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
         .await;
     let _ = stream.flush().await;
+    drain(stream).await;
+}
+
+/// Read what the client already sent, so the close is a FIN and not an RST.
+///
+/// Only the request line is parsed, so the browser's headers are still sitting
+/// unread in the receive buffer. Closing a socket with unread data queued
+/// sends an RST, and on an RST the browser throws away the response it has
+/// just read and retries the navigation -- by then the listener is gone, so
+/// the tab shows ERR_CONNECTION_REFUSED while the sign-in itself succeeded.
+/// Measured against Chromium: without this, `ERR_CONNECTION_RESET`.
+async fn drain(stream: &mut TcpStream) {
+    let mut sink = [0u8; 1024];
+    // `Connection: close` means the client closes once it has the response, so
+    // the EOF arrives on its own; the bound is for one that does not.
+    let _ = tokio::time::timeout(DRAIN_BOUND, async {
+        while let Ok(n) = stream.read(&mut sink).await {
+            if n == 0 {
+                break;
+            }
+        }
+    })
+    .await;
 }
 
 /// A bound listener waiting for the browser's callback.
@@ -376,6 +404,42 @@ mod tests {
         reply.finish(&Outcome::Success).await;
         let response = read_response(&mut client).await;
         assert!(response.contains("302"), "{}", response);
+    }
+
+    /// Regression: the browser must be able to keep the answer.
+    ///
+    /// Only the request line is parsed, so the headers stay unread. Closing on
+    /// them resets the connection, and a browser throws away the response it
+    /// has already read and retries -- onto a listener that is gone by then.
+    #[tokio::test]
+    async fn the_rest_of_the_request_is_read_so_the_close_is_not_a_reset() {
+        let cb = start_loopback(WEBAPP).await.unwrap();
+        let addr = cb.local_addr().unwrap();
+        let cancel = CancellationToken::new();
+        let task = tokio::spawn(async move { cb.recv(Duration::from_secs(5), &cancel).await });
+
+        let mut client = TcpStream::connect(addr).await.unwrap();
+        let mut request =
+            b"GET /callback?code=X&state=Y HTTP/1.1\r\nHost: 127.0.0.1\r\nCookie: ".to_vec();
+        // Well past anything the parser touches, so a close on it is a reset
+        // rather than a buffer that happened to be empty.
+        request.extend_from_slice(&vec![b'x'; 16 * 1024]);
+        request.extend_from_slice(b"\r\n\r\n");
+        client.write_all(&request).await.unwrap();
+
+        let (_url, reply) = task.await.unwrap().unwrap();
+        reply.finish(&Outcome::Success).await;
+
+        let mut response = Vec::new();
+        client
+            .read_to_end(&mut response)
+            .await
+            .expect("the connection was reset instead of closed");
+        assert!(
+            String::from_utf8_lossy(&response).contains("302"),
+            "{:?}",
+            String::from_utf8_lossy(&response)
+        );
     }
 
     // -- 4.1b ---------------------------------------------------------------
