@@ -30,8 +30,12 @@ export async function launchApp(urls: { apiUrl: string; webUrl: string }): Promi
       COGNICLONE_ERROR_REPORTS_ENABLED: "false",
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
     },
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  // Kept for the failure message: an app that dies on start says why here.
+  let output = "";
+  child.stdout?.on("data", (d) => (output += d));
+  child.stderr?.on("data", (d) => (output += d));
 
   let browser: Browser | undefined;
   const quit = async () => {
@@ -40,7 +44,7 @@ export async function launchApp(urls: { apiUrl: string; webUrl: string }): Promi
   };
 
   try {
-    browser = await connect(port);
+    browser = await connect(port, child, () => output);
     return { page: await mainWindow(browser), quit };
   } catch (e) {
     await quit();
@@ -48,15 +52,18 @@ export async function launchApp(urls: { apiUrl: string; webUrl: string }): Promi
   }
 }
 
-async function connect(port: number): Promise<Browser> {
+async function connect(port: number, child: ChildProcess, output: () => string): Promise<Browser> {
   for (let i = 0; i < 150; i++) {
+    if (child.exitCode !== null) {
+      throw new Error(`the app exited with ${child.exitCode} before its window opened:\n${output()}`);
+    }
     try {
       return await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
     } catch {
       await new Promise((r) => setTimeout(r, 200));
     }
   }
-  throw new Error(`the app's WebView never opened its DevTools port (${port})`);
+  throw new Error(`the app's WebView never opened its DevTools port (${port}):\n${output()}`);
 }
 
 /** The app has more than one window; the recording bar is another. */

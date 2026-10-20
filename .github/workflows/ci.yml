@@ -110,6 +110,14 @@ jobs:
       - name: End-to-end tests
         run: npm run e2e
 
+      - name: Upload the app's log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-app-log
+          path: ${{ env.APPDATA }}/com.cogniclone.recorder.e2e/logs/
+          retention-days: 7
+
   # Tests run on every push; the installers do not. A macOS bundle takes about
   # ten minutes, which is a long time to wait on a branch where most commits
   # cannot affect packaging at all.
