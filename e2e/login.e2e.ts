@@ -23,6 +23,19 @@ const test = base.extend<{ stubs: Stubs; app: Page }>({
   },
 });
 
+/**
+ * Signed in: the recorder, with its sign-out button. A machine without a
+ * microphone -- the CI runner -- gets the permission setup first, which a
+ * user there would put off.
+ */
+async function expectSignedIn(app: Page) {
+  const signOut = app.getByRole("button", { name: "Abmelden" });
+  const later = app.getByRole("button", { name: "Später erteilen" });
+  await expect(signOut.or(later)).toBeVisible();
+  if (await later.isVisible()) await later.click();
+  await expect(signOut).toBeVisible();
+}
+
 const signInWithBrowser = (app: Page) =>
   app.getByRole("button", { name: "Mit Browser anmelden" }).click();
 
@@ -53,7 +66,7 @@ test("signs in through the browser, and the browser keeps the answer", async ({ 
   const landed = await confirmInBrowser(stubs);
 
   expect(landed.pathname, "the browser should end on the success page").toBe("/desktop/signed-in");
-  await expect(app.getByRole("button", { name: "Abmelden" })).toBeVisible();
+  await expectSignedIn(app);
   expect(stubs.state.exchanges).toEqual([{ code: "e2e-code", accepted: true }]);
 });
 
@@ -94,12 +107,12 @@ test("a restart goes straight in with the stored session", async ({ stubs }) => 
   const first = await launchApp(stubs);
   await signInWithBrowser(first.page);
   await confirmInBrowser(stubs);
-  await expect(first.page.getByRole("button", { name: "Abmelden" })).toBeVisible();
+  await expectSignedIn(first.page);
   await first.quit();
 
   const second = await launchApp(stubs);
   try {
-    await expect(second.page.getByRole("button", { name: "Abmelden" })).toBeVisible();
+    await expectSignedIn(second.page);
     await expect(second.page.getByText(TOKENS.email)).toBeVisible();
   } finally {
     await second.quit();

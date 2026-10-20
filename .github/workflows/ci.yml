@@ -117,29 +117,14 @@ jobs:
       - name: End-to-end tests
         run: npm run e2e
 
-      # ponytail: diagnosis for the first CI runs, remove once the job is green.
-      - name: Why the DevTools port did not open
-        if: failure()
-        shell: pwsh
-        run: |
-          $env:COGNICLONE_UPDATER_ENABLED = "false"
-          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9333"
-          $app = Start-Process src-tauri/target/debug/cogniclone-recorder.exe -PassThru
-          Start-Sleep 15
-          Get-CimInstance Win32_Process -Filter "name='msedgewebview2.exe'" | Select-Object -First 3 -ExpandProperty CommandLine
-          netstat -ano | Select-String LISTENING | Select-String "127.0.0.1|0.0.0.0|\[::"
-          try { (Invoke-WebRequest http://127.0.0.1:9333/json/version -UseBasicParsing).Content } catch { "no answer on 9333: $_" }
-          foreach ($k in "HKLM:\SOFTWARE\Policies\Microsoft\Edge", "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2", "HKCU:\SOFTWARE\Policies\Microsoft\Edge") {
-            if (Test-Path $k) { "--- $k"; Get-ItemProperty $k | Format-List | Out-String }
-          }
-          Stop-Process -Id $app.Id -Force
-
-      - name: Upload the app's log
+      # What the app was showing when a journey failed: Playwright writes the
+      # window's accessibility snapshot next to each failure.
+      - name: Upload the failure snapshots
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-app-log
-          path: ${{ env.APPDATA }}/com.cogniclone.recorder.e2e/logs/
+          name: e2e-results
+          path: test-results/
           retention-days: 7
 
   # Tests run on every push; the installers do not. A macOS bundle takes about
