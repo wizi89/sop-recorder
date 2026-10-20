@@ -16,7 +16,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "e2e:build": "tauri build --debug --no-bundle --config e2e/tauri.e2e.conf.json",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
@@ -34,6 +36,7 @@
   "devDependencies": {
     "@fontsource/manrope": "^5.2.8",
     "@fontsource/orbitron": "^5.2.8",
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
