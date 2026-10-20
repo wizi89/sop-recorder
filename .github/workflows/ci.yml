@@ -107,6 +107,13 @@ jobs:
       - name: Build the app
         run: npm run e2e:build
 
+      # WebView2 on the runner ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+      # (measured: the browser process starts without the flag, and no
+      # policy is set), so the DevTools port goes in through its registry
+      # policy instead. The port must match DEVTOOLS_PORT in e2e/app.ts.
+      - name: Open the WebView's DevTools port
+        run: reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v cogniclone-recorder.exe /d "--remote-debugging-port=9333" /f
+
       - name: End-to-end tests
         run: npm run e2e
 

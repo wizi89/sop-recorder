@@ -11,16 +11,23 @@
  * its own identifier, so it has its own settings, logs and WebView profile.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { createServer, type AddressInfo } from "node:net";
 import path from "node:path";
 import { chromium, type Browser, type Page } from "@playwright/test";
 
 export const BINARY = path.resolve("src-tauri/target/debug/cogniclone-recorder.exe");
 
+/**
+ * Fixed rather than free, because CI cannot use the environment variable:
+ * WebView2 on the runner ignores it, so ci.yml passes the same port through
+ * WebView2's registry policy instead -- which applies to every window of the
+ * exe alike, as WebView2 requires of windows sharing a profile.
+ */
+const DEVTOOLS_PORT = 9333;
+
 export type App = { page: Page; quit: () => Promise<void> };
 
 export async function launchApp(urls: { apiUrl: string; webUrl: string }): Promise<App> {
-  const port = await freePort();
+  const port = DEVTOOLS_PORT;
   const child: ChildProcess = spawn(BINARY, [], {
     env: {
       ...process.env,
@@ -78,12 +85,4 @@ async function mainWindow(browser: Browser): Promise<Page> {
     await new Promise((r) => setTimeout(r, 200));
   }
   throw new Error("the app's main window never appeared");
-}
-
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as AddressInfo;
-  await new Promise((resolve) => server.close(resolve));
-  return port;
 }
