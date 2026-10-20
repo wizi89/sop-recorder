@@ -26,6 +26,7 @@ dist-ssr
 
 # Test artifacts
 test-installer/
+test-results/
 
 # Signing keys
 src-tauri/keys

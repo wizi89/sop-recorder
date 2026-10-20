@@ -136,7 +136,10 @@ and notarization (see below).
 ```bash
 npm test                          # Frontend tests (vitest)
 cd src-tauri && cargo test --lib  # Rust tests
+npm run e2e:build && npm run e2e  # The real app, driven through its window (Windows)
 ```
+
+The end-to-end run starts the debug build against fake servers, so it never touches your installed app's login or settings. It does open a tab in your default browser per sign-in, which the test then takes over.
 
 ### Build installers
 

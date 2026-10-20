@@ -73,6 +73,43 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+  # The real app, driven through its window: the journeys unit tests passed
+  # over and only a windowed run found (a wait screen that never rendered, an
+  # old server sending users into a five-minute wait). Windows only, because
+  # that is where the WebView opens a DevTools port to drive it through.
+  e2e:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install the browser that plays the user's
+        run: npx playwright install chromium
+
+      - name: Build the app
+        run: npm run e2e:build
+
+      - name: End-to-end tests
+        run: npm run e2e
+
   # Tests run on every push; the installers do not. A macOS bundle takes about
   # ten minutes, which is a long time to wait on a branch where most commits
   # cannot affect packaging at all.
