@@ -62,6 +62,8 @@ futures = "0.3"
 thiserror = "2"
 dirs-next = "2"
 toml = "0.8"
+rubato = "5"
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
