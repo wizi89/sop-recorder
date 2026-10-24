@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-10-24
+
 ### Changed
 
 - If signing in through the browser fails -- for example because security software on your computer blocks it -- the app now creates an error report for it, following your setting under Einstellungen: it asks first, sends it on its own, or does nothing. It is sent once you are signed in, for example through "Ohne Browser anmelden". Cancelling the sign-in or declining it in the browser creates no report.
@@ -519,7 +521,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.19.2...HEAD
+[0.19.2]: https://github.com/wizi89/sop-recorder/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/wizi89/sop-recorder/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/wizi89/sop-recorder/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/wizi89/sop-recorder/compare/v0.17.0...v0.18.0
