@@ -44,7 +44,8 @@ available behind **Ohne Browser anmelden**.
 ## Features
 
 - Screen capture on mouse click with click position overlay
-- Audio recording (16kHz mono WAV, resampled from device native rate)
+- Audio recording (16kHz mono WAV, resampled from the device's native rate through an anti-aliasing filter)
+- Single running instance: launching the app again brings the running one to the front
 - Server-side AI pipeline with SSE progress streaming
 - Local PDF + markdown generation
 - Sign-in through the user's browser (loopback redirect with PKCE), session in the OS keyring
@@ -78,6 +79,8 @@ npm run app:staging     # against staging, without touching Settings
 npm run app:local       # against a server on localhost:8000
 npm run app:production
 ```
+
+The dev build shares its single-instance lock with the installed app. While an installed CogniClone is running, the dev build brings that one to the front and quits -- quit the installed app first.
 
 #### Choosing a backend without opening Settings
 
@@ -182,7 +185,7 @@ src-tauri/              Rust backend
 
 ## CI/CD
 
-- **CI** (`ci.yml`): Runs on push to `main`, `feature/**`, pull requests, and manual dispatch. Tests, `cargo fmt --check`, clippy with `-D warnings` and the TypeScript check run every time, on both Windows and macOS; the installers do not, because a macOS bundle takes about ten minutes and most commits cannot affect packaging. Installers are built on `main`, on a manual run, or on any commit whose message contains `[build]`, and are uploaded as artifacts
+- **CI** (`ci.yml`): Runs on push to `main`, `feature/**`, pull requests, and manual dispatch. Tests, `cargo fmt --check`, clippy with `-D warnings` and the TypeScript check run every time, on both Windows and macOS; the installers do not, because a macOS bundle takes about ten minutes and most commits cannot affect packaging. Installers are built on `main`, on a manual run, or on any commit whose message contains `[build]`, and are uploaded as artifacts. An `e2e` job drives the real app through its window on Windows only: WKWebView on macOS offers no port for Playwright to attach to, so macOS-specific behaviour is checked by hand
 - **Release** (`release.yml`): Runs on `v*` tags -- Windows/macOS release builds + GitHub Release with auto-updater manifest. A `server-contract` job runs first and refuses the release while production does not serve an endpoint the build depends on, so the server is always deployed before a recorder that needs it
 
 ## License

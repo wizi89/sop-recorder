@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-10-24
+
 ### Changed
 
 - Clearer narration in your guides: the microphone recording is now converted to the format speech recognition needs with a proper filter. Before, high-pitched sounds such as "s" and "sch", and fan or keyboard noise, could turn into distortion in the speech range and cause misheard words.
@@ -500,7 +502,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.19.1...HEAD
+[0.19.1]: https://github.com/wizi89/sop-recorder/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/wizi89/sop-recorder/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/wizi89/sop-recorder/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/wizi89/sop-recorder/compare/v0.16.0...v0.17.0

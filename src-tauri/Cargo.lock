@@ -916,7 +916,7 @@ dependencies = [
 
 [[package]]
 name = "cogniclone-recorder"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "base64 0.22.1",
  "block2",
