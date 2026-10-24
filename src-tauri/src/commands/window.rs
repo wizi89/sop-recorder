@@ -225,7 +225,48 @@ pub fn set_recorder_region(region: Option<(i32, i32, i32, i32)>) {
 #[tauri::command]
 pub fn restart_app(app: tauri::AppHandle) {
     log::info!("Restarting to pick up newly granted permissions");
+    // `restart` starts the new process before this one exits. Still holding
+    // the single-instance lock, the new one would take itself for a second
+    // launch, hand over to this one and quit -- and no app would come back.
+    tauri_plugin_single_instance::destroy(&app);
     app.restart();
+}
+
+/// Show a window and give it focus.
+pub fn bring_to_front(app: &tauri::AppHandle, label: &str) {
+    use tauri::Manager;
+    if let Some(window) = app.get_webview_window(label) {
+        let _ = window.unminimize();
+        let _ = window.show();
+        // On Windows, foreground-lock rules may turn this into a flashing
+        // taskbar button rather than a raised window. Accepted: it still
+        // points the user at the app.
+        let _ = window.set_focus();
+    }
+}
+
+/// The app was launched again while running: point the user at the copy they
+/// already have instead of starting a second one -- which would bring its own
+/// settings writes, keyring migration and, worst, a second recorder able to
+/// record the same session in parallel.
+pub fn focus_running_instance(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    let bar_visible = app
+        .get_webview_window(BAR_LABEL)
+        .and_then(|bar| bar.is_visible().ok())
+        .unwrap_or(false);
+    log::info!("Second launch; raising the running instance");
+    bring_to_front(app, window_to_raise(bar_visible));
+}
+
+/// While recording, the main window is hidden behind the compact bar on
+/// purpose; showing it would cover the app being recorded.
+fn window_to_raise(bar_visible: bool) -> &'static str {
+    if bar_visible {
+        BAR_LABEL
+    } else {
+        "main"
+    }
 }
 
 /// Label of the window that carries the compact recording bar.
@@ -370,5 +411,16 @@ mod overlay_tests {
         let got = overlay_behavior(B::FullScreenPrimary);
         assert!(got.contains(B::FullScreenPrimary));
         assert!(got.contains(B::CanJoinAllSpaces));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn second_launch_raises_the_bar_while_recording_and_the_main_window_otherwise() {
+        assert_eq!(window_to_raise(true), BAR_LABEL);
+        assert_eq!(window_to_raise(false), "main");
     }
 }

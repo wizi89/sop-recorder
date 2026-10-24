@@ -26,15 +26,24 @@ const DEVTOOLS_PORT = 9333;
 
 export type App = { page: Page; quit: () => Promise<void> };
 
-export async function launchApp(urls: { apiUrl: string; webUrl: string }): Promise<App> {
+type Urls = { apiUrl: string; webUrl: string };
+
+/** What every launch of the app under test runs with. */
+export function appEnv(urls: Urls): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    COGNICLONE_API_URL: urls.apiUrl,
+    COGNICLONE_WEBAPP_URL: urls.webUrl,
+    COGNICLONE_UPDATER_ENABLED: "false",
+    COGNICLONE_ERROR_REPORTS_ENABLED: "false",
+  };
+}
+
+export async function launchApp(urls: Urls): Promise<App> {
   const port = DEVTOOLS_PORT;
   const child: ChildProcess = spawn(BINARY, [], {
     env: {
-      ...process.env,
-      COGNICLONE_API_URL: urls.apiUrl,
-      COGNICLONE_WEBAPP_URL: urls.webUrl,
-      COGNICLONE_UPDATER_ENABLED: "false",
-      COGNICLONE_ERROR_REPORTS_ENABLED: "false",
+      ...appEnv(urls),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
     },
     stdio: ["ignore", "pipe", "pipe"],
