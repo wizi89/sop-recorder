@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useAuth } from "../hooks/useAuth";
+import { describeBrowserFailure, useAuth } from "../hooks/useAuth";
 
 const mockInvoke = vi.mocked(invoke);
 const mockListen = vi.mocked(listen);
@@ -305,6 +305,40 @@ describe("useAuth", () => {
     }
   });
 
+  it("marks a browser-path failure for a report, and clears it on the next attempt", async () => {
+    let rejection: string | null = "Die Anmeldung im Browser wurde nicht abgeschlossen.";
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "refresh_session") {
+        return Promise.resolve({ logged_in: false, email: null });
+      }
+      if (cmd === "login_via_browser") {
+        return rejection
+          ? Promise.reject(rejection)
+          : new Promise(() => {}); // the second attempt is still waiting
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const { result } = renderHook(() => useAuth());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    await act(async () => {
+      await result.current.loginViaBrowser();
+    });
+    // The raw command error, not the translated sentence: that is what a
+    // report needs to be grouped by.
+    expect(result.current.browserFailureToReport).toBe(
+      "Die Anmeldung im Browser wurde nicht abgeschlossen.",
+    );
+
+    rejection = null;
+    act(() => {
+      void result.current.loginViaBrowser();
+    });
+    expect(result.current.browserFailureToReport).toBeNull();
+  });
+
   it("cancel invokes the command and survives it failing", async () => {
     mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === "refresh_session") {
@@ -326,5 +360,22 @@ describe("useAuth", () => {
       await result.current.cancelBrowserLogin();
     });
     expect(mockInvoke).toHaveBeenCalledWith("cancel_browser_login");
+  });
+});
+
+// Which failures say something about the browser path. The in-app form stays,
+// so these reports are the only signal that browser sign-in fails for anyone.
+describe("describeBrowserFailure", () => {
+  it.each([
+    ["browser-login-unsupported", false],
+    ["browser-login-denied", false],
+    ["Die Anmeldung wurde abgebrochen.", false],
+    ["browser-login-verification", true],
+    ["Die Anmeldung im Browser wurde nicht abgeschlossen.", true],
+    ["Could not open the local callback port: Address already in use", true],
+    ["Der Browser konnte nicht geöffnet werden: no handler", true],
+    ["Connection failed: dns error", true],
+  ])("%s -> reportable %s", (rejection, reportable) => {
+    expect(describeBrowserFailure(rejection).reportable).toBe(reportable);
   });
 });

@@ -80,6 +80,16 @@ function MainApp() {
     mode: errorReportMode,
     onAutoSent: handleAutoSent,
   });
+  // A failed browser sign-in is reported without a button, unlike the
+  // recorder's errors (D6): the in-app form is right there, and a user who
+  // takes it has no reason to click anything else. The report is sent once a
+  // session exists -- typically right after that form signs them in.
+  const browserFailure = auth.browserFailureToReport;
+  const createReport = errorReports.create;
+  useEffect(() => {
+    if (!browserFailure) return;
+    void createReport("command_error", "login", `Browser-Anmeldung fehlgeschlagen: ${browserFailure}`);
+  }, [browserFailure, createReport]);
   // Quota hook is gated on login: only fetches once the user is authenticated.
   const quotaHook = useQuota(auth.loggedIn);
 

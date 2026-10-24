@@ -2,6 +2,11 @@
 
 ## The follow-up change's first task (task 8.1)
 
+> **Superseded 2026-10-24:** the fallback stays, with no removal date. The
+> signal was added instead -- a failed browser sign-in now creates an error
+> report (spec `user-authentication`, "A failed browser sign-in is
+> reported"). Removal is a later decision on those reports.
+
 Remove the password fallback, the `login` command, `net_auth::sign_in` and
 their copy, one release after this ships.
 

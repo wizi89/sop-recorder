@@ -29,8 +29,10 @@ of that list.
 
 **Mit Browser anmelden** opens your web browser, where your password manager can fill in
 the form -- or, if you are already signed in on the website, you only confirm.
-The app never sees your password. For one more version the old form is still
-available behind **Ohne Browser anmelden**.
+The app never sees your password. If the browser cannot reach the app -- for
+example because security software blocks it -- the form behind
+**Ohne Browser anmelden** signs you in inside the app, and the failed browser
+attempt becomes an error report, so we learn about it.
 
 ## How it works
 

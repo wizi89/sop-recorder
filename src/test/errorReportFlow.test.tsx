@@ -156,3 +156,53 @@ describe("mode always (design D1)", () => {
     expect(screen.queryByText(/Berichtsnummer:/)).toBeNull();
   });
 });
+
+// The in-app form stays as the way in, so these reports are the only sign
+// that browser sign-in fails for anyone. No button: the report is created
+// on the failure itself.
+describe("browser sign-in failures", () => {
+  function signedOut(loginRejection: string) {
+    vi.mocked(invoke).mockImplementation(async (cmd: string) => {
+      switch (cmd) {
+        case "refresh_session":
+          return { logged_in: false, email: null };
+        case "login_via_browser":
+          throw loginRejection;
+        case "list_error_reports":
+          return [];
+        default:
+          return null;
+      }
+    });
+  }
+
+  const reportCalls = () =>
+    vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "create_error_report");
+
+  it("a timeout creates a login report", async () => {
+    signedOut("Die Anmeldung im Browser wurde nicht abgeschlossen.");
+    const { default: App } = await import("../App");
+    render(<App />);
+
+    (await screen.findByRole("button", { name: "Mit Browser anmelden" })).click();
+
+    await waitFor(() => expect(reportCalls()).toHaveLength(1));
+    expect(reportCalls()[0][1]).toMatchObject({
+      kind: "command_error",
+      phase: "login",
+      message:
+        "Browser-Anmeldung fehlgeschlagen: Die Anmeldung im Browser wurde nicht abgeschlossen.",
+    });
+  });
+
+  it("a cancel creates none", async () => {
+    signedOut("Die Anmeldung wurde abgebrochen.");
+    const { default: App } = await import("../App");
+    render(<App />);
+
+    (await screen.findByRole("button", { name: "Mit Browser anmelden" })).click();
+
+    await screen.findByText("Die Anmeldung wurde abgebrochen.");
+    expect(reportCalls()).toHaveLength(0);
+  });
+});
