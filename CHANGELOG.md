@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Opening the app while it was already running started a second copy. It now brings the running one to the front, or the recording bar during a recording.
 
+### Security
+
+- Updated the library that secures the app's connection to the server, closing a flaw in how it checks the start of an encrypted connection.
+
 ## [0.19.0] - 2026-10-19
 
 ### Added
