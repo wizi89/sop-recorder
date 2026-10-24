@@ -47,7 +47,6 @@ hound = "3.5"
 rdev = "0.5"
 image = "0.25"
 imageproc = "0.25"
-genpdf = { version = "0.2", features = ["images"] }
 chrono = "0.4"
 tempfile = "3"
 uuid = { version = "1", features = ["v4"] }
