@@ -21,8 +21,16 @@ test("a second launch exits and brings the running window back", async () => {
   const stubs = await startStubs();
   const app = await launchApp(stubs);
   try {
+    // The UI shows its own window once on mount (App.tsx, leaving compact
+    // mode). Hidden before that, the window would reappear by itself -- on the
+    // slower CI runner it did -- so wait for the UI first.
+    await expect(app.page.getByRole("button").first()).toBeVisible();
     await invoke(app.page, "plugin:window|hide", { label: "main" });
     await expect.poll(() => mainVisible(app.page)).toBe(false);
+    // Still hidden a moment later: a late show() would otherwise pass the
+    // final check below without the second launch doing anything.
+    await app.page.waitForTimeout(1_000);
+    expect(await mainVisible(app.page), "the window came back by itself").toBe(false);
 
     const second = spawn(BINARY, [], { env: appEnv(stubs), stdio: "ignore" });
     const exitCode = await new Promise<number | null>((resolve) => {
