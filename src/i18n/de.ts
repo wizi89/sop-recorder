@@ -194,11 +194,6 @@ const de = {
   "quota.exceeded_upgrade": "Kontingent erweitern",
   "quota.exceeded_dismiss": "Schließen",
 
-  // PDF
-  "pdf.steps": "{count} Schritte",
-  "pdf.step": "Schritt {order}",
-  "pdf.no_title": "(ohne Titel)",
-
   // Update
   "update.available": "Version {version} verfügbar",
   "update.install": "Jetzt aktualisieren",

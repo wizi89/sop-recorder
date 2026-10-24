@@ -5,7 +5,7 @@ use tauri_plugin_store::StoreExt;
 
 use crate::commands::auth::SessionCache;
 use crate::network::{auth as net_auth, jobs, sse, upload};
-use crate::output::{markdown, pdf, pending, step_meta};
+use crate::output::{markdown, pending, step_meta};
 use crate::state::{AppState, RecordingStatus};
 
 static GENERATING: AtomicBool = AtomicBool::new(false);
@@ -382,7 +382,10 @@ async fn run_generation_inner(
     markdown::save_markdown(&output_path, &result.markdown)
         .map_err(|e| format!("Failed to save markdown: {}", e))?;
 
-    // Download server-generated PDF, fall back to local generation
+    // The PDF is the server's. Without it the guide is still complete -- on
+    // the server and as markdown here -- so a missing PDF does not fail the
+    // generation. There used to be a local fallback, but it only found fonts
+    // on Windows: on macOS it turned this case into a failed generation.
     let _ = app.emit(
         "sse:status",
         sse::SSEStatusPayload {
@@ -390,42 +393,15 @@ async fn run_generation_inner(
         },
     );
 
-    let pdf_saved = if let Some(ref pdf_url) = result.pdf_url {
-        match download_pdf(pdf_url, &output_path).await {
-            Ok(()) => {
-                log::info!(
-                    "Server PDF downloaded to {}",
-                    output_path.join("guide.pdf").display()
-                );
-                true
-            }
-            Err(e) => {
-                log::warn!(
-                    "Server PDF download failed ({}), falling back to local generation",
-                    e
-                );
-                false
-            }
-        }
-    } else {
-        log::info!("No pdf_url in result, falling back to local generation");
-        false
-    };
-
-    if !pdf_saved {
-        let _ = app.emit(
-            "sse:status",
-            sse::SSEStatusPayload {
-                message: "PDF wird lokal erstellt...".into(),
-            },
-        );
-        pdf::generate_pdf(
-            &output_path,
-            &guide_title,
-            &result.enriched,
-            &screenshot_paths,
-        )
-        .map_err(|e| format!("PDF generation failed: {}", e))?;
+    match result.pdf_url.as_deref() {
+        Some(pdf_url) => match download_pdf(pdf_url, &output_path).await {
+            Ok(()) => log::info!(
+                "Server PDF downloaded to {}",
+                output_path.join("guide.pdf").display()
+            ),
+            Err(e) => log::warn!("Server PDF download failed ({}); no PDF saved", e),
+        },
+        None => log::warn!("No pdf_url in result; no PDF saved"),
     }
 
     // Clear pending marker

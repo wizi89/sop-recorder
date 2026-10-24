@@ -39,7 +39,7 @@ available behind **Ohne Browser anmelden**.
 3. Narrate what you're doing -- audio is recorded simultaneously
 4. Click **Aufnahme stoppen** (Stop Recording)
 5. The app uploads screenshots + audio to the server, which uses AI (Whisper + GPT-4o) to generate a step-by-step guide
-6. A markdown file and PDF are saved locally
+6. The guide is saved locally as markdown, with the PDF the server rendered
 
 ## Features
 
@@ -47,7 +47,7 @@ available behind **Ohne Browser anmelden**.
 - Audio recording (16kHz mono WAV, resampled from the device's native rate through an anti-aliasing filter)
 - Single running instance: launching the app again brings the running one to the front
 - Server-side AI pipeline with SSE progress streaming
-- Local PDF + markdown generation
+- Local copy of each guide: markdown, plus the server-rendered PDF
 - Sign-in through the user's browser (loopback redirect with PKCE), session in the OS keyring
 - Crash recovery (pending.json retry)
 - Auto-updater via GitHub Releases, with an opt-in beta channel
@@ -178,7 +178,7 @@ src-tauri/              Rust backend
     capture/            Screen capture, audio recording, input hooks
     commands/           Tauri commands (auth, recording, generate, settings)
     network/            Server communication (upload, SSE, auth)
-    output/             PDF generation, markdown, crash recovery
+    output/             Markdown, crash recovery
     state.rs            Shared app state
     tray.rs             System tray
 ```

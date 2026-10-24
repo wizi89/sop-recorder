@@ -12,8 +12,6 @@ describe("i18n", () => {
   });
 
   it("substitutes placeholders", () => {
-    expect(t("pdf.steps", { count: 5 })).toBe("5 Schritte");
-    expect(t("pdf.step", { order: 3 })).toBe("Schritt 3");
     expect(t("update.available", { version: "0.7.7" })).toBe(
       "Version 0.7.7 verfügbar",
     );

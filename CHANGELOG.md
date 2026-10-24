@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On a Mac, a guide could end with "PDF generation failed" although it had been created: when the server sent no PDF, the app tried to make one itself and could not. The guide now finishes as usual -- it is on the website and saved locally as markdown -- just without the PDF file in the folder.
+
+### Removed
+
+- The app no longer makes its own simpler PDF when the server's PDF is missing. The PDF always comes from the server.
+
 ## [0.19.1] - 2026-10-24
 
 ### Changed
