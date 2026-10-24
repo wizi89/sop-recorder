@@ -220,14 +220,38 @@ Where the server does not support the browser sign-in exchange, the recorder SHA
 - **THEN** the user is told the sign-in did not complete and can be retried
 - **AND** the message is NOT the "server does not support browser sign-in" message, because the browser path works on this server
 
-### Requirement: A sign-in without a browser remains available for one release
+### Requirement: A sign-in without a browser remains available
 
-While the browser path is the primary one, the login screen SHALL still offer a way to sign in by entering credentials in the app, so that a machine on which the browser handoff cannot work is not locked out of the product.
+While the browser path is the primary one, the login screen SHALL still offer a way to sign in by entering credentials in the app, so that a machine on which the browser handoff cannot work is not locked out of the product. No removal is scheduled; removing it is a decision to be made on the reports below, not on a release count.
 
 #### Scenario: The browser handoff cannot complete on this machine
 
 - **WHEN** the browser does not open, or no callback can reach the recorder
 - **THEN** the user can reach the in-app credential form from the login screen and sign in with it
+
+### Requirement: A failed browser sign-in is reported
+
+A browser sign-in that fails for a reason that points at the browser path SHALL create an error report in the `login` phase, without the user having to ask for one, under the user's error-report setting: under "ask" the consent dialog opens, under "always" it is sent without one, under "never" nothing is created. Outcomes that are the user's own decision, or that the product treats as normal, SHALL NOT create one.
+
+#### Scenario: The browser path fails
+
+- **WHEN** a browser sign-in fails because the callback port cannot be bound, the browser cannot be opened, no callback arrives in time, the callback fails verification, or the exchange fails
+- **THEN** an error report for that failure is created in the `login` phase
+
+#### Scenario: The user ends the attempt
+
+- **WHEN** the user cancels the attempt, or declines it in the browser
+- **THEN** no error report is created
+
+#### Scenario: The server does not support browser sign-in
+
+- **WHEN** the attempt fails because the server lacks the exchange endpoint
+- **THEN** no error report is created
+
+#### Scenario: The user gets in another way
+
+- **WHEN** a report was created and granted while signed out, and the user then signs in by any path
+- **THEN** the report is sent with that session
 
 ### Requirement: A completed browser sign-in is indistinguishable from any other
 

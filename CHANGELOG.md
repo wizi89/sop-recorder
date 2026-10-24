@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- If signing in through the browser fails -- for example because security software on your computer blocks it -- the app now creates an error report for it, following your setting under Einstellungen: it asks first, sends it on its own, or does nothing. It is sent once you are signed in, for example through "Ohne Browser anmelden". Cancelling the sign-in or declining it in the browser creates no report.
+- "Ohne Browser anmelden" stays. It was announced to stay for only one more version; it now stays until the reports show it is no longer needed.
+
 ### Fixed
 
 - On a Mac, a guide could end with "PDF generation failed" although it had been created: when the server sent no PDF, the app tried to make one itself and could not. The guide now finishes as usual -- it is on the website and saved locally as markdown -- just without the PDF file in the folder.

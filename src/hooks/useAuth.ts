@@ -10,6 +10,7 @@ import {
 } from "../lib/tauri";
 import { t } from "../i18n";
 import { safeUnlisten } from "../lib/safeUnlisten";
+import { isReportable } from "../lib/serverErrors";
 
 interface AuthState {
   loggedIn: boolean;
@@ -20,6 +21,12 @@ interface AuthState {
   awaitingBrowser: boolean;
   /** The one failure whose answer is the fallback form, not "try again". */
   browserUnsupported: boolean;
+  /**
+   * The last browser sign-in failure worth an error report, as the command
+   * reported it; null otherwise. The in-app form stays as the way in, so
+   * these reports are the only sign that the browser path fails for someone.
+   */
+  browserFailureToReport: string | null;
 }
 
 /**
@@ -28,27 +35,37 @@ interface AuthState {
  * The command returns fixed tokens for the cases the UI has to tell apart;
  * anything else is already a German message from the network layer.
  */
-function describeBrowserFailure(error: unknown): {
+export function describeBrowserFailure(error: unknown): {
   message: string;
   unsupported: boolean;
+  /** Whether the failure says something about the browser path (see below). */
+  reportable: boolean;
 } {
   const raw = String(error);
+  // Not reported: a server without the endpoint is a deployment question the
+  // release's server-contract check answers, and a denial or a cancel is the
+  // user's own decision.
   if (raw.includes("browser-login-unsupported")) {
-    return { message: t("login.browser_unsupported"), unsupported: true };
+    return { message: t("login.browser_unsupported"), unsupported: true, reportable: false };
   }
   if (raw.includes("browser-login-denied")) {
-    return { message: t("login.browser_denied"), unsupported: false };
+    return { message: t("login.browser_denied"), unsupported: false, reportable: false };
   }
   if (raw.includes("browser-login-verification")) {
-    return { message: t("login.browser_verification"), unsupported: false };
+    return { message: t("login.browser_verification"), unsupported: false, reportable: true };
   }
   if (raw.includes("abgebrochen")) {
-    return { message: t("login.browser_cancelled"), unsupported: false };
+    return { message: t("login.browser_cancelled"), unsupported: false, reportable: false };
   }
+  // Reported although a user who walked away produces it too: a browser that
+  // cannot reach 127.0.0.1 -- the endpoint-security and local-network-access
+  // risks in the browser-login design -- looks exactly like this.
   if (raw.includes("nicht abgeschlossen")) {
-    return { message: t("login.browser_timeout"), unsupported: false };
+    return { message: t("login.browser_timeout"), unsupported: false, reportable: true };
   }
-  return { message: raw, unsupported: false };
+  // The port could not be bound, the browser would not open, the exchange
+  // failed: reported unless it is an outcome the product treats as normal.
+  return { message: raw, unsupported: false, reportable: isReportable(raw) };
 }
 
 export function useAuth() {
@@ -59,6 +76,7 @@ export function useAuth() {
     error: null,
     awaitingBrowser: false,
     browserUnsupported: false,
+    browserFailureToReport: null,
   });
 
   useEffect(() => {
@@ -71,6 +89,7 @@ export function useAuth() {
           error: null,
           awaitingBrowser: false,
           browserUnsupported: false,
+          browserFailureToReport: null,
         });
       })
       .catch(() => {
@@ -89,6 +108,7 @@ export function useAuth() {
         error: "Sitzung abgelaufen. Bitte erneut anmelden.",
         awaitingBrowser: false,
         browserUnsupported: false,
+        browserFailureToReport: null,
       });
     });
     return () => {
@@ -107,6 +127,7 @@ export function useAuth() {
         error: null,
         awaitingBrowser: false,
         browserUnsupported: false,
+        browserFailureToReport: null,
       });
     } catch (e) {
       setState((s) => ({
@@ -124,6 +145,7 @@ export function useAuth() {
       error: null,
       awaitingBrowser: true,
       browserUnsupported: false,
+      browserFailureToReport: null,
     }));
     try {
       const session = await tauriLoginViaBrowser();
@@ -134,15 +156,17 @@ export function useAuth() {
         error: null,
         awaitingBrowser: false,
         browserUnsupported: false,
+        browserFailureToReport: null,
       });
     } catch (e) {
-      const { message, unsupported } = describeBrowserFailure(e);
+      const { message, unsupported, reportable } = describeBrowserFailure(e);
       setState((s) => ({
         ...s,
         loading: false,
         awaitingBrowser: false,
         error: message,
         browserUnsupported: unsupported,
+        browserFailureToReport: reportable ? String(e) : null,
       }));
     }
   }, []);
@@ -168,6 +192,7 @@ export function useAuth() {
       error: null,
       awaitingBrowser: false,
       browserUnsupported: false,
+      browserFailureToReport: null,
     });
   }, []);
 
