@@ -1,6 +1,8 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::SampleFormat;
 use hound::{WavSpec, WavWriter};
+use rubato::audioadapter_buffers::direct::InterleavedSlice;
+use rubato::{Fft, FixedSync, Indexing, Resampler};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc;
@@ -98,10 +100,13 @@ impl AudioHandle {
         };
 
         // Resampling state shared with the callback via Arc<Mutex<>>
-        let resample_state = Arc::new(Mutex::new(ResampleState::new(
-            device_rate,
-            TARGET_SAMPLE_RATE,
-        )));
+        let resample_state = match ResampleState::new(device_rate, TARGET_SAMPLE_RATE) {
+            Ok(rs) => Arc::new(Mutex::new(rs)),
+            Err(e) => {
+                let _ = ready_tx.send(Err(e.clone()));
+                return Err(e);
+            }
+        };
         let resample_clone = resample_state.clone();
 
         // Per-callback helper: compute peak abs level over a mono slice and
@@ -142,9 +147,7 @@ impl AudioHandle {
                             {
                                 if let Some(ref mut w) = *guard {
                                     for sample in rs.process(&mono) {
-                                        let pcm =
-                                            (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
-                                        let _ = w.write_sample(pcm);
+                                        let _ = w.write_sample(to_pcm(sample));
                                     }
                                 }
                             }
@@ -175,9 +178,7 @@ impl AudioHandle {
                             {
                                 if let Some(ref mut w) = *guard {
                                     for sample in rs.process(&mono) {
-                                        let pcm =
-                                            (sample * 32767.0).clamp(-32768.0, 32767.0) as i16;
-                                        let _ = w.write_sample(pcm);
+                                        let _ = w.write_sample(to_pcm(sample));
                                     }
                                 }
                             }
@@ -207,9 +208,14 @@ impl AudioHandle {
         let _ = stop_rx.recv();
         drop(stream);
 
-        // Finalize WAV
+        // Flush the resampler's tail, then finalize the WAV
         if let Ok(mut guard) = writer.lock() {
-            if let Some(w) = guard.take() {
+            if let Some(mut w) = guard.take() {
+                if let Ok(mut rs) = resample_state.lock() {
+                    for sample in rs.finish() {
+                        let _ = w.write_sample(to_pcm(sample));
+                    }
+                }
                 w.finalize()
                     .map_err(|e| format!("Failed to finalize WAV: {}", e))?;
             }
@@ -233,59 +239,137 @@ impl AudioHandle {
     }
 }
 
-/// Simple linear resampler that converts from one sample rate to another.
-/// Maintains fractional position across calls for seamless resampling.
+fn to_pcm(sample: f32) -> i16 {
+    (sample * 32767.0).clamp(-32768.0, 32767.0) as i16
+}
+
+/// Band-limited resampler from the device rate to 16 kHz.
+///
+/// Linear interpolation (what this used to be) has no anti-aliasing filter: at
+/// 48 -> 16 kHz everything between 8 and 24 kHz -- sibilants, fan and keyboard
+/// noise -- folds back into the speech band the recognizer listens to. rubato's
+/// FFT resampler low-passes below the new Nyquist frequency first.
+///
+/// The output stays aligned with the input: the filter's start-up delay is
+/// dropped and `finish` flushes the tail, so the WAV holds exactly
+/// `frames_in * out / in` samples and narration timestamps still line up with
+/// the steps captured at the same moment.
 struct ResampleState {
-    ratio: f64,       // input_rate / output_rate
-    fractional: f64,  // accumulated fractional position
-    last_sample: f32, // previous sample for interpolation
+    /// `None` when the device already runs at the target rate.
+    fft: Option<Fft<f32>>,
+    input_rate: u64,
+    output_rate: u64,
+    /// Input not yet a whole resampler chunk.
+    pending: Vec<f32>,
+    out_buf: Vec<f32>,
+    /// Output frames of filter delay still to drop.
+    skip: usize,
+    frames_in: u64,
+    frames_out: u64,
 }
 
 impl ResampleState {
-    fn new(input_rate: u32, output_rate: u32) -> Self {
-        Self {
-            ratio: input_rate as f64 / output_rate as f64,
-            fractional: 0.0,
-            last_sample: 0.0,
-        }
+    fn new(input_rate: u32, output_rate: u32) -> Result<Self, String> {
+        let fft = if input_rate == output_rate {
+            None
+        } else {
+            // ~20 ms chunks: short enough that the WAV grows while recording,
+            // long enough for a sharp filter.
+            let chunk = (input_rate / 50).max(1) as usize;
+            Some(
+                Fft::<f32>::new(
+                    input_rate as usize,
+                    output_rate as usize,
+                    chunk,
+                    1,
+                    FixedSync::Both,
+                )
+                .map_err(|e| format!("Failed to create resampler: {}", e))?,
+            )
+        };
+        let (skip, out_len) = fft
+            .as_ref()
+            .map_or((0, 0), |f| (f.output_delay(), f.output_frames_max()));
+        Ok(Self {
+            fft,
+            input_rate: input_rate as u64,
+            output_rate: output_rate as u64,
+            pending: Vec::new(),
+            out_buf: vec![0.0; out_len],
+            skip,
+            frames_in: 0,
+            frames_out: 0,
+        })
     }
 
     /// Process a chunk of mono input samples, return resampled output samples.
     pub fn process(&mut self, input: &[f32]) -> Vec<f32> {
-        if input.is_empty() {
-            return Vec::new();
-        }
-
+        self.frames_in += input.len() as u64;
         let mut output = Vec::new();
-
-        while (self.fractional as usize) < input.len() {
-            let idx = self.fractional as usize;
-            let frac = (self.fractional - idx as f64) as f32;
-
-            // Linear interpolation between adjacent samples
-            let s0 = if idx == 0 {
-                self.last_sample
-            } else {
-                input[idx - 1]
-            };
-            let s1 = if idx < input.len() {
-                input[idx]
-            } else {
-                *input.last().unwrap()
-            };
-            let interpolated = s0 + (s1 - s0) * frac;
-
-            output.push(interpolated);
-            self.fractional += self.ratio;
+        if self.fft.is_none() {
+            self.frames_out += input.len() as u64;
+            output.extend_from_slice(input);
+            return output;
         }
-
-        // Keep fractional position relative to next buffer
-        self.fractional -= input.len() as f64;
-
-        // Remember last sample for interpolation across buffers
-        self.last_sample = *input.last().unwrap_or(&0.0);
-
+        self.pending.extend_from_slice(input);
+        while let Some(need) = self.fft.as_ref().map(|f| f.input_frames_next()) {
+            if self.pending.len() < need || !self.run_chunk(need, &mut output) {
+                break;
+            }
+            self.pending.drain(..need);
+        }
         output
+    }
+
+    /// Flush what is still buffered, at the end of a recording. Returns the
+    /// remaining output, trimmed so the total matches the input duration.
+    pub fn finish(&mut self) -> Vec<f32> {
+        let mut output = Vec::new();
+        let expected = (self.frames_in * self.output_rate + self.input_rate / 2) / self.input_rate;
+        while let Some(need) = self.fft.as_ref().map(|f| f.input_frames_next()) {
+            if self.frames_out >= expected {
+                break;
+            }
+            let take = self.pending.len().min(need);
+            if !self.run_chunk(take, &mut output) {
+                break;
+            }
+            self.pending.drain(..take);
+        }
+        let excess = self.frames_out.saturating_sub(expected) as usize;
+        output.truncate(output.len().saturating_sub(excess));
+        self.frames_out -= excess as u64;
+        output
+    }
+
+    /// Resample the first `take` pending frames (zero-padded to a full chunk).
+    /// False if rubato refused, which with these fixed sizes means a bug: the
+    /// recording keeps going and loses the rest of the audio rather than the app.
+    fn run_chunk(&mut self, take: usize, output: &mut Vec<f32>) -> bool {
+        let Some(fft) = self.fft.as_mut() else {
+            return false;
+        };
+        let out_len = self.out_buf.len();
+        let result = InterleavedSlice::new(&self.pending[..take], 1, take)
+            .map_err(|e| e.to_string())
+            .and_then(|input| {
+                let mut out = InterleavedSlice::new_mut(&mut self.out_buf[..], 1, out_len)
+                    .map_err(|e| e.to_string())?;
+                fft.process_into_buffer(&input, &mut out, Some(&Indexing::new().partial_len(take)))
+                    .map_err(|e| e.to_string())
+            });
+        let written = match result {
+            Ok((_, written)) => written,
+            Err(e) => {
+                log::error!("Resampling failed: {}", e);
+                return false;
+            }
+        };
+        let skipped = self.skip.min(written);
+        self.skip -= skipped;
+        output.extend_from_slice(&self.out_buf[skipped..written]);
+        self.frames_out += (written - skipped) as u64;
+        true
     }
 }
 
@@ -293,88 +377,164 @@ impl ResampleState {
 mod tests {
     use super::*;
 
-    #[test]
-    fn resample_48k_to_16k_reduces_sample_count() {
-        let mut rs = ResampleState::new(48000, 16000);
-        // 480 input samples at 48kHz = 10ms -> should produce ~160 at 16kHz
-        let input: Vec<f32> = (0..480).map(|i| (i as f32 / 480.0).sin()).collect();
-        let output = rs.process(&input);
+    const DEVICE_RATES: [u32; 3] = [44_100, 48_000, 96_000];
 
-        // Should produce roughly 160 samples (ratio 3:1)
-        assert!(
-            output.len() >= 158 && output.len() <= 162,
-            "Expected ~160 samples, got {}",
-            output.len()
-        );
+    fn sine(freq: f32, rate: u32, seconds: f32) -> Vec<f32> {
+        let n = (rate as f32 * seconds) as usize;
+        // Phase in f64: in f32 it loses precision over a second of samples,
+        // and that rounding noise alone measures around -60 dB.
+        (0..n)
+            .map(|i| {
+                let phase = 2.0 * std::f64::consts::PI * freq as f64 * i as f64 / rate as f64;
+                (0.5 * phase.sin()) as f32
+            })
+            .collect()
     }
 
-    #[test]
-    fn resample_preserves_silence() {
-        let mut rs = ResampleState::new(48000, 16000);
-        let input = vec![0.0_f32; 480];
-        let output = rs.process(&input);
-
-        for s in &output {
-            assert!(*s == 0.0, "Expected silence, got {}", s);
+    /// Amplitude of the `freq` component, over the middle half of the signal
+    /// (away from start-up and flush edges).
+    fn level_at(samples: &[f32], freq: f32, rate: u32) -> f32 {
+        let mid = &samples[samples.len() / 4..samples.len() * 3 / 4];
+        let (mut re, mut im) = (0.0_f64, 0.0_f64);
+        for (i, &x) in mid.iter().enumerate() {
+            let phase = 2.0 * std::f64::consts::PI * freq as f64 * i as f64 / rate as f64;
+            re += x as f64 * phase.cos();
+            im += x as f64 * phase.sin();
         }
+        (2.0 * (re * re + im * im).sqrt() / mid.len() as f64) as f32
     }
 
-    #[test]
-    fn resample_empty_input() {
-        let mut rs = ResampleState::new(48000, 16000);
-        let output = rs.process(&[]);
-        assert!(output.is_empty());
+    fn rms(samples: &[f32]) -> f32 {
+        let mid = &samples[samples.len() / 4..samples.len() * 3 / 4];
+        (mid.iter().map(|x| x * x).sum::<f32>() / mid.len() as f32).sqrt()
     }
 
-    #[test]
-    fn resample_same_rate_preserves_count() {
-        let mut rs = ResampleState::new(16000, 16000);
-        let input: Vec<f32> = (0..100).map(|i| i as f32 / 100.0).collect();
-        let output = rs.process(&input);
-
-        // Same rate should produce same number of samples
-        assert_eq!(output.len(), input.len());
-        // After first sample (which interpolates from 0), values should track closely
-        for (a, b) in input[1..].iter().zip(output[1..].iter()) {
-            assert!((a - b).abs() < 0.02, "Mismatch: {} vs {}", a, b);
-        }
-    }
-
-    #[test]
-    fn resample_across_multiple_chunks_is_seamless() {
-        let mut rs = ResampleState::new(48000, 16000);
-        // Process two chunks separately
-        let chunk1: Vec<f32> = (0..480).map(|i| (i as f32 * 0.01).sin()).collect();
-        let chunk2: Vec<f32> = (480..960).map(|i| (i as f32 * 0.01).sin()).collect();
-        let out1 = rs.process(&chunk1);
-        let out2 = rs.process(&chunk2);
-
-        // Process both at once
-        let mut rs2 = ResampleState::new(48000, 16000);
-        let combined: Vec<f32> = (0..960).map(|i| (i as f32 * 0.01).sin()).collect();
-        let out_combined = rs2.process(&combined);
-
-        // Total sample count should match
-        let total_separate = out1.len() + out2.len();
-        assert!(
-            (total_separate as i32 - out_combined.len() as i32).abs() <= 1,
-            "Chunk processing produced {} vs combined {}",
-            total_separate,
-            out_combined.len()
-        );
-    }
-
-    #[test]
-    fn resample_output_stays_in_range() {
-        let mut rs = ResampleState::new(48000, 16000);
-        // Feed max/min values
-        let input: Vec<f32> = (0..480)
-            .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
+    /// Feed `input` the way cpal does -- in callback-sized pieces -- then flush.
+    fn resample(rate: u32, input: &[f32], callback_frames: usize) -> Vec<f32> {
+        let mut rs = ResampleState::new(rate, TARGET_SAMPLE_RATE).unwrap();
+        let mut out: Vec<f32> = input
+            .chunks(callback_frames)
+            .flat_map(|c| rs.process(c))
             .collect();
-        let output = rs.process(&input);
+        out.extend(rs.finish());
+        out
+    }
 
-        for s in &output {
-            assert!(*s >= -1.0 && *s <= 1.0, "Out of range: {}", s);
+    #[test]
+    fn speech_band_tones_keep_their_level() {
+        for rate in DEVICE_RATES {
+            for freq in [300.0, 1_000.0, 3_400.0, 6_000.0] {
+                let out = resample(rate, &sine(freq, rate, 1.0), 480);
+                let level = level_at(&out, freq, TARGET_SAMPLE_RATE);
+                assert!(
+                    (level - 0.5).abs() < 0.01,
+                    "{freq} Hz from {rate} Hz: amplitude {level}, expected 0.5"
+                );
+            }
         }
+    }
+
+    #[test]
+    fn tones_above_8khz_do_not_fold_back_into_the_speech_band() {
+        // A 12 kHz tone at 48 kHz lands on 4 kHz after naive decimation. The
+        // linear interpolator this replaced left it there at full strength
+        // (0 dB at 48 kHz, -1 to -3 dB at 44.1 kHz); rubato measures below
+        // -140 dB.
+        for rate in DEVICE_RATES {
+            for freq in [9_000.0, 12_000.0, 15_000.0] {
+                let out = resample(rate, &sine(freq, rate, 1.0), 480);
+                let residue = rms(&out) / (0.5 / 2f32.sqrt());
+                assert!(
+                    residue < 1e-5,
+                    "{freq} Hz from {rate} Hz left {:.1} dB in the output",
+                    20.0 * residue.log10()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn output_length_matches_the_recording_duration() {
+        for rate in DEVICE_RATES {
+            for frames in [0, 1, 999, rate as usize * 7 / 3] {
+                for callback in [1, 441, 480, 1_024, 4_096] {
+                    let input = vec![0.1_f32; frames];
+                    let out = resample(rate, &input, callback);
+                    let expected =
+                        (frames as u64 * TARGET_SAMPLE_RATE as u64 + rate as u64 / 2) / rate as u64;
+                    assert_eq!(
+                        out.len() as u64,
+                        expected,
+                        "{frames} frames at {rate} Hz in {callback}-frame callbacks"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn output_is_not_delayed() {
+        // Narration timestamps are matched to steps by sample position, so a
+        // click 250 ms in must stay 250 ms in.
+        for rate in DEVICE_RATES {
+            let mut input = vec![0.0_f32; rate as usize];
+            input[rate as usize / 4] = 1.0;
+            let out = resample(rate, &input, 480);
+            let peak = out
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.abs().total_cmp(&b.1.abs()))
+                .unwrap()
+                .0;
+            let expected = TARGET_SAMPLE_RATE as usize / 4;
+            assert!(
+                peak.abs_diff(expected) <= 1,
+                "click from {rate} Hz landed at {peak}, expected {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn callback_size_does_not_change_the_output() {
+        for rate in DEVICE_RATES {
+            let input = sine(440.0, rate, 0.5);
+            let whole = resample(rate, &input, input.len());
+            for callback in [1, 37, 480, 1_000] {
+                assert_eq!(
+                    resample(rate, &input, callback),
+                    whole,
+                    "{callback}-frame callbacks at {rate} Hz"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn silence_stays_silent() {
+        let out = resample(48_000, &vec![0.0; 48_000], 480);
+        assert!(out.iter().all(|&s| s == 0.0));
+    }
+
+    #[test]
+    fn empty_input_produces_nothing() {
+        let mut rs = ResampleState::new(48_000, TARGET_SAMPLE_RATE).unwrap();
+        assert!(rs.process(&[]).is_empty());
+        assert!(rs.finish().is_empty());
+    }
+
+    #[test]
+    fn device_already_at_16khz_passes_through_untouched() {
+        let input: Vec<f32> = (0..1_000).map(|i| (i as f32 * 0.01).sin()).collect();
+        assert_eq!(resample(TARGET_SAMPLE_RATE, &input, 160), input);
+    }
+
+    #[test]
+    fn pcm_conversion_clamps_overshoot() {
+        // The anti-aliasing filter rings slightly past full scale on clipped
+        // input; that must clip, not wrap around.
+        assert_eq!(to_pcm(1.2), i16::MAX);
+        assert_eq!(to_pcm(-1.2), i16::MIN);
+        assert_eq!(to_pcm(0.0), 0);
+        assert_eq!(to_pcm(0.5), 16_383);
     }
 }

@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{Manager, State};
+use tauri::State;
 use tauri_plugin_store::StoreExt;
 use tokio_util::sync::CancellationToken;
 
@@ -272,7 +272,8 @@ pub async fn login_via_browser(
     *session.access_token.lock().unwrap() = Some(auth.access_token);
     *session.email.lock().unwrap() = auth.email.clone();
 
-    bring_to_front(&app);
+    // The user is in the browser at this moment, so the recorder is behind it.
+    super::window::bring_to_front(&app, "main");
 
     Ok(SessionState {
         logged_in: true,
@@ -392,18 +393,6 @@ fn urlencode(value: &str) -> String {
         }
     }
     out
-}
-
-/// The user is in the browser at this moment, so the recorder is behind it.
-fn bring_to_front(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        // On Windows, foreground-lock rules may turn this into a flashing
-        // taskbar button rather than a raised window. Accepted: it still
-        // points the user at the app.
-        let _ = window.set_focus();
-    }
 }
 
 #[cfg(test)]

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Clearer narration in your guides: the microphone recording is now converted to the format speech recognition needs with a proper filter. Before, high-pitched sounds such as "s" and "sch", and fan or keyboard noise, could turn into distortion in the speech range and cause misheard words.
+
+### Fixed
+
+- Opening the app while it was already running started a second copy. It now brings the running one to the front, or the recording bar during a recording.
+
 ## [0.19.0] - 2026-10-19
 
 ### Added

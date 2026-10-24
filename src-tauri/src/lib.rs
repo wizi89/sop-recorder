@@ -117,6 +117,11 @@ pub fn run() {
     error_reports::install_panic_hook();
 
     tauri::Builder::default()
+        // First, so a second launch hands over and exits before any other
+        // plugin or `setup` runs in it.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            window::focus_running_instance(app)
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(log_builder.build())
         .plugin(tauri_plugin_store::Builder::default().build())
