@@ -96,7 +96,7 @@ jobs:
       - name: Cache Rust
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: src-tauri -> target/e2e
 
       - name: Install frontend dependencies
         run: npm ci
