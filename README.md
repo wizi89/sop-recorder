@@ -60,7 +60,7 @@ available behind **Ohne Browser anmelden**.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 22+
+- [Node.js](https://nodejs.org/) 24 (pinned in `.nvmrc`)
 - [Rust](https://rustup.rs/) stable
 - Windows 10/11 for Windows installers
 - macOS 14+ with Xcode Command Line Tools for macOS bundles
