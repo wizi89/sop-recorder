@@ -268,7 +268,7 @@ const de = {
     "Einmal verweigerte Berechtigungen fragt macOS nicht erneut ab -- sie müssen in den Systemeinstellungen erteilt werden.",
   "status.no_audio": "Kein Ton",
   "status.no_audio_hint":
-    "Es kommt kein Ton an. Vermutlich fehlt die Mikrofon-Berechtigung -- diese Aufnahme bekommt keine Sprachbeschreibung.",
+    "Es kommt kein Ton an: Das Mikrofon fehlt, ist nicht freigegeben oder lässt sich nicht öffnen. Die Schritte werden aufgezeichnet, aber ohne Sprachbeschreibung.",
   "tray.start_recording": "Aufnahme starten",
   "tray.stop_recording": "Aufnahme stoppen",
   "tray.settings": "Einstellungen",

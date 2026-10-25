@@ -127,8 +127,20 @@ pub async fn start_recording(
 
     // Start audio recording
     let audio_path = output_dir.join("recording.wav");
-    let audio_handle =
-        AudioHandle::start(&audio_path).map_err(|e| format!("Audio start failed: {}", e))?;
+    let audio_handle = match AudioHandle::start(&audio_path) {
+        Ok(handle) => Some(handle),
+        Err(e) => {
+            // No microphone, or one that will not open: the steps are still
+            // worth recording. The server requires an audio file and builds
+            // the guide from the screenshots alone when it is silent, so a
+            // silent one keeps everything downstream unchanged; the level
+            // poller below raises the usual no-sound warning after a few
+            // seconds, since the level stays at exactly zero.
+            log::warn!("Audio start failed, recording without narration: {e}");
+            crate::capture::audio::write_silent_wav(&audio_path)?;
+            None
+        }
+    };
 
     // Reset the shared stop flag BEFORE spawning any background tasks that
     // check it, so a stale value from a previous session cannot terminate
@@ -143,7 +155,10 @@ pub async fn start_recording(
     // Spawn the audio-level poller: at ~10 Hz, read the latest peak level
     // from the shared atomic and emit a Tauri event so the frontend can
     // render a live VU meter. Exits when the capture stop flag is set.
-    let audio_level_atomic = audio_handle.audio_level.clone();
+    let audio_level_atomic = audio_handle
+        .as_ref()
+        .map(|h| h.audio_level.clone())
+        .unwrap_or_default();
     let vu_stop_flag = state.capture_stop_flag.clone();
     let vu_app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -287,7 +302,7 @@ pub async fn start_recording(
         output_dir: output_dir.clone(),
         screenshots_dir,
         guide_title,
-        audio_handle: Some(audio_handle),
+        audio_handle,
         input_hook: Some(hook_handle),
         stop_flag: Some(stop_flag),
         in_flight: Some(in_flight),
