@@ -53,3 +53,37 @@ impl Default for AppState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// Every lock recovers from poisoning. With a plain unwrap, one thread that
+    /// panicked while holding a lock -- a capture, the audio callback -- makes
+    /// every later command that takes it panic too, and the app is dead until
+    /// restarted.
+    #[test]
+    fn no_lock_panics_on_a_poisoned_mutex() {
+        let needle = concat!(".lock()", ".unwrap()");
+        let mut offenders = Vec::new();
+        let mut dirs = vec![std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")];
+        while let Some(dir) = dirs.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    let source = std::fs::read_to_string(&path).unwrap();
+                    for (i, line) in source.lines().enumerate() {
+                        if line.contains(needle) {
+                            offenders.push(format!("{}:{}", path.display(), i + 1));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "use .lock().unwrap_or_else(|e| e.into_inner()) instead:\n{}",
+            offenders.join("\n")
+        );
+    }
+}

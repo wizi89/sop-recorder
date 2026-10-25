@@ -165,7 +165,7 @@ static EXCLUDED_REGION: Mutex<Option<(i32, i32, i32, i32)>> = Mutex::new(None);
 
 /// Tell the input hook where the recorder's window is, or that it is gone.
 pub fn set_excluded_region(region: Option<(i32, i32, i32, i32)>) {
-    *EXCLUDED_REGION.lock().unwrap() = region;
+    *EXCLUDED_REGION.lock().unwrap_or_else(|e| e.into_inner()) = region;
 }
 
 /// Whether a point falls inside the recorder's own window.
@@ -205,7 +205,7 @@ impl InputHookHandle {
 }
 
 fn begin_session(exclude_hwnd: Option<isize>, on_event: Arc<dyn Fn(CaptureEvent) + Send + Sync>) {
-    *SESSION.lock().unwrap() = Some(Session {
+    *SESSION.lock().unwrap_or_else(|e| e.into_inner()) = Some(Session {
         exclude_hwnd,
         started_at: Instant::now(),
         baseline: Baseline::default(),
@@ -214,7 +214,7 @@ fn begin_session(exclude_hwnd: Option<isize>, on_event: Arc<dyn Fn(CaptureEvent)
 }
 
 fn end_session() {
-    *SESSION.lock().unwrap() = None;
+    *SESSION.lock().unwrap_or_else(|e| e.into_inner()) = None;
     // The bar goes back to being an ordinary window between recordings.
     set_excluded_region(None);
 }
@@ -265,7 +265,7 @@ pub enum RawEvent {
 
 /// The single OS-level callback. Does nothing unless a recording is in session.
 fn dispatch(event: RawEvent) {
-    let mut guard = SESSION.lock().unwrap();
+    let mut guard = SESSION.lock().unwrap_or_else(|e| e.into_inner());
     let Some(session) = guard.as_mut() else {
         return;
     };
@@ -526,7 +526,10 @@ fn is_click_on_excluded_window(_exclude_hwnd: Option<isize>) -> bool {
     let Some(cursor) = get_cursor_position() else {
         return false;
     };
-    point_is_in_region(cursor, *EXCLUDED_REGION.lock().unwrap())
+    point_is_in_region(
+        cursor,
+        *EXCLUDED_REGION.lock().unwrap_or_else(|e| e.into_inner()),
+    )
 }
 
 #[cfg(all(not(windows), not(target_os = "macos")))]
@@ -612,7 +615,7 @@ mod tests {
         begin_session(Some(42), Arc::new(|_| {}));
 
         {
-            let guard = SESSION.lock().unwrap();
+            let guard = SESSION.lock().unwrap_or_else(|e| e.into_inner());
             let session = guard.as_ref().expect("a session must be active");
             assert_eq!(
                 session.exclude_hwnd,
@@ -623,7 +626,7 @@ mod tests {
 
         end_session();
         assert!(
-            SESSION.lock().unwrap().is_none(),
+            SESSION.lock().unwrap_or_else(|e| e.into_inner()).is_none(),
             "one stop must end the one session, not leave an earlier one listening",
         );
     }
@@ -632,8 +635,13 @@ mod tests {
     fn a_new_session_does_not_inherit_the_previous_baseline() {
         let _guard = global_session_guard();
         begin_session(None, Arc::new(|_| {}));
-        SESSION.lock().unwrap().as_mut().unwrap().baseline.mouse =
-            Some(((400, 300), Instant::now()));
+        SESSION
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+            .unwrap()
+            .baseline
+            .mouse = Some(((400, 300), Instant::now()));
 
         begin_session(None, Arc::new(|_| {}));
         assert!(
@@ -700,7 +708,10 @@ mod tests {
         set_excluded_region(Some((1218, 840, 240, 34)));
         end_session();
         assert!(
-            !point_is_in_region((1408, 843), *EXCLUDED_REGION.lock().unwrap()),
+            !point_is_in_region(
+                (1408, 843),
+                *EXCLUDED_REGION.lock().unwrap_or_else(|e| e.into_inner())
+            ),
             "a stale region would suppress real clicks in the next recording",
         );
     }

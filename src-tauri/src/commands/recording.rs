@@ -91,7 +91,10 @@ pub async fn start_recording(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut status = state.recording_status.lock().unwrap();
+    let mut status = state
+        .recording_status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     if *status == RecordingStatus::Recording {
         return Err("Eine Aufnahme läuft bereits.".into());
     }
@@ -310,7 +313,10 @@ pub async fn start_recording(
         failed_captures: Some(failed_captures),
     };
 
-    *state.current_session.lock().unwrap() = Some(session);
+    *state
+        .current_session
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(session);
     *status = RecordingStatus::Recording;
     // What a panic report says the app was doing (design D3). Set here rather
     // than read out of this mutex at panic time: the panic hook must not take
@@ -337,13 +343,34 @@ pub async fn stop_recording(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<StoppedRecording, String> {
+    let result = stop_recording_inner(app, state.clone()).await;
+    if result.is_err() {
+        // A stop that failed part-way, after the status moved to Processing,
+        // would otherwise leave it there and every later error report
+        // labelled with a phase the app is no longer in.
+        *state
+            .recording_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = RecordingStatus::Idle;
+        crate::error_reports::set_phase(crate::error_reports::Phase::Idle);
+    }
+    result
+}
+
+async fn stop_recording_inner(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StoppedRecording, String> {
     // Set stop flag IMMEDIATELY -- before locking the session mutex.
     // This prevents the race where rdev fires the stop-button click
     // before the session lock is acquired.
     state.capture_stop_flag.store(true, Ordering::SeqCst);
 
     {
-        let mut status = state.recording_status.lock().unwrap();
+        let mut status = state
+            .recording_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if *status != RecordingStatus::Recording {
             return Err("Keine aktive Aufnahme.".into());
         }
@@ -353,7 +380,10 @@ pub async fn stop_recording(
 
     // Extract everything from the session in one scoped block
     let (in_flight_counter, failed_counter, audio, output_dir_path, guide_title) = {
-        let mut session_guard = state.current_session.lock().unwrap();
+        let mut session_guard = state
+            .current_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let session = session_guard.as_mut().ok_or("No active session")?;
 
         // Clear session's copy of the flag (already set above)
@@ -404,7 +434,10 @@ pub async fn stop_recording(
 
     // Store in-flight counter in app state (kept as defense in depth for the
     // generate path; should always be 0 here after the wait above).
-    *state.in_flight_captures.lock().unwrap() = in_flight_counter;
+    *state
+        .in_flight_captures
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = in_flight_counter;
 
     // Write pending.json. Per-step metadata lives in step_NN.json sidecars
     // alongside each PNG, so pending.json only needs the guide title.
@@ -498,7 +531,10 @@ pub async fn delete_last_screenshot(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
-    let session_guard = state.current_session.lock().unwrap();
+    let session_guard = state
+        .current_session
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let session = session_guard.as_ref().ok_or("Keine aktive Aufnahme.")?;
 
     // Refuse if a capture is currently being written to disk.

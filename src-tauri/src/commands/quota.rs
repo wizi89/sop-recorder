@@ -20,9 +20,12 @@ pub async fn get_quota(
     let access_token = match net_auth::refresh_session(api_base).await {
         Ok(Some(auth)) => {
             let token = auth.access_token.clone();
-            *session.access_token.lock().unwrap() = Some(auth.access_token);
+            *session
+                .access_token
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(auth.access_token);
             if let Some(email) = auth.email {
-                *session.email.lock().unwrap() = Some(email);
+                *session.email.lock().unwrap_or_else(|e| e.into_inner()) = Some(email);
             }
             token
         }

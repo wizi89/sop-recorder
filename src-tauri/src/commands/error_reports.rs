@@ -133,7 +133,11 @@ pub async fn submit_error_reports(
 
     // Read the token out before the first await: a `State` guard must not be
     // held across one.
-    let access_token = session.access_token.lock().unwrap().clone();
+    let access_token = session
+        .access_token
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     let Some(access_token) = access_token else {
         // Not signed in yet. The reports stay exactly where they are.
         return Ok(Vec::new());

@@ -877,7 +877,8 @@ mod tests {
             let (mut stream, _) = listener.accept().await.unwrap();
             let mut buf = vec![0u8; 4096];
             let n = stream.read(&mut buf).await.unwrap();
-            *captured.lock().unwrap() = String::from_utf8_lossy(&buf[..n]).to_string();
+            *captured.lock().unwrap_or_else(|e| e.into_inner()) =
+                String::from_utf8_lossy(&buf[..n]).to_string();
             let body = r#"{"access_token":"at","refresh_token":"rt","email":"u@e.test"}"#;
             let _ = stream
                 .write_all(
@@ -897,7 +898,7 @@ mod tests {
             .await
             .unwrap();
 
-        let request = seen.lock().unwrap().clone();
+        let request = seen.lock().unwrap_or_else(|e| e.into_inner()).clone();
         assert!(
             request.contains("POST /auth/desktop/exchange"),
             "{}",

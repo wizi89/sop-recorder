@@ -108,8 +108,16 @@ pub async fn run_generation(
     }
 
     crate::error_reports::set_phase(crate::error_reports::Phase::Processing);
-    let result = run_generation_inner(output_dir, app, session, state).await;
+    let result = run_generation_inner(output_dir, app, session, state.clone()).await;
     GENERATING.store(false, Ordering::SeqCst);
+    if result.is_err() {
+        // Here rather than at each early return, so a new one cannot forget
+        // it and leave the app showing "Processing" with nothing processing.
+        *state
+            .recording_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = RecordingStatus::Idle;
+    }
     crate::error_reports::set_phase(crate::error_reports::Phase::Idle);
     result
 }
@@ -123,7 +131,11 @@ async fn run_generation_inner(
     let output_path = PathBuf::from(&output_dir);
 
     // Wait for any in-flight screenshot captures to finish
-    let in_flight = state.in_flight_captures.lock().unwrap().take();
+    let in_flight = state
+        .in_flight_captures
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take();
     if let Some(counter) = in_flight {
         if counter.load(std::sync::atomic::Ordering::SeqCst) > 0 {
             let _ = app.emit(
@@ -153,9 +165,12 @@ async fn run_generation_inner(
     let access_token = match net_auth::refresh_session(api_base).await {
         Ok(Some(auth)) => {
             let token = auth.access_token.clone();
-            *session.access_token.lock().unwrap() = Some(auth.access_token);
+            *session
+                .access_token
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(auth.access_token);
             if let Some(email) = auth.email {
-                *session.email.lock().unwrap() = Some(email);
+                *session.email.lock().unwrap_or_else(|e| e.into_inner()) = Some(email);
             }
             log::info!("Token refreshed before upload");
             token
@@ -182,16 +197,7 @@ async fn run_generation_inner(
     }
 
     let screenshots_dir = output_path.join("screenshots");
-    // An unreadable folder and an empty one are the same thing to the user, and
-    // both have to put the app back in an idle state -- returning early without
-    // that leaves it showing "Processing" with nothing processing.
-    let screenshot_paths = match collect_step_screenshots(&screenshots_dir) {
-        Ok(paths) => paths,
-        Err(e) => {
-            *state.recording_status.lock().unwrap() = RecordingStatus::Idle;
-            return Err(e);
-        }
-    };
+    let screenshot_paths = collect_step_screenshots(&screenshots_dir)?;
 
     log::info!(
         "generate: {} screenshot(s) from {} (steps {:?}..{:?})",
@@ -202,7 +208,6 @@ async fn run_generation_inner(
     );
 
     if screenshot_paths.is_empty() {
-        *state.recording_status.lock().unwrap() = RecordingStatus::Idle;
         return Err("No screenshots found".into());
     }
 
@@ -308,15 +313,21 @@ async fn run_generation_inner(
             let fresh_token = match net_auth::refresh_session(api_base).await {
                 Ok(Some(auth)) => {
                     let token = auth.access_token.clone();
-                    *session.access_token.lock().unwrap() = Some(auth.access_token);
+                    *session
+                        .access_token
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner()) = Some(auth.access_token);
                     if let Some(email) = auth.email {
-                        *session.email.lock().unwrap() = Some(email);
+                        *session.email.lock().unwrap_or_else(|e| e.into_inner()) = Some(email);
                     }
                     token
                 }
                 _ => {
                     // Refresh permanently failed -- signal frontend to re-login
-                    *session.access_token.lock().unwrap() = None;
+                    *session
+                        .access_token
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner()) = None;
                     let _ = app.emit("auth:session_expired", ());
                     return Err("Sitzung abgelaufen. Bitte erneut anmelden.".into());
                 }
@@ -340,7 +351,10 @@ async fn run_generation_inner(
             .map_err(|e| {
                 if e.contains("(401)") {
                     // Even the fresh token was rejected -- force re-login
-                    *session.access_token.lock().unwrap() = None;
+                    *session
+                        .access_token
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner()) = None;
                     let _ = app.emit("auth:session_expired", ());
                     "Sitzung abgelaufen. Bitte erneut anmelden.".to_string()
                 } else {
@@ -415,7 +429,10 @@ async fn run_generation_inner(
     // Clear pending marker
     pending::clear_pending(&output_path);
 
-    *state.recording_status.lock().unwrap() = RecordingStatus::Done;
+    *state
+        .recording_status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = RecordingStatus::Done;
 
     Ok(())
 }
