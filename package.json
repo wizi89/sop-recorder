@@ -17,7 +17,7 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e:build": "tauri build --debug --no-bundle --config e2e/tauri.e2e.conf.json",
+    "e2e:build": "node scripts/e2e-build.mjs",
     "e2e": "playwright test"
   },
   "dependencies": {

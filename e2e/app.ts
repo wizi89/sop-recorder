@@ -5,7 +5,8 @@
  * environment variable, and Playwright attaches to that like to any Chromium.
  * Windows only: WKWebView on macOS has no such port.
  *
- * The binary is the debug build from `npm run e2e:build`, which matters twice:
+ * The binary is the debug build from `npm run e2e:build`, in its own target
+ * directory so `cargo test` cannot overwrite it. That matters twice:
  * a debug build keeps its credentials under its own keyring name, so a run
  * cannot sign the developer's installed app out, and the e2e config gives it
  * its own identifier, so it has its own settings, logs and WebView profile.
@@ -14,7 +15,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { chromium, type Browser, type Page } from "@playwright/test";
 
-export const BINARY = path.resolve("src-tauri/target/debug/cogniclone-recorder.exe");
+export const BINARY = path.resolve("src-tauri/target/e2e/debug/cogniclone-recorder.exe");
 
 /**
  * Fixed rather than free, because CI cannot use the environment variable:

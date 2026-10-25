@@ -9,6 +9,44 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-10-24 The UI shows the main window by itself once, after mount
+
+**Symptom:** an e2e test hid the main window and it was visible again a moment later. Passed
+locally, failed on the slower CI runner.
+
+**Cause:** `App.tsx` leaves compact mode on mount (`exitCompactMode`), which calls
+`appWindow.show()`. A test that hides the window before the UI has mounted loses the race.
+
+**Rule:** wait for the UI (a visible button) before changing window state in a test, and check the
+state still holds a second later. See `e2e/single-instance.e2e.ts`.
+
+---
+
+## 2026-10-24 Every e2e test failed at launch with WebView2 error 0x8007139F
+
+**Symptom:** all e2e tests fail on launch with `0x8007139F`, right after a `cargo test`.
+
+**Cause:** the exe under test had been relinked with the normal identifier, so its WebView2
+profile was the installed app's, which was in use. `cargo test` and `tauri dev` both relink the
+shared `target/debug` exe.
+
+**Rule:** `npm run e2e:build` builds into `src-tauri/target/e2e`, and the tests run only that exe.
+Rebuild it after changing Rust code; never point the tests at `target/debug`.
+
+---
+
+## 2026-10-24 A resampler test measured noise at -60 dB that the resampler did not make
+
+**Symptom:** an alias-level test failed near -60 dB, and no change to the resampler moved it.
+
+**Cause:** the test sine was generated with an f32 phase. The accumulated rounding error is noise
+in the *input*.
+
+**Rule:** compute the phase in f64 and convert each sample to f32. The resampler itself measures
+below -140 dB (`capture/audio.rs` tests).
+
+---
+
 ## 2026-09-04 A source-scanning test passed on macOS and failed on Windows, because git hands it CRLF
 
 **Symptom:** `only_write_report_writes_a_report_file` failed in CI on Windows only, claiming three

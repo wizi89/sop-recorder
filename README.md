@@ -40,8 +40,10 @@ attempt becomes an error report, so we learn about it.
 2. Perform your workflow -- every mouse click is captured as a screenshot
 3. Narrate what you're doing -- audio is recorded simultaneously
 4. Click **Aufnahme stoppen** (Stop Recording)
-5. The app uploads screenshots + audio to the server, which uses AI (Whisper + GPT-4o) to generate a step-by-step guide
+5. Review, then **Generate**: the app uploads screenshots + audio to the server, which transcribes and writes a step-by-step guide with Azure AI services in Germany West Central
 6. The guide is saved locally as markdown, with the PDF the server rendered
+
+What leaves your computer, and when, is listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#what-leaves-the-machine).
 
 ## Features
 
@@ -51,9 +53,8 @@ attempt becomes an error report, so we learn about it.
 - Server-side AI pipeline with SSE progress streaming
 - Local copy of each guide: markdown, plus the server-rendered PDF
 - Sign-in through the user's browser (loopback redirect with PKCE), session in the OS keyring
-- Crash recovery (pending.json retry)
+- Recovery by hand: a stopped recording stays on disk and can be generated again from its folder
 - Auto-updater via GitHub Releases, with an opt-in beta channel
-- System tray integration
 - German UI (i18n)
 - Per-user NSIS installer on Windows (no admin rights)
 - macOS `.dmg` and `.app` bundles
@@ -167,23 +168,7 @@ From a Windows machine, the fastest validation loop for macOS packaging changes 
 
 ## Project structure
 
-```
-src/                    React + TypeScript frontend
-  components/           UI screens (Login, Recorder, Settings, StatusBar)
-  hooks/                React hooks (useAuth, useRecorder, useSSE)
-  i18n/                 German translations
-  lib/                  Typed Tauri command wrappers
-  test/                 Vitest test suite
-
-src-tauri/              Rust backend
-  src/
-    capture/            Screen capture, audio recording, input hooks
-    commands/           Tauri commands (auth, recording, generate, settings)
-    network/            Server communication (upload, SSE, auth)
-    output/             Markdown, crash recovery
-    state.rs            Shared app state
-    tray.rs             System tray
-```
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules, the life of a recording, what is sent where, and known gaps.
 
 ## CI/CD
 
