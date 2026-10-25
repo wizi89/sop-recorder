@@ -96,38 +96,45 @@ export function RecordingBar() {
         style={{ width: "22%", color: "#fff" }}
         title={audioSilent ? t("status.no_audio_hint") : undefined}
       >
-        <span
-          style={{
-            fontSize: "0.55rem",
-            fontWeight: 600,
-            lineHeight: 1.1,
-            color: audioSilent ? "var(--color-error)" : undefined,
-          }}
-        >
-          {audioSilent
-            ? t("status.no_audio")
-            : `${captureCount} · ${formatElapsed(elapsedSec)}`}
+        <span style={{ fontSize: "0.55rem", fontWeight: 600, lineHeight: 1.1 }}>
+          {`${captureCount} · ${formatElapsed(elapsedSec)}`}
         </span>
-        <div
-          aria-label="audio level"
-          style={{
-            width: "80%",
-            height: "3px",
-            marginTop: "3px",
-            borderRadius: "2px",
-            background: "rgba(255,255,255,0.12)",
-            overflow: "hidden",
-          }}
-        >
-          <div
+        {/* Without sound the meter says nothing, so the warning takes its
+            line and the counter stays: the steps are still being recorded. */}
+        {audioSilent ? (
+          <span
             style={{
-              width: audioSilent ? "100%" : `${vuFillPct}%`,
-              height: "100%",
-              background: audioSilent ? "var(--color-error)" : vuColor,
-              transition: "width 60ms linear",
+              fontSize: "0.5rem",
+              fontWeight: 600,
+              lineHeight: 1.1,
+              marginTop: "1px",
+              color: "var(--color-error)",
             }}
-          />
-        </div>
+          >
+            {t("status.no_audio")}
+          </span>
+        ) : (
+          <div
+            aria-label="audio level"
+            style={{
+              width: "80%",
+              height: "3px",
+              marginTop: "3px",
+              borderRadius: "2px",
+              background: "rgba(255,255,255,0.12)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${vuFillPct}%`,
+                height: "100%",
+                background: vuColor,
+                transition: "width 60ms linear",
+              }}
+            />
+          </div>
+        )}
       </div>
       <button
         onClick={() => void emit("bar:stop")}

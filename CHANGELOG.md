@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- When no sound arrives during a recording, the bar keeps showing the number of steps and the time; "Kein Ton" now appears below them instead of replacing them.
+
 ## [0.20.0] - 2026-10-25
 
 ### Added

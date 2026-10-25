@@ -105,6 +105,34 @@ fn accessibility_trusted(prompt: bool) -> bool {
     }
 }
 
+/// The setup screen asks for these states every second or two. Logging every
+/// answer filled the log -- and the error reports that carry it -- with the
+/// same line, so each state is logged when its answer changes.
+struct LastLogged(std::sync::Mutex<String>);
+
+impl LastLogged {
+    const fn new() -> Self {
+        Self(std::sync::Mutex::new(String::new()))
+    }
+
+    /// Logs `message` unless it repeats the last one; says whether it did.
+    fn log(&self, level: log::Level, message: String) -> bool {
+        let mut last = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if *last == message {
+            return false;
+        }
+        log::log!(level, "{message}");
+        *last = message;
+        true
+    }
+}
+
+#[allow(dead_code)] // Read only on macOS.
+static ACCESSIBILITY_LOG: LastLogged = LastLogged::new();
+static MIC_LOG: LastLogged = LastLogged::new();
+#[allow(dead_code)] // Read only on macOS.
+static SCREEN_LOG: LastLogged = LastLogged::new();
+
 /// Whether the global input hook can be installed.
 ///
 /// Without this the recorder starts, shows a running timer, and captures
@@ -114,9 +142,12 @@ pub fn get_accessibility_permission_state() -> String {
     #[cfg(target_os = "macos")]
     {
         let granted = accessibility_trusted(false);
-        log::info!(
-            "Accessibility permission: {}",
-            if granted { "granted" } else { "denied" }
+        ACCESSIBILITY_LOG.log(
+            log::Level::Info,
+            format!(
+                "Accessibility permission: {}",
+                if granted { "granted" } else { "denied" }
+            ),
         );
         if granted {
             "granted".to_string()
@@ -149,7 +180,10 @@ pub fn get_microphone_permission_state() -> String {
     use objc2_av_foundation::{AVAuthorizationStatus, AVCaptureDevice, AVMediaTypeAudio};
 
     let Some(media_type) = (unsafe { AVMediaTypeAudio }) else {
-        log::warn!("Mic permission: AVMediaTypeAudio unavailable");
+        MIC_LOG.log(
+            log::Level::Warn,
+            "Mic permission: AVMediaTypeAudio unavailable".into(),
+        );
         return "denied".to_string();
     };
     let status = unsafe { AVCaptureDevice::authorizationStatusForMediaType(media_type) };
@@ -165,7 +199,10 @@ pub fn get_microphone_permission_state() -> String {
         AVAuthorizationStatus::NotDetermined => "undetermined",
         _ => "denied",
     };
-    log::info!("Mic permission: {} (status {})", state, status.0);
+    MIC_LOG.log(
+        log::Level::Info,
+        format!("Mic permission: {} (status {})", state, status.0),
+    );
     state.to_string()
 }
 
@@ -179,18 +216,27 @@ pub fn get_microphone_permission_state() -> String {
     let device = match host.default_input_device() {
         Some(d) => d,
         None => {
-            log::warn!("Mic permission: no default input device");
+            MIC_LOG.log(
+                log::Level::Warn,
+                "Mic permission: no default input device".into(),
+            );
             return "denied".to_string();
         }
     };
 
     match device.default_input_config() {
         Ok(_) => {
-            log::info!("Mic permission: granted (device {:?})", device.name().ok());
+            MIC_LOG.log(
+                log::Level::Info,
+                format!("Mic permission: granted (device {:?})", device.name().ok()),
+            );
             "granted".to_string()
         }
         Err(e) => {
-            log::warn!("Mic permission: config probe failed: {}", e);
+            MIC_LOG.log(
+                log::Level::Warn,
+                format!("Mic permission: config probe failed: {}", e),
+            );
             "denied".to_string()
         }
     }
@@ -201,9 +247,12 @@ pub fn get_screen_recording_permission_state() -> String {
     #[cfg(target_os = "macos")]
     {
         let granted = unsafe { CGPreflightScreenCaptureAccess() };
-        log::info!(
-            "Screen recording permission: {}",
-            if granted { "granted" } else { "denied" }
+        SCREEN_LOG.log(
+            log::Level::Info,
+            format!(
+                "Screen recording permission: {}",
+                if granted { "granted" } else { "denied" }
+            ),
         );
         if granted {
             "granted".to_string()
@@ -375,5 +424,21 @@ mod request_permission_tests {
     fn an_unknown_permission_is_refused_rather_than_guessed_at() {
         assert!(request_permission("camera".into()).is_err());
         assert!(request_permission("".into()).is_err());
+    }
+}
+
+#[cfg(test)]
+mod last_logged_tests {
+    use super::LastLogged;
+
+    #[test]
+    fn a_polled_state_is_logged_when_it_changes_not_on_every_poll() {
+        let log = LastLogged::new();
+        let level = log::Level::Info;
+        assert!(log.log(level, "Mic permission: granted".into()));
+        assert!(!log.log(level, "Mic permission: granted".into()));
+        assert!(log.log(level, "Mic permission: no default input device".into()));
+        assert!(!log.log(level, "Mic permission: no default input device".into()));
+        assert!(log.log(level, "Mic permission: granted".into()));
     }
 }
