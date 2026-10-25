@@ -10,6 +10,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ErrorReportModal } from "./components/ErrorReportModal";
 import { useAuth } from "./hooks/useAuth";
 import { useRecorder } from "./hooks/useRecorder";
+import { useOfferUnfinished } from "./hooks/useOfferUnfinished";
 import { useErrorReports } from "./hooks/useErrorReports";
 import { useSSE } from "./hooks/useSSE";
 import { useUpdater } from "./hooks/useUpdater";
@@ -67,6 +68,7 @@ function MainApp() {
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
+  useOfferUnfinished(auth.loggedIn && recorder.status === "idle", recorder.generateFromDir);
   const updater = useUpdater();
   // Error reports (design D1, D5, D7). The hook owns the queue; this window
   // owns what is on screen. Under mode `always` no dialog opens and the number

@@ -175,6 +175,13 @@ const de = {
   // PII disabled chip (main screen)
   "pii.disabled_chip": "Sicherheitsprüfung deaktiviert",
 
+  // Unfinished recording, offered at startup
+  "recovery.title": "Aufnahme noch nicht erzeugt",
+  "recovery.message":
+    "Aus der Aufnahme „{title}“ wurde noch keine Anleitung erzeugt. Im nächsten Schritt kannst du sie prüfen und erzeugen oder verwerfen.",
+  "recovery.review": "Aufnahme prüfen",
+  "recovery.later": "Später",
+
   // Network errors
   "network.pii_blocked":
     "Personenbezogene Daten erkannt. Erzeugung abgebrochen.",

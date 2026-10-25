@@ -476,6 +476,42 @@ pub async fn read_screenshot_bytes(path: String) -> Result<Vec<u8>, String> {
     fs::read(&path).map_err(|e| format!("Failed to read {}: {}", path, e))
 }
 
+/// A recording that was stopped but never generated.
+#[derive(serde::Serialize)]
+pub struct UnfinishedRecording {
+    pub output_dir: String,
+    pub guide_title: String,
+}
+
+/// How far back an unfinished recording is still offered at startup.
+const UNFINISHED_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
+
+/// The newest recording from the last week that was stopped but never
+/// generated -- the app was closed on the review screen, Generate failed, or
+/// the app crashed after Stop. Offered at startup so it is not lost.
+#[tauri::command]
+pub async fn unfinished_recording(app: tauri::AppHandle) -> Option<UnfinishedRecording> {
+    let dir = pending::find_pending(
+        &get_output_dir(&app),
+        std::time::SystemTime::now(),
+        UNFINISHED_MAX_AGE,
+    )?;
+    let guide_title = pending::read_pending(&dir)
+        .and_then(|meta| meta["guide_title"].as_str().map(String::from))
+        .unwrap_or_else(|| dir.file_name().unwrap_or_default().to_string_lossy().into());
+    Some(UnfinishedRecording {
+        output_dir: dir.to_string_lossy().into(),
+        guide_title,
+    })
+}
+
+/// The user discarded a stopped recording: it is no longer offered at
+/// startup. Its files stay on disk.
+#[tauri::command]
+pub async fn discard_recording(output_dir: String) {
+    pending::clear_pending(&PathBuf::from(output_dir));
+}
+
 /// List the captured screenshot files in a session output directory, in
 /// capture order. Returns absolute file paths as strings so the React side
 /// can render them via `read_screenshot_bytes`.

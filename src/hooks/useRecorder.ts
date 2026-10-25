@@ -3,6 +3,7 @@ import {
   startRecording,
   stopRecording,
   runGeneration,
+  discardRecording,
 } from "../lib/tauri";
 import { t } from "../i18n";
 import {
@@ -216,9 +217,10 @@ export function useRecorder() {
   /**
    * Cancel from the review screen: discard the captured session and return
    * to idle. The recording dir is left on disk (future cleanup tracked in
-   * memory: future_cancel_cleanup.md).
+   * memory: future_cancel_cleanup.md), but is no longer offered at startup.
    */
   const cancelFromReview = useCallback(() => {
+    if (outputDirRef.current) void discardRecording(outputDirRef.current).catch(() => {});
     setState({
       status: "idle",
       statusMessage: "",
@@ -233,7 +235,10 @@ export function useRecorder() {
 
   const cancel = useCallback(async () => {
     try {
-      await stopRecording();
+      // Stop writes the marker that offers a recording at startup; a cancelled
+      // one is not to be offered.
+      const stopped = await stopRecording();
+      void discardRecording(stopped.output_dir).catch(() => {});
     } catch {
       // ignore -- best effort cleanup
     }

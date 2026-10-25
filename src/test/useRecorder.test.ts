@@ -90,6 +90,26 @@ describe("useRecorder", () => {
     expect(result.current.outputDir).toBeNull();
     // run_generation was NOT called
     expect(mockInvoke).not.toHaveBeenCalledWith("run_generation", expect.anything());
+    // and the recording is not offered again at the next start
+    expect(mockInvoke).toHaveBeenCalledWith("discard_recording", { outputDir });
+  });
+
+  it("a recording cancelled while running is not offered at the next start", async () => {
+    const outputDir = "C:\Users\test\output";
+    mockInvoke
+      .mockResolvedValueOnce(undefined) // start_recording
+      .mockResolvedValueOnce({ output_dir: outputDir, failed_captures: 0 }); // stop_recording
+
+    const { result } = renderHook(() => useRecorder());
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      await result.current.cancel();
+    });
+
+    expect(result.current.status).toBe("idle");
+    expect(mockInvoke).toHaveBeenCalledWith("discard_recording", { outputDir });
   });
 
   it("transitions to error on start failure", async () => {
