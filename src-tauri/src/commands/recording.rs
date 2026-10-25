@@ -371,24 +371,19 @@ pub async fn stop_recording(
     // Wait for any in-flight screenshot captures to finish writing to disk
     // BEFORE returning, so the review screen opens onto a stable filesystem
     // state. On a fast machine this is near-instant; on a slow one the last
-    // click's capture + resize can take a second or two. Cap at 15s to avoid
-    // a truly stuck stop.
+    // click's capture + resize can take a second or two. Capped, so a stuck
+    // capture cannot hang the stop.
     if let Some(counter) = in_flight_counter.as_ref() {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
-        let mut waited = false;
-        while counter.load(Ordering::SeqCst) > 0 {
-            if std::time::Instant::now() > deadline {
-                log::warn!("stop_recording: in-flight captures did not finish within 15s");
-                break;
-            }
-            if !waited {
-                log::info!(
-                    "stop_recording: waiting for {} in-flight capture(s) to finish",
-                    counter.load(Ordering::SeqCst)
-                );
-                waited = true;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let running = counter.load(Ordering::SeqCst);
+        if running > 0 {
+            log::info!("stop_recording: waiting for {running} in-flight capture(s) to finish");
+        }
+        let stuck = wait_for_captures(counter, CAPTURE_DRAIN_TIMEOUT).await;
+        if stuck > 0 {
+            log::warn!(
+                "stop_recording: {stuck} in-flight capture(s) did not finish within {}s",
+                CAPTURE_DRAIN_TIMEOUT.as_secs()
+            );
         }
     }
 
@@ -533,10 +528,66 @@ pub async fn delete_last_screenshot(
     }
 }
 
+/// Longest wait for screenshot captures still being written. On a fast machine
+/// they finish at once and on a slow one within a second or two; one that
+/// takes longer is stuck, and waiting on it would hang Stop or Generate.
+pub const CAPTURE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Waits until no capture is in flight or `timeout` has passed, and returns how
+/// many are still running: 0 when all finished.
+pub async fn wait_for_captures(counter: &AtomicU32, timeout: std::time::Duration) -> u32 {
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        let running = counter.load(Ordering::SeqCst);
+        if running == 0 || tokio::time::Instant::now() >= deadline {
+            return running;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::capture::screenshot::MarkerBox;
+
+    #[tokio::test]
+    async fn the_capture_wait_returns_once_the_last_capture_finishes() {
+        let counter = Arc::new(AtomicU32::new(2));
+        let finisher = counter.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            finisher.store(0, Ordering::SeqCst);
+        });
+        let started = Instant::now();
+        let left = wait_for_captures(&counter, std::time::Duration::from_secs(5)).await;
+        assert_eq!(left, 0);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[tokio::test]
+    async fn a_stuck_capture_ends_the_wait_at_the_deadline() {
+        let counter = AtomicU32::new(1);
+        let started = Instant::now();
+        let left = wait_for_captures(&counter, std::time::Duration::from_millis(200)).await;
+        assert_eq!(left, 1, "the stuck capture is reported, not hidden");
+        let waited = started.elapsed();
+        assert!(
+            waited >= std::time::Duration::from_millis(200),
+            "{waited:?}"
+        );
+        assert!(waited < std::time::Duration::from_secs(2), "{waited:?}");
+    }
+
+    #[tokio::test]
+    async fn nothing_in_flight_means_no_wait() {
+        let started = Instant::now();
+        assert_eq!(
+            wait_for_captures(&AtomicU32::new(0), std::time::Duration::from_secs(5)).await,
+            0
+        );
+        assert!(started.elapsed() < std::time::Duration::from_millis(50));
+    }
 
     fn box_at(x0: i32) -> Option<MarkerBox> {
         Some(MarkerBox {

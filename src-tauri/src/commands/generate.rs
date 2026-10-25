@@ -132,8 +132,16 @@ async fn run_generation_inner(
                     message: "Screenshots werden verarbeitet...".into(),
                 },
             );
-            while counter.load(std::sync::atomic::Ordering::SeqCst) > 0 {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            let stuck = super::recording::wait_for_captures(
+                &counter,
+                super::recording::CAPTURE_DRAIN_TIMEOUT,
+            )
+            .await;
+            // Generating without the stuck ones beats waiting forever: the
+            // steps that did finish are on disk, and the guide is built
+            // from what is there.
+            if stuck > 0 {
+                log::warn!("run_generation: going ahead with {stuck} capture(s) still unfinished");
             }
         }
     }
