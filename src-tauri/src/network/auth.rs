@@ -415,10 +415,15 @@ pub async fn refresh_session(api_base: &str) -> Result<Option<AuthSession>, Stri
         .await
         .map_err(|e| format!("Refresh failed: {}", e))?;
 
-    if !res.status().is_success() {
-        // Server rejected the token -- clear it
+    let status = res.status().as_u16();
+    if token_rejected(status) {
         let _ = keyring_clear("refresh-token");
         return Ok(None);
+    }
+    if !res.status().is_success() {
+        // A deploy, an overloaded server or a proxy in between: the token may
+        // be fine, and deleting it would sign the user out over a hiccup.
+        return Err(format!("Refresh failed: server answered {}", status));
     }
 
     let data: SignInResponse = res.json().await.map_err(|e| e.to_string())?;
@@ -442,6 +447,12 @@ pub async fn refresh_session(api_base: &str) -> Result<Option<AuthSession>, Stri
         access_token,
         email: data.email,
     }))
+}
+
+/// The answers that mean the refresh token itself is no good. Anything else --
+/// 5xx, 429, a proxy's 404 -- says nothing about the token.
+fn token_rejected(status: u16) -> bool {
+    matches!(status, 400 | 401 | 403)
 }
 
 /// Sign out: clear all stored credentials.
@@ -479,6 +490,16 @@ pub fn keyring_clear(key: &str) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::config;
+
+    #[test]
+    fn only_a_rejection_of_the_token_signs_the_user_out() {
+        for status in [400, 401, 403] {
+            assert!(token_rejected(status), "{status}");
+        }
+        for status in [404, 408, 429, 500, 502, 503, 504] {
+            assert!(!token_rejected(status), "{status} must keep the session");
+        }
+    }
 
     #[test]
     fn api_url_defaults_to_prod() {

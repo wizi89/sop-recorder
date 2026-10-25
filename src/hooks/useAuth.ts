@@ -68,6 +68,9 @@ export function describeBrowserFailure(error: unknown): {
   return { message: raw, unsupported: false, reportable: isReportable(raw) };
 }
 
+/** How often a stored session is tried again while the server is unreachable. */
+export const RESTORE_RETRY_MS = 10_000;
+
 export function useAuth() {
   const [state, setState] = useState<AuthState>({
     loggedIn: false,
@@ -80,21 +83,46 @@ export function useAuth() {
   });
 
   useEffect(() => {
-    refreshSession()
-      .then((session: SessionState) => {
-        setState({
-          loggedIn: session.logged_in,
-          email: session.email,
-          loading: false,
-          error: null,
-          awaitingBrowser: false,
-          browserUnsupported: false,
-          browserFailureToReport: null,
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const restore = () =>
+      refreshSession()
+        .then((session: SessionState) => {
+          if (cancelled) return;
+          // A retry must not undo a sign-in the user finished meanwhile.
+          setState((s) =>
+            s.loggedIn
+              ? s
+              : {
+                  loggedIn: session.logged_in,
+                  email: session.email,
+                  loading: false,
+                  error: null,
+                  awaitingBrowser: false,
+                  browserUnsupported: false,
+                  browserFailureToReport: null,
+                },
+          );
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          // The server could not be reached or answered with an error of its
+          // own. The stored session is kept for exactly this case, so say so
+          // and try again rather than asking for a new sign-in.
+          if (String(e).startsWith("Refresh failed")) {
+            setState((s) =>
+              s.loggedIn ? s : { ...s, loading: false, error: t("login.restore_unavailable") },
+            );
+            retry = setTimeout(restore, RESTORE_RETRY_MS);
+          } else {
+            setState((s) => ({ ...s, loading: false }));
+          }
         });
-      })
-      .catch(() => {
-        setState((s) => ({ ...s, loading: false }));
-      });
+    restore();
+    return () => {
+      cancelled = true;
+      clearTimeout(retry);
+    };
   }, []);
 
   // Backend emits auth:session_expired when token refresh is permanently

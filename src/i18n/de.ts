@@ -23,6 +23,8 @@ const de = {
   "login.browser_unsupported":
     "Dieser Server unterstützt die Anmeldung über den Browser noch nicht. Melde dich bitte ohne Browser an.",
   "login.without_browser": "Ohne Browser anmelden",
+  "login.restore_unavailable":
+    "Der Server ist gerade nicht erreichbar. Deine Anmeldung bleibt gespeichert, die App versucht es gleich wieder.",
   "login.with_browser_instead": "Stattdessen mit Browser anmelden",
 
   // Recording
