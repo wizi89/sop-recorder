@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A recording that was never turned into a guide -- because the app was closed on the review screen, generating failed, or the app crashed after stopping -- is offered when the app starts. You can review it and generate it, or discard it. Recordings older than a week are not offered; they are still in their folder.
+
+### Changed
+
+- If the microphone is missing or will not open, the recording now starts anyway and captures the steps without narration. The bar shows "Kein Ton", as it already did when the microphone permission is missing.
+
+### Fixed
+
+- A short server outage or update no longer signs you out. The app says the server is unreachable and keeps trying; your sign-in stays saved.
+- Generating could wait forever when a screenshot never finished saving. It now waits at most 15 seconds and goes ahead with the steps that were saved.
+- After an error while stopping or generating, the app could keep thinking it was still busy, and an internal error in one part of the app could make every following action fail until the app was restarted. Both are fixed.
+
 ## [0.19.3] - 2026-10-25
 
 ### Fixed
