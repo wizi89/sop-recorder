@@ -18,8 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e:build": "node scripts/e2e-build.mjs",
-    "e2e": "playwright test",
-    "prepare": "git config core.hooksPath .githooks"
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
