@@ -82,15 +82,7 @@ impl AudioHandle {
             TARGET_SAMPLE_RATE
         );
 
-        // WAV output: 16kHz mono 16-bit (what Azure Speech SDK expects)
-        let spec = WavSpec {
-            channels: 1,
-            sample_rate: TARGET_SAMPLE_RATE,
-            bits_per_sample: 16,
-            sample_format: hound::SampleFormat::Int,
-        };
-
-        let writer = WavWriter::create(output_path, spec)
+        let writer = WavWriter::create(output_path, wav_spec())
             .map_err(|e| format!("Failed to create WAV file: {}", e))?;
         let writer = Arc::new(Mutex::new(Some(writer)));
         let writer_clone = writer.clone();
@@ -373,11 +365,44 @@ impl ResampleState {
     }
 }
 
+/// 16 kHz mono 16-bit: what Azure Speech expects.
+fn wav_spec() -> WavSpec {
+    WavSpec {
+        channels: 1,
+        sample_rate: TARGET_SAMPLE_RATE,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    }
+}
+
+/// One second of silence in the recording format, for a recording made
+/// without a working microphone.
+pub fn write_silent_wav(path: &Path) -> Result<(), String> {
+    let mut writer = WavWriter::create(path, wav_spec())
+        .map_err(|e| format!("Failed to create WAV file: {}", e))?;
+    for _ in 0..TARGET_SAMPLE_RATE {
+        writer.write_sample(0i16).map_err(|e| e.to_string())?;
+    }
+    writer.finalize().map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const DEVICE_RATES: [u32; 3] = [44_100, 48_000, 96_000];
+
+    #[test]
+    fn the_silent_stand_in_is_a_valid_recording_of_one_second_of_silence() {
+        let path = std::env::temp_dir().join(format!("silent-{}.wav", std::process::id()));
+        write_silent_wav(&path).unwrap();
+        let mut reader = hound::WavReader::open(&path).unwrap();
+        assert_eq!(reader.spec(), wav_spec());
+        let samples: Vec<i16> = reader.samples::<i16>().map(Result::unwrap).collect();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(samples.len(), TARGET_SAMPLE_RATE as usize);
+        assert!(samples.iter().all(|&s| s == 0));
+    }
 
     fn sine(freq: f32, rate: u32, seconds: f32) -> Vec<f32> {
         let n = (rate as f32 * seconds) as usize;

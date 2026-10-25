@@ -27,10 +27,18 @@ pub async fn get_pipelines(
     let access_token = match net_auth::refresh_session(api_base).await {
         Ok(Some(auth)) => {
             let token = auth.access_token.clone();
-            *session.access_token.lock().unwrap() = Some(auth.access_token);
+            *session
+                .access_token
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(auth.access_token);
             token
         }
-        _ => match session.access_token.lock().unwrap().clone() {
+        _ => match session
+            .access_token
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+        {
             Some(token) => token,
             None => return Ok(last_good(&app)),
         },

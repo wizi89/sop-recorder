@@ -94,6 +94,22 @@ export async function deleteLastScreenshot(): Promise<number> {
  * List all captured screenshot files in a recording session output dir,
  * ordered by capture sequence. Returns absolute file paths.
  */
+/** A recording that was stopped but never generated. */
+export interface UnfinishedRecording {
+  output_dir: string;
+  guide_title: string;
+}
+
+/** The newest unfinished recording from the last week, if any. */
+export async function unfinishedRecording(): Promise<UnfinishedRecording | null> {
+  return invoke("unfinished_recording");
+}
+
+/** Stop offering a recording at startup. Its files stay on disk. */
+export async function discardRecording(outputDir: string): Promise<void> {
+  return invoke("discard_recording", { outputDir });
+}
+
 export async function listSessionScreenshots(outputDir: string): Promise<string[]> {
   return invoke("list_session_screenshots", { outputDir });
 }

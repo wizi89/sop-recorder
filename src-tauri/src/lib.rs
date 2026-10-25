@@ -193,6 +193,8 @@ pub fn run() {
             recording::stop_recording,
             recording::delete_last_screenshot,
             recording::list_session_screenshots,
+            recording::unfinished_recording,
+            recording::discard_recording,
             recording::read_screenshot_bytes,
             generate::run_generation,
             quota::get_quota,

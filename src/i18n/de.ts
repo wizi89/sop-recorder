@@ -23,6 +23,8 @@ const de = {
   "login.browser_unsupported":
     "Dieser Server unterstützt die Anmeldung über den Browser noch nicht. Melde dich bitte ohne Browser an.",
   "login.without_browser": "Ohne Browser anmelden",
+  "login.restore_unavailable":
+    "Der Server ist gerade nicht erreichbar. Deine Anmeldung bleibt gespeichert, die App versucht es gleich wieder.",
   "login.with_browser_instead": "Stattdessen mit Browser anmelden",
 
   // Recording
@@ -173,6 +175,13 @@ const de = {
   // PII disabled chip (main screen)
   "pii.disabled_chip": "Sicherheitsprüfung deaktiviert",
 
+  // Unfinished recording, offered at startup
+  "recovery.title": "Aufnahme noch nicht erzeugt",
+  "recovery.message":
+    "Aus der Aufnahme „{title}“ wurde noch keine Anleitung erzeugt. Im nächsten Schritt kannst du sie prüfen und erzeugen oder verwerfen.",
+  "recovery.review": "Aufnahme prüfen",
+  "recovery.later": "Später",
+
   // Network errors
   "network.pii_blocked":
     "Personenbezogene Daten erkannt. Erzeugung abgebrochen.",
@@ -266,7 +275,7 @@ const de = {
     "Einmal verweigerte Berechtigungen fragt macOS nicht erneut ab -- sie müssen in den Systemeinstellungen erteilt werden.",
   "status.no_audio": "Kein Ton",
   "status.no_audio_hint":
-    "Es kommt kein Ton an. Vermutlich fehlt die Mikrofon-Berechtigung -- diese Aufnahme bekommt keine Sprachbeschreibung.",
+    "Es kommt kein Ton an: Das Mikrofon fehlt, ist nicht freigegeben oder lässt sich nicht öffnen. Die Schritte werden aufgezeichnet, aber ohne Sprachbeschreibung.",
   "tray.start_recording": "Aufnahme starten",
   "tray.stop_recording": "Aufnahme stoppen",
   "tray.settings": "Einstellungen",

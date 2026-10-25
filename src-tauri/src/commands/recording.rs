@@ -91,7 +91,10 @@ pub async fn start_recording(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut status = state.recording_status.lock().unwrap();
+    let mut status = state
+        .recording_status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     if *status == RecordingStatus::Recording {
         return Err("Eine Aufnahme läuft bereits.".into());
     }
@@ -127,8 +130,20 @@ pub async fn start_recording(
 
     // Start audio recording
     let audio_path = output_dir.join("recording.wav");
-    let audio_handle =
-        AudioHandle::start(&audio_path).map_err(|e| format!("Audio start failed: {}", e))?;
+    let audio_handle = match AudioHandle::start(&audio_path) {
+        Ok(handle) => Some(handle),
+        Err(e) => {
+            // No microphone, or one that will not open: the steps are still
+            // worth recording. The server requires an audio file and builds
+            // the guide from the screenshots alone when it is silent, so a
+            // silent one keeps everything downstream unchanged; the level
+            // poller below raises the usual no-sound warning after a few
+            // seconds, since the level stays at exactly zero.
+            log::warn!("Audio start failed, recording without narration: {e}");
+            crate::capture::audio::write_silent_wav(&audio_path)?;
+            None
+        }
+    };
 
     // Reset the shared stop flag BEFORE spawning any background tasks that
     // check it, so a stale value from a previous session cannot terminate
@@ -143,7 +158,10 @@ pub async fn start_recording(
     // Spawn the audio-level poller: at ~10 Hz, read the latest peak level
     // from the shared atomic and emit a Tauri event so the frontend can
     // render a live VU meter. Exits when the capture stop flag is set.
-    let audio_level_atomic = audio_handle.audio_level.clone();
+    let audio_level_atomic = audio_handle
+        .as_ref()
+        .map(|h| h.audio_level.clone())
+        .unwrap_or_default();
     let vu_stop_flag = state.capture_stop_flag.clone();
     let vu_app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -287,7 +305,7 @@ pub async fn start_recording(
         output_dir: output_dir.clone(),
         screenshots_dir,
         guide_title,
-        audio_handle: Some(audio_handle),
+        audio_handle,
         input_hook: Some(hook_handle),
         stop_flag: Some(stop_flag),
         in_flight: Some(in_flight),
@@ -295,7 +313,10 @@ pub async fn start_recording(
         failed_captures: Some(failed_captures),
     };
 
-    *state.current_session.lock().unwrap() = Some(session);
+    *state
+        .current_session
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(session);
     *status = RecordingStatus::Recording;
     // What a panic report says the app was doing (design D3). Set here rather
     // than read out of this mutex at panic time: the panic hook must not take
@@ -322,13 +343,34 @@ pub async fn stop_recording(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<StoppedRecording, String> {
+    let result = stop_recording_inner(app, state.clone()).await;
+    if result.is_err() {
+        // A stop that failed part-way, after the status moved to Processing,
+        // would otherwise leave it there and every later error report
+        // labelled with a phase the app is no longer in.
+        *state
+            .recording_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = RecordingStatus::Idle;
+        crate::error_reports::set_phase(crate::error_reports::Phase::Idle);
+    }
+    result
+}
+
+async fn stop_recording_inner(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<StoppedRecording, String> {
     // Set stop flag IMMEDIATELY -- before locking the session mutex.
     // This prevents the race where rdev fires the stop-button click
     // before the session lock is acquired.
     state.capture_stop_flag.store(true, Ordering::SeqCst);
 
     {
-        let mut status = state.recording_status.lock().unwrap();
+        let mut status = state
+            .recording_status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if *status != RecordingStatus::Recording {
             return Err("Keine aktive Aufnahme.".into());
         }
@@ -338,7 +380,10 @@ pub async fn stop_recording(
 
     // Extract everything from the session in one scoped block
     let (in_flight_counter, failed_counter, audio, output_dir_path, guide_title) = {
-        let mut session_guard = state.current_session.lock().unwrap();
+        let mut session_guard = state
+            .current_session
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let session = session_guard.as_mut().ok_or("No active session")?;
 
         // Clear session's copy of the flag (already set above)
@@ -371,30 +416,28 @@ pub async fn stop_recording(
     // Wait for any in-flight screenshot captures to finish writing to disk
     // BEFORE returning, so the review screen opens onto a stable filesystem
     // state. On a fast machine this is near-instant; on a slow one the last
-    // click's capture + resize can take a second or two. Cap at 15s to avoid
-    // a truly stuck stop.
+    // click's capture + resize can take a second or two. Capped, so a stuck
+    // capture cannot hang the stop.
     if let Some(counter) = in_flight_counter.as_ref() {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
-        let mut waited = false;
-        while counter.load(Ordering::SeqCst) > 0 {
-            if std::time::Instant::now() > deadline {
-                log::warn!("stop_recording: in-flight captures did not finish within 15s");
-                break;
-            }
-            if !waited {
-                log::info!(
-                    "stop_recording: waiting for {} in-flight capture(s) to finish",
-                    counter.load(Ordering::SeqCst)
-                );
-                waited = true;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let running = counter.load(Ordering::SeqCst);
+        if running > 0 {
+            log::info!("stop_recording: waiting for {running} in-flight capture(s) to finish");
+        }
+        let stuck = wait_for_captures(counter, CAPTURE_DRAIN_TIMEOUT).await;
+        if stuck > 0 {
+            log::warn!(
+                "stop_recording: {stuck} in-flight capture(s) did not finish within {}s",
+                CAPTURE_DRAIN_TIMEOUT.as_secs()
+            );
         }
     }
 
     // Store in-flight counter in app state (kept as defense in depth for the
     // generate path; should always be 0 here after the wait above).
-    *state.in_flight_captures.lock().unwrap() = in_flight_counter;
+    *state
+        .in_flight_captures
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = in_flight_counter;
 
     // Write pending.json. Per-step metadata lives in step_NN.json sidecars
     // alongside each PNG, so pending.json only needs the guide title.
@@ -431,6 +474,42 @@ pub async fn stop_recording(
 #[tauri::command]
 pub async fn read_screenshot_bytes(path: String) -> Result<Vec<u8>, String> {
     fs::read(&path).map_err(|e| format!("Failed to read {}: {}", path, e))
+}
+
+/// A recording that was stopped but never generated.
+#[derive(serde::Serialize)]
+pub struct UnfinishedRecording {
+    pub output_dir: String,
+    pub guide_title: String,
+}
+
+/// How far back an unfinished recording is still offered at startup.
+const UNFINISHED_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 3600);
+
+/// The newest recording from the last week that was stopped but never
+/// generated -- the app was closed on the review screen, Generate failed, or
+/// the app crashed after Stop. Offered at startup so it is not lost.
+#[tauri::command]
+pub async fn unfinished_recording(app: tauri::AppHandle) -> Option<UnfinishedRecording> {
+    let dir = pending::find_pending(
+        &get_output_dir(&app),
+        std::time::SystemTime::now(),
+        UNFINISHED_MAX_AGE,
+    )?;
+    let guide_title = pending::read_pending(&dir)
+        .and_then(|meta| meta["guide_title"].as_str().map(String::from))
+        .unwrap_or_else(|| dir.file_name().unwrap_or_default().to_string_lossy().into());
+    Some(UnfinishedRecording {
+        output_dir: dir.to_string_lossy().into(),
+        guide_title,
+    })
+}
+
+/// The user discarded a stopped recording: it is no longer offered at
+/// startup. Its files stay on disk.
+#[tauri::command]
+pub async fn discard_recording(output_dir: String) {
+    pending::clear_pending(&PathBuf::from(output_dir));
 }
 
 /// List the captured screenshot files in a session output directory, in
@@ -488,7 +567,10 @@ pub async fn delete_last_screenshot(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<u32, String> {
-    let session_guard = state.current_session.lock().unwrap();
+    let session_guard = state
+        .current_session
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let session = session_guard.as_ref().ok_or("Keine aktive Aufnahme.")?;
 
     // Refuse if a capture is currently being written to disk.
@@ -533,10 +615,66 @@ pub async fn delete_last_screenshot(
     }
 }
 
+/// Longest wait for screenshot captures still being written. On a fast machine
+/// they finish at once and on a slow one within a second or two; one that
+/// takes longer is stuck, and waiting on it would hang Stop or Generate.
+pub const CAPTURE_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Waits until no capture is in flight or `timeout` has passed, and returns how
+/// many are still running: 0 when all finished.
+pub async fn wait_for_captures(counter: &AtomicU32, timeout: std::time::Duration) -> u32 {
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        let running = counter.load(Ordering::SeqCst);
+        if running == 0 || tokio::time::Instant::now() >= deadline {
+            return running;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::capture::screenshot::MarkerBox;
+
+    #[tokio::test]
+    async fn the_capture_wait_returns_once_the_last_capture_finishes() {
+        let counter = Arc::new(AtomicU32::new(2));
+        let finisher = counter.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+            finisher.store(0, Ordering::SeqCst);
+        });
+        let started = Instant::now();
+        let left = wait_for_captures(&counter, std::time::Duration::from_secs(5)).await;
+        assert_eq!(left, 0);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[tokio::test]
+    async fn a_stuck_capture_ends_the_wait_at_the_deadline() {
+        let counter = AtomicU32::new(1);
+        let started = Instant::now();
+        let left = wait_for_captures(&counter, std::time::Duration::from_millis(200)).await;
+        assert_eq!(left, 1, "the stuck capture is reported, not hidden");
+        let waited = started.elapsed();
+        assert!(
+            waited >= std::time::Duration::from_millis(200),
+            "{waited:?}"
+        );
+        assert!(waited < std::time::Duration::from_secs(2), "{waited:?}");
+    }
+
+    #[tokio::test]
+    async fn nothing_in_flight_means_no_wait() {
+        let started = Instant::now();
+        assert_eq!(
+            wait_for_captures(&AtomicU32::new(0), std::time::Duration::from_secs(5)).await,
+            0
+        );
+        assert!(started.elapsed() < std::time::Duration::from_millis(50));
+    }
 
     fn box_at(x0: i32) -> Option<MarkerBox> {
         Some(MarkerBox {

@@ -48,8 +48,11 @@ pub async fn login(
     let api_base = get_api_base(&app);
     let auth = net_auth::sign_in(&email, &password, api_base).await?;
 
-    *session.access_token.lock().unwrap() = Some(auth.access_token);
-    *session.email.lock().unwrap() = auth.email.clone();
+    *session
+        .access_token
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(auth.access_token);
+    *session.email.lock().unwrap_or_else(|e| e.into_inner()) = auth.email.clone();
 
     Ok(SessionState {
         logged_in: true,
@@ -60,8 +63,11 @@ pub async fn login(
 #[tauri::command]
 pub async fn logout(session: State<'_, SessionCache>) -> Result<(), String> {
     net_auth::sign_out();
-    *session.access_token.lock().unwrap() = None;
-    *session.email.lock().unwrap() = None;
+    *session
+        .access_token
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = None;
+    *session.email.lock().unwrap_or_else(|e| e.into_inner()) = None;
     Ok(())
 }
 
@@ -73,8 +79,11 @@ pub async fn refresh_session(
     let api_base = get_api_base(&app);
     match net_auth::refresh_session(api_base).await? {
         Some(auth) => {
-            *session.access_token.lock().unwrap() = Some(auth.access_token);
-            *session.email.lock().unwrap() = auth.email.clone();
+            *session
+                .access_token
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(auth.access_token);
+            *session.email.lock().unwrap_or_else(|e| e.into_inner()) = auth.email.clone();
             Ok(SessionState {
                 logged_in: true,
                 email: auth.email,
@@ -89,8 +98,16 @@ pub async fn refresh_session(
 
 #[tauri::command]
 pub async fn get_session_state(session: State<'_, SessionCache>) -> Result<SessionState, String> {
-    let token = session.access_token.lock().unwrap().clone();
-    let email = session.email.lock().unwrap().clone();
+    let token = session
+        .access_token
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let email = session
+        .email
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     Ok(SessionState {
         logged_in: token.is_some(),
         email,
@@ -128,11 +145,11 @@ impl PendingBrowserLogin {
     /// Returns the attempt's id, for `release`.
     fn install(&self, token: CancellationToken) -> u64 {
         let id = {
-            let mut next = self.next_id.lock().unwrap();
+            let mut next = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
             *next += 1;
             *next
         };
-        let mut slot = self.slot.lock().unwrap();
+        let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
         if let Some((_, previous)) = slot.replace((id, token)) {
             // Supersede: cancel the *previous* attempt through its own token,
             // which drops its listener. A second attempt's callback must never
@@ -147,14 +164,14 @@ impl PendingBrowserLogin {
     /// Cancel the attempt in flight. A no-op once it has ended, because its
     /// token is gone from state by then.
     fn cancel(&self) {
-        if let Some((_, token)) = self.slot.lock().unwrap().as_ref() {
+        if let Some((_, token)) = self.slot.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
             token.cancel();
         }
     }
 
     /// Clear the slot if it still holds this attempt.
     fn release(&self, id: u64) {
-        let mut slot = self.slot.lock().unwrap();
+        let mut slot = self.slot.lock().unwrap_or_else(|e| e.into_inner());
         if slot.as_ref().is_some_and(|(current, _)| *current == id) {
             *slot = None;
         }
@@ -269,8 +286,11 @@ pub async fn login_via_browser(
     };
     log::info!("Browser sign-in: completed");
 
-    *session.access_token.lock().unwrap() = Some(auth.access_token);
-    *session.email.lock().unwrap() = auth.email.clone();
+    *session
+        .access_token
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(auth.access_token);
+    *session.email.lock().unwrap_or_else(|e| e.into_inner()) = auth.email.clone();
 
     // The user is in the browser at this moment, so the recorder is behind it.
     super::window::bring_to_front(&app, "main");
@@ -521,10 +541,13 @@ mod tests {
             let writes = ["refresh-token", "email"];
             for (i, key) in writes.iter().enumerate() {
                 if Some(i) == fail_after {
-                    store.lock().unwrap().clear(); // sign_out()
+                    store.lock().unwrap_or_else(|e| e.into_inner()).clear(); // sign_out()
                     return Err("credential store failed".into());
                 }
-                store.lock().unwrap().push((*key).to_string());
+                store
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .push((*key).to_string());
             }
             Ok(net_auth::AuthSession {
                 access_token: t.access_token.clone(),
@@ -552,7 +575,10 @@ mod tests {
         .await;
 
         assert!(got.is_ok());
-        assert_eq!(*store.lock().unwrap(), vec!["refresh-token", "email"]);
+        assert_eq!(
+            *store.lock().unwrap_or_else(|e| e.into_inner()),
+            vec!["refresh-token", "email"]
+        );
     }
 
     #[tokio::test]
@@ -583,7 +609,7 @@ mod tests {
             !called.load(Ordering::SeqCst),
             "the code was exchanged anyway"
         );
-        assert!(store.lock().unwrap().is_empty());
+        assert!(store.lock().unwrap_or_else(|e| e.into_inner()).is_empty());
     }
 
     #[tokio::test]
@@ -631,7 +657,7 @@ mod tests {
 
         assert!(matches!(got, Err(ExchangeError::Exchange(_))));
         assert!(
-            store.lock().unwrap().is_empty(),
+            store.lock().unwrap_or_else(|e| e.into_inner()).is_empty(),
             "a timed-out attempt stored a credential"
         );
     }
@@ -665,7 +691,7 @@ mod tests {
 
         assert!(matches!(got, Err(ExchangeError::Cancelled)));
         assert!(
-            store.lock().unwrap().is_empty(),
+            store.lock().unwrap_or_else(|e| e.into_inner()).is_empty(),
             "a cancelled attempt stored a credential"
         );
         assert!(
@@ -703,7 +729,7 @@ mod tests {
             "a cancelled attempt reported something other than cancelled"
         );
         assert!(
-            store.lock().unwrap().is_empty(),
+            store.lock().unwrap_or_else(|e| e.into_inner()).is_empty(),
             "the keyring was written for an attempt the user cancelled"
         );
     }
@@ -731,7 +757,7 @@ mod tests {
             Ok(_) => panic!("a failed keyring save returned a session"),
         };
         assert_eq!(outcome_for(&err), Outcome::Error);
-        assert!(store.lock().unwrap().is_empty());
+        assert!(store.lock().unwrap_or_else(|e| e.into_inner()).is_empty());
     }
 
     #[tokio::test]
@@ -754,7 +780,7 @@ mod tests {
 
         assert!(matches!(got, Err(ExchangeError::Exchange(_))));
         assert!(
-            store.lock().unwrap().is_empty(),
+            store.lock().unwrap_or_else(|e| e.into_inner()).is_empty(),
             "the refresh token survived a failed second write"
         );
     }
@@ -817,7 +843,7 @@ mod tests {
             matches!(got, Err(ExchangeError::Cancelled)),
             "the superseded attempt did not resolve as cancelled"
         );
-        assert!(store.lock().unwrap().is_empty());
+        assert!(store.lock().unwrap_or_else(|e| e.into_inner()).is_empty());
         assert!(!second.is_cancelled(), "the live attempt was cancelled");
         pending.release(first_id);
         let _ = exchanges;
