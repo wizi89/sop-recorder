@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Closing the app's window left it running in the background, and opening it again then showed nothing. Closing the window now quits the app, and the next start opens it as usual.
+
 ## [0.19.2] - 2026-10-24
 
 ### Changed
