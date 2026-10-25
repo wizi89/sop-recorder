@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-25
+
 ### Added
 
 - A recording that was never turned into a guide -- because the app was closed on the review screen, generating failed, or the app crashed after stopping -- is offered when the app starts. You can review it and generate it, or discard it. Recordings older than a week are not offered; they are still in their folder.
@@ -541,7 +543,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.19.3...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/wizi89/sop-recorder/compare/v0.19.3...v0.20.0
 [0.19.3]: https://github.com/wizi89/sop-recorder/compare/v0.19.2...v0.19.3
 [0.19.2]: https://github.com/wizi89/sop-recorder/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/wizi89/sop-recorder/compare/v0.19.0...v0.19.1
