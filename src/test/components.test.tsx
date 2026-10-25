@@ -317,7 +317,7 @@ describe("RecordingBar", () => {
     await userEvent.click(undo);
     expect(emit).toHaveBeenCalledWith("bar:undo");
   });
-  it("replaces the counter with a warning when the input goes silent", async () => {
+  it("warns when the input goes silent and keeps counting the steps", async () => {
     // A denied microphone does not fail the stream on macOS, it yields zeroed
     // samples -- so this warning is the only thing standing between the user
     // and an SOP with no narration.
@@ -331,6 +331,9 @@ describe("RecordingBar", () => {
     render(<RecordingBar />);
 
     expect(await screen.findByText(/kein ton/i)).toBeInTheDocument();
+    // The steps are still recorded, so the user still sees how many.
+    expect(screen.getByText("0 · 0:00")).toBeInTheDocument();
+    expect(screen.queryByLabelText("audio level")).not.toBeInTheDocument();
   });
   it("clears the silence warning when the next recording starts", async () => {
     // The bar's window is created once at startup and only hidden between

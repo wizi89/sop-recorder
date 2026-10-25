@@ -37,7 +37,15 @@ impl AudioHandle {
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), String>>();
 
         let join_handle = std::thread::spawn(move || {
-            Self::run_recording(&path_clone, stop_rx, ready_tx, level_clone)
+            let result = Self::run_recording(&path_clone, stop_rx, ready_tx.clone(), level_clone);
+            // Most setup steps return early with `?`. Without this their reason
+            // never reached `start`, and the log said only that the thread died.
+            // After a successful start nobody listens any more, and the send
+            // is dropped.
+            if let Err(e) = &result {
+                let _ = ready_tx.send(Err(e.clone()));
+            }
+            result
         });
 
         ready_rx
@@ -391,6 +399,19 @@ mod tests {
     use super::*;
 
     const DEVICE_RATES: [u32; 3] = [44_100, 48_000, 96_000];
+
+    /// Against the real default microphone: `cargo test --lib live_microphone -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn live_microphone() {
+        let path = std::env::temp_dir().join("live-mic.wav");
+        let handle = AudioHandle::start(&path).expect("audio start");
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let saved = handle.stop().expect("audio stop");
+        let frames = hound::WavReader::open(&saved).unwrap().duration();
+        println!("recorded {frames} frames to {}", saved.display());
+        assert!(frames > 16_000);
+    }
 
     #[test]
     fn the_silent_stand_in_is_a_valid_recording_of_one_second_of_silence() {
