@@ -25,7 +25,12 @@ export const BINARY = path.resolve("src-tauri/target/e2e/debug/cogniclone-record
  */
 const DEVTOOLS_PORT = 9333;
 
-export type App = { page: Page; quit: () => Promise<void> };
+export type App = {
+  page: Page;
+  quit: () => Promise<void>;
+  /** Resolves with the exit code once the app's process has ended. */
+  exited: Promise<number | null>;
+};
 
 type Urls = { apiUrl: string; webUrl: string };
 
@@ -51,6 +56,7 @@ export async function launchApp(urls: Urls): Promise<App> {
   });
   // Kept for the failure message: an app that dies on start says why here.
   let output = "";
+  const exited = new Promise<number | null>((resolve) => child.on("exit", resolve));
   child.stdout?.on("data", (d) => (output += d));
   child.stderr?.on("data", (d) => (output += d));
 
@@ -62,7 +68,7 @@ export async function launchApp(urls: Urls): Promise<App> {
 
   try {
     browser = await connect(port, child, () => output);
-    return { page: await mainWindow(browser), quit };
+    return { page: await mainWindow(browser), quit, exited };
   } catch (e) {
     await quit();
     throw e;

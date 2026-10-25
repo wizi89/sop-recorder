@@ -52,3 +52,29 @@ test("a second launch exits and brings the running window back", async () => {
     await stubs.close();
   }
 });
+
+test("closing the main window quits, and the next launch opens normally", async () => {
+  const stubs = await startStubs();
+  try {
+    const first = await launchApp(stubs);
+    await expect(first.page.getByRole("button").first()).toBeVisible();
+    // The page goes away with the window, so the call never answers.
+    await invoke(first.page, "plugin:window|close", { label: "main" }).catch(() => {});
+    const code = await Promise.race([
+      first.exited,
+      new Promise<string>((r) => setTimeout(() => r("still running"), 10_000)),
+    ]);
+    if (code === "still running") await first.quit();
+    expect(code, "the app kept running with no window").toBe(0);
+
+    // Had it kept running, this launch would hand over to it and exit.
+    const second = await launchApp(stubs);
+    try {
+      await expect(second.page.getByRole("button").first()).toBeVisible();
+    } finally {
+      await second.quit();
+    }
+  } finally {
+    await stubs.close();
+  }
+});

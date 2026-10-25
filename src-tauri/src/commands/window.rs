@@ -259,6 +259,19 @@ pub fn focus_running_instance(app: &tauri::AppHandle) {
     bring_to_front(app, window_to_raise(bar_visible));
 }
 
+/// Closing the main window quits the app. Tauri only exits once every window
+/// is gone, and the recording bar lives hidden for the app's whole life, so
+/// without this the process kept running with nothing on screen -- and the
+/// next launch handed over to it and showed nothing either. A recording never
+/// closes the main window, only hides it.
+pub fn quit_when_main_closes(window: &tauri::Window, event: &tauri::WindowEvent) {
+    use tauri::Manager;
+    if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+        log::info!("Main window closed; quitting");
+        window.app_handle().exit(0);
+    }
+}
+
 /// While recording, the main window is hidden behind the compact bar on
 /// purpose; showing it would cover the app being recorded.
 fn window_to_raise(bar_visible: bool) -> &'static str {

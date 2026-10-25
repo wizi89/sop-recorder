@@ -163,6 +163,7 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(window::quit_when_main_closes)
         .manage(state::AppState::default())
         .manage(auth::SessionCache::default())
         .manage(auth::PendingBrowserLogin::default())
