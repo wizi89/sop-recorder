@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.3] - 2026-10-25
+
 ### Fixed
 
 - Closing the app's window left it running in the background, and opening it again then showed nothing. Closing the window now quits the app, and the next start opens it as usual.
@@ -525,7 +527,8 @@ Full rewrite of the SOP Recorder from Python/CustomTkinter to Tauri v2 (Rust + R
 - Screenshots now saved in `screenshots/` subdirectory (was flat in output dir)
 - Screenshots saved as RGB PNGs (was RGBA, which Azure OpenAI rejected)
 
-[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.19.2...HEAD
+[Unreleased]: https://github.com/wizi89/sop-recorder/compare/v0.19.3...HEAD
+[0.19.3]: https://github.com/wizi89/sop-recorder/compare/v0.19.2...v0.19.3
 [0.19.2]: https://github.com/wizi89/sop-recorder/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/wizi89/sop-recorder/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/wizi89/sop-recorder/compare/v0.18.0...v0.19.0
