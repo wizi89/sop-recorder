@@ -263,7 +263,7 @@ async fn run_generation_inner(
                 .get("generation_model")
                 .and_then(|v| v.as_str().map(String::from))
         })
-        .unwrap_or_else(|| "azure/gpt-4.1".to_string());
+        .unwrap_or_else(|| "azure/gpt-5.4".to_string());
 
     // The user's pipeline choice from the review screen. Independent of the
     // advanced-settings gate: every org may pick a pipeline, no org sees the

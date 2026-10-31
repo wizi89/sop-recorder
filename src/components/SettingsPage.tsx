@@ -27,8 +27,8 @@ interface SettingsPageProps {
 
 const FALLBACK_GENERATION_SETTINGS: GenerationSettings = {
   pipeline_versions: [1, 2],
-  models: ["azure/gpt-4.1"],
-  default_model: "azure/gpt-4.1",
+  models: ["azure/gpt-5.4"],
+  default_model: "azure/gpt-5.4",
 };
 
 function modelLabel(model: string): string {
@@ -48,7 +48,7 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     upload_target: null,
     skip_pii_check: false,
     pipeline_version: 1,
-    generation_model: "azure/gpt-4.1",
+    generation_model: "azure/gpt-5.4",
     error_reports: "ask",
     beta_updates: false,
   });
