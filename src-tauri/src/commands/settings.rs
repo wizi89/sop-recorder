@@ -45,7 +45,7 @@ fn default_pipeline_version() -> u8 {
 }
 
 fn default_generation_model() -> String {
-    "azure/gpt-4.1".to_string()
+    "azure/gpt-5.4".to_string()
 }
 
 fn default_error_reports() -> String {

@@ -31,8 +31,8 @@ impl Default for GenerationSettings {
     fn default() -> Self {
         Self {
             pipeline_versions: vec![1, 2],
-            models: vec!["azure/gpt-4.1".to_string()],
-            default_model: "azure/gpt-4.1".to_string(),
+            models: vec!["azure/gpt-5.4".to_string()],
+            default_model: "azure/gpt-5.4".to_string(),
         }
     }
 }
