@@ -187,9 +187,6 @@ async fn run_generation_inner(
         }
     };
 
-    // Get OpenAI key from keyring
-    let openai_key = net_auth::keyring_load("openai-key").ok().flatten();
-
     // Collect audio + screenshot paths
     let audio_path = output_path.join("recording.wav");
     if !audio_path.exists() {
@@ -293,7 +290,6 @@ async fn run_generation_inner(
     // server-side revocation, and network-blip-during-refresh scenarios.
     let response = match upload::upload_with_retry(
         &access_token,
-        openai_key.as_deref(),
         &audio_path,
         &path_refs,
         &guide_title,
@@ -335,7 +331,6 @@ async fn run_generation_inner(
 
             upload::upload_with_retry(
                 &fresh_token,
-                openai_key.as_deref(),
                 &audio_path,
                 &path_refs,
                 &guide_title,

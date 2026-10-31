@@ -283,22 +283,6 @@ export async function setRecorderRegion(
 }
 
 /**
- * Keep the compact recording bar visible above everything, including apps in
- * native fullscreen, or hand the window back its ordinary behaviour.
- *
- * Replaces `setAlwaysOnTop` for the recording lifecycle. Always-on-top only
- * changes the window's level, which orders it within one Space; a fullscreen
- * app gets a Space of its own, so the bar disappeared exactly when the user
- * still needed to reach Stop. Screenshot exclusion is unaffected -- that is
- * `setDisplayAffinity`, a separate property.
- *
- * Scoped to the recording: the idle window must not float over everything.
- */
-export async function setOverlayMode(enabled: boolean): Promise<void> {
-  return invoke("set_overlay_mode", { enabled });
-}
-
-/**
  * Open the System Settings pane for a refused permission.
  *
  * Goes through a command rather than the opener plugin: that plugin's default
