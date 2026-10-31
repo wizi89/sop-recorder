@@ -8,13 +8,12 @@ const UPLOAD_TIMEOUT_SECS: u64 = 300;
 
 /// Upload audio + screenshots to the generation endpoint.
 /// Returns the SSE stream URL or response.
-// ponytail: eleven real parameters, not an abstraction waiting to happen.
+// ponytail: ten real parameters, not an abstraction waiting to happen.
 // Bundling them into a struct would move the same list one line up and touch
-// every caller of the upload path for a lint; revisit if a twelfth appears.
+// every caller of the upload path for a lint; revisit if an eleventh appears.
 #[allow(clippy::too_many_arguments)]
 pub async fn upload_multipart(
     access_token: &str,
-    openai_key: Option<&str>,
     audio_path: &Path,
     screenshot_paths: &[(u32, &Path)],
     guide_title: &str,
@@ -87,14 +86,10 @@ pub async fn upload_multipart(
         form = form.text("skip_pii_check", "true");
     }
 
-    let mut req = client
+    let req = client
         .post(&url)
         .header("Authorization", format!("Bearer {}", access_token))
         .multipart(form);
-
-    if let Some(key) = openai_key {
-        req = req.header("X-OpenAI-Key", key);
-    }
 
     let response = req.send().await.map_err(|e| {
         if e.is_timeout() {
@@ -144,7 +139,6 @@ pub async fn upload_multipart(
 #[allow(clippy::too_many_arguments)]
 pub async fn upload_with_retry(
     access_token: &str,
-    openai_key: Option<&str>,
     audio_path: &Path,
     screenshot_paths: &[(u32, &Path)],
     guide_title: &str,
@@ -162,7 +156,6 @@ pub async fn upload_with_retry(
     for attempt in 0..=max_retries {
         match upload_multipart(
             access_token,
-            openai_key,
             audio_path,
             screenshot_paths,
             guide_title,
