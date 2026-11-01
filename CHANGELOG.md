@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Password fields are blacked out in the screenshots on Windows. The field is filled in before the screenshot is written, so no copy with the password visible is ever saved.
+- The review screen marks steps with "Prüfen" when a password field could not be checked reliably, or when the whole screen was captured. Generating needs the tick "Ich habe die markierten Schritte geprüft" first.
+
+### Changed
+
+- On Windows, a screenshot now shows only the window you clicked in, together with its dialogs and menus, instead of the whole screen. The taskbar, notifications and other windows are no longer captured.
+- To go back to the old behaviour, open "Einstellungen" → "Datenschutz bei der Aufnahme" and choose "Ganzer Bildschirm". Untick "Passwortfelder schwärzen" to stop the blacking out.
+- On macOS nothing changes yet: the whole screen is captured and passwords are not blacked out.
+
 ## [0.20.1] - 2026-10-25
 
 ### Changed
