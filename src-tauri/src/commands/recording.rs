@@ -400,6 +400,11 @@ pub async fn start_recording(
                 trigger,
                 &failed,
             );
+            // After the capture, so the bar never moves while pixels are read.
+            #[cfg(windows)]
+            if let Some(click) = click_pos {
+                crate::commands::window::follow_click(&app, click);
+            }
             match outcome {
                 CaptureOutcome::Captured(meta) => {
                     // Written AFTER the PNG so a crash between the two leaves an

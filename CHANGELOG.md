@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - To go back to the old behaviour, open "Einstellungen", set "Aufnahmebereich" to "Ganzer Bildschirm". Switch off "Passwortfelder schwärzen" to stop the blacking out.
 - On macOS nothing changes yet: the whole screen is captured and passwords are not blacked out.
 
+### Fixed
+
+- On Windows with more than one monitor, the recording bar now moves to the monitor you click on, so it stays in sight while you work on another monitor.
+
 ## [0.20.1] - 2026-10-25
 
 ### Changed
