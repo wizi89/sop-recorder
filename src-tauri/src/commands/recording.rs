@@ -11,7 +11,7 @@ use tauri_plugin_store::StoreExt;
 
 use crate::capture::audio::AudioHandle;
 use crate::capture::input_hooks;
-use crate::capture::permits::CapturePermits;
+use crate::capture::permits::{self, CapturePermits};
 use crate::capture::screenshot;
 use crate::commands::settings::{read_capture_settings, CaptureSettings};
 use crate::output::pending;
@@ -38,8 +38,16 @@ pub enum CaptureOutcome {
 /// so the recording carried a gap nobody could see, and the review screen
 /// counted the screenshots that survived and looked complete -- which is how a
 /// 21-click recording presented itself as a one-step guide on 2026-09-03.
+/// What phase B wrote for one step.
+#[derive(Debug, PartialEq)]
+pub struct SavedStep {
+    pub marker_box: Option<screenshot::MarkerBox>,
+    pub capture_scope: step_meta::CaptureScope,
+    pub password_check: step_meta::PasswordCheck,
+}
+
 fn note_capture_outcome(
-    result: Result<Option<screenshot::MarkerBox>, String>,
+    result: Result<SavedStep, String>,
     step_num: u32,
     timestamp_seconds: f64,
     click_pos: Option<(i32, i32)>,
@@ -47,17 +55,15 @@ fn note_capture_outcome(
     failed: &AtomicU32,
 ) -> CaptureOutcome {
     match result {
-        Ok(marker_box) => CaptureOutcome::Captured(Box::new(StepMeta {
+        Ok(saved) => CaptureOutcome::Captured(Box::new(StepMeta {
             order: step_num,
             timestamp_seconds,
             click_x: click_pos.map(|(x, _)| x),
             click_y: click_pos.map(|(_, y)| y),
             trigger: trigger.to_string(),
-            marker_box,
-            // ponytail: what every platform captures until the window area and
-            // the password check exist (sections 3-4 of privacy-capture).
-            capture_scope: step_meta::CaptureScope::Monitor,
-            password_check: step_meta::PasswordCheck::Off,
+            marker_box: saved.marker_box,
+            capture_scope: saved.capture_scope,
+            password_check: saved.password_check,
         })),
         Err(e) => {
             let total = failed.fetch_add(1, Ordering::SeqCst) + 1;
@@ -231,9 +237,11 @@ pub async fn start_recording(
     let step_counter = Arc::new(AtomicU32::new(0));
     let in_flight = Arc::new(AtomicU32::new(0));
     let failed_captures = Arc::new(AtomicU32::new(0));
-    // Bounds how many full-screen buffers are resident at once. Per recording
+    // Buffer slots bound how many screenshots are resident at once; read
+    // permits serialise the monitor reads (privacy-capture D3). Per recording
     // rather than global: nothing captures between recordings.
     let capture_permits = Arc::new(CapturePermits::default());
+    let read_permits = Arc::new(CapturePermits::new(permits::PIXEL_READ_PERMITS));
 
     // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
@@ -258,6 +266,7 @@ pub async fn start_recording(
     let in_flight_clone = in_flight.clone();
     let failed_clone = failed_captures.clone();
     let permits_clone = capture_permits.clone();
+    let readers_clone = read_permits.clone();
     let stop_clone = stop_flag.clone();
     let screenshots_dir_clone = screenshots_dir.clone();
     let app_clone = app.clone();
@@ -287,17 +296,35 @@ pub async fn start_recording(
         let flight = in_flight_clone.clone();
         let failed = failed_clone.clone();
         let permits = permits_clone.clone();
+        let readers = readers_clone.clone();
         // Incremented before the spawn, so the counter covers a capture that is
         // still queued for a permit as well as one already running. That is what
         // `stop_recording` and the generate path wait on, and a queued capture
         // is exactly the kind they must not race past.
         flight.fetch_add(1, Ordering::SeqCst);
         std::thread::spawn(move || {
-            // Held for the capture and the sidecar write, released on the way
-            // out of this scope however the capture ends.
-            let _permit = permits.acquire();
+            // Phase A takes the pixels at once; phase B checks and writes. The
+            // buffer slot is released on the way out however the capture ends.
+            let saved = permits::two_phase(
+                &permits,
+                &readers,
+                || screenshot::capture_step(step_num, click_pos, capture_settings.monitor_mode),
+                |held| {
+                    let held = held?;
+                    let capture_scope = held.scope;
+                    // ponytail: no password check until section 4 of
+                    // privacy-capture, so nothing is masked and the record says so.
+                    screenshot::finish_and_save(held, &dir, step_num, click_pos, &[]).map(
+                        |marker_box| SavedStep {
+                            marker_box,
+                            capture_scope,
+                            password_check: step_meta::PasswordCheck::Off,
+                        },
+                    )
+                },
+            );
             let outcome = note_capture_outcome(
-                screenshot::capture_and_save(&dir, step_num, click_pos),
+                saved,
                 step_num,
                 timestamp_seconds,
                 click_pos,
@@ -798,6 +825,14 @@ mod tests {
         })
     }
 
+    fn saved(marker_box: Option<MarkerBox>) -> SavedStep {
+        SavedStep {
+            marker_box,
+            capture_scope: step_meta::CaptureScope::Window,
+            password_check: step_meta::PasswordCheck::Ok,
+        }
+    }
+
     /// The path the 2026-09-03 recordings took silently: a capture fails, the
     /// step number has already advanced, and nothing counts the loss.
     #[test]
@@ -847,7 +882,7 @@ mod tests {
         let failed = AtomicU32::new(2);
 
         let outcome = note_capture_outcome(
-            Ok(box_at(1)),
+            Ok(saved(box_at(1))),
             7,
             12.25,
             Some((100, 200)),
@@ -863,6 +898,8 @@ mod tests {
                 assert_eq!(meta.click_y, Some(200));
                 assert_eq!(meta.trigger, "mouse_click");
                 assert_eq!(meta.marker_box, box_at(1));
+                assert_eq!(meta.capture_scope, step_meta::CaptureScope::Window);
+                assert_eq!(meta.password_check, step_meta::PasswordCheck::Ok);
             }
             other => panic!("expected a capture, got {:?}", other),
         }
@@ -876,7 +913,7 @@ mod tests {
     fn a_keypress_step_records_no_position_and_no_marker() {
         let failed = AtomicU32::new(0);
 
-        match note_capture_outcome(Ok(None), 1, 0.5, None, "enter_key", &failed) {
+        match note_capture_outcome(Ok(saved(None)), 1, 0.5, None, "enter_key", &failed) {
             CaptureOutcome::Captured(meta) => {
                 assert_eq!(meta.click_x, None);
                 assert_eq!(meta.click_y, None);

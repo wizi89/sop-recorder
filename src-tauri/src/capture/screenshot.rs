@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use xcap::Monitor;
 
+use super::window_area::{self, Area, Geometry, Rect};
+use crate::output::step_meta::CaptureScope;
+
 /// The desktop a capture was composited against.
 ///
 /// Two coordinate spaces meet in this module. Monitor geometry and the OS's
@@ -367,30 +370,175 @@ fn capture_active_monitor(
     capture_one_monitor(&monitors[chosen])
 }
 
-/// Capture a screenshot and save it as a numbered PNG.
-///
-/// Returns the marker box in the coordinate space of the **saved** image, or
-/// `None` when no marker was drawn. The scale factor and the virtual-screen
-/// offset are known only here, so this is the only place the box can be
-/// expressed in the pixels the server will actually receive.
-pub fn capture_and_save(
-    output_dir: &Path,
+/// One step after phase A (privacy-capture D3): its pixels, already cropped to
+/// the step's area in the active window mode, and the geometry phase B needs.
+pub struct HeldStep {
+    img: RgbaImage,
+    screen: VirtualScreen,
+    /// Desktop rectangles the step shows; everything else in `img` is filled
+    /// in phase B. Empty means the whole image.
+    keep: Vec<Rect>,
+    pub scope: CaptureScope,
+    /// Both snapshots merged, for the password check. `None` off Windows.
+    pub geometry: Option<Geometry>,
+}
+
+/// The monitor a `VirtualScreen` was captured from, in desktop units.
+fn monitor_rect(screen: &VirtualScreen, img: &RgbaImage) -> Rect {
+    Rect::new(
+        screen.origin.0,
+        screen.origin.1,
+        screen.origin.0 + (img.width() as f64 / screen.scale).round() as i32,
+        screen.origin.1 + (img.height() as f64 / screen.scale).round() as i32,
+    )
+}
+
+/// A desktop rectangle in `img`'s pixels, clipped to it.
+fn canvas_rect(screen: &VirtualScreen, img: &RgbaImage, r: &Rect) -> Option<(u32, u32, u32, u32)> {
+    let (x0, y0) = screen.to_canvas(r.left, r.top);
+    let (x1, y1) = screen.to_canvas(r.right, r.bottom);
+    let (x0, y0) = (x0.max(0) as u32, y0.max(0) as u32);
+    let (x1, y1) = (
+        (x1.max(0) as u32).min(img.width()),
+        (y1.max(0) as u32).min(img.height()),
+    );
+    (x0 < x1 && y0 < y1).then_some((x0, y0, x1, y1))
+}
+
+/// Cut `img` down to `area`, keeping `screen` pointed at the new origin so a
+/// click in desktop coordinates still lands on the right pixel.
+fn crop_to(
+    img: &RgbaImage,
+    screen: VirtualScreen,
+    area: &Rect,
+) -> Option<(RgbaImage, VirtualScreen)> {
+    let (x0, y0, x1, y1) = canvas_rect(&screen, img, area)?;
+    let cropped = image::imageops::crop_imm(img, x0, y0, x1 - x0, y1 - y0).to_image();
+    let (left, top) = (
+        screen.origin.0 + (x0 as f64 / screen.scale).round() as i32,
+        screen.origin.1 + (y0 as f64 / screen.scale).round() as i32,
+    );
+    Some((
+        cropped,
+        VirtualScreen {
+            origin: (left, top),
+            scale: screen.scale,
+        },
+    ))
+}
+
+/// Phase A: geometry snapshot, pixel read, second snapshot, crop (D2, D3).
+/// No UIA work, so it is as quick as the pixel read.
+pub fn capture_step(
     step_number: u32,
     click_position: Option<(i32, i32)>,
-) -> Result<Option<MarkerBox>, String> {
-    // Timed and dimensioned on every step, because the one question the
-    // 2026-09-03 test could not answer from the logs was which capture failed
-    // and how big the canvas was when it did.
+    monitor_mode: bool,
+) -> Result<HeldStep, String> {
     let started = std::time::Instant::now();
-    let (mut img, screen) = capture_active_monitor(click_position)?;
-    let captured_in = started.elapsed();
+    let before = super::geometry::snapshot(click_position);
+    let (img, screen) = capture_active_monitor(click_position)?;
+    let after = super::geometry::snapshot(click_position);
+    let geometry = before
+        .as_ref()
+        .zip(after.as_ref())
+        .map(|(b, a)| window_area::merge(b, a));
+
+    let monitor = monitor_rect(&screen, &img);
+    let area = (!monitor_mode).then(|| match &before {
+        Some(snapshot) => window_area::capture_area(snapshot, click_position, monitor),
+        None => Area::Fallback("no window geometry on this platform"),
+    });
+
+    // One line per step saying what it kept (task 3.6): the first question
+    // when a guide shows too little or too much.
+    let (img, screen, keep, scope) = match area {
+        None => {
+            log::info!("Step {step_number}: capture monitor {monitor:?}");
+            (img, screen, Vec::new(), CaptureScope::Monitor)
+        }
+        Some(Area::Fallback(reason)) => {
+            log::warn!(
+                "Step {step_number}: capture active_window fell back to monitor {monitor:?}: {reason}"
+            );
+            (img, screen, Vec::new(), CaptureScope::MonitorFallback)
+        }
+        Some(Area::Window { crop, keep }) => match crop_to(&img, screen, &crop) {
+            // Cropped at once, so what phase B holds is the area, not the monitor.
+            Some((cropped, cropped_screen)) => {
+                log::info!(
+                    "Step {step_number}: capture active_window, area {crop:?} from {} window rectangle(s)",
+                    keep.len()
+                );
+                (cropped, cropped_screen, keep, CaptureScope::Window)
+            }
+            None => {
+                log::warn!(
+                    "Step {step_number}: capture active_window fell back to monitor {monitor:?}: \
+                     area {crop:?} is not in the captured pixels"
+                );
+                (img, screen, Vec::new(), CaptureScope::MonitorFallback)
+            }
+        },
+    };
+    log::info!(
+        "Step {step_number}: pixels held in {} ms ({}x{})",
+        started.elapsed().as_millis(),
+        img.width(),
+        img.height()
+    );
+    Ok(HeldStep {
+        img,
+        screen,
+        keep,
+        scope,
+        geometry,
+    })
+}
+
+/// What fills the gap around a dialog and every masked password field.
+const MASK: Rgba<u8> = Rgba([0, 0, 0, 255]);
+
+/// Phase B's image work, without the disk: gap fill, masks, marker, downsize.
+///
+/// Masks go on before the marker, so the marker stays visible over a masked
+/// field, and everything happens before the encode, so no unmasked image is
+/// ever written. Returns the image to save and the marker box in its pixels.
+fn finish_image(
+    mut img: RgbaImage,
+    screen: VirtualScreen,
+    keep: &[Rect],
+    masks: &[Rect],
+    click_position: Option<(i32, i32)>,
+) -> (DynamicImage, Option<MarkerBox>) {
+    // One kept rectangle is the crop itself; only a dialog with a distant
+    // owner, or a menu past the window edge, leaves a gap.
+    if keep.len() > 1 {
+        let kept: Vec<_> = keep
+            .iter()
+            .filter_map(|r| canvas_rect(&screen, &img, r))
+            .collect();
+        for (x, y, pixel) in img.enumerate_pixels_mut() {
+            if !kept
+                .iter()
+                .any(|&(x0, y0, x1, y1)| x >= x0 && x < x1 && y >= y0 && y < y1)
+            {
+                *pixel = MASK;
+            }
+        }
+    }
+    for mask in masks {
+        if let Some((x0, y0, x1, y1)) = canvas_rect(&screen, &img, mask) {
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    img.put_pixel(x, y, MASK);
+                }
+            }
+        }
+    }
 
     let marker = click_position.map(|(x, y)| render_click_overlay(&mut img, x, y, &screen));
 
-    let filename = format!("step_{:02}.png", step_number);
-    let path = output_dir.join(&filename);
-
-    // Convert RGBA to RGB and resize if needed to stay under Azure OpenAI's 4MB limit
+    // Resize if needed to stay under Azure OpenAI's 4MB limit
     let dynamic = DynamicImage::ImageRgba8(img);
     let (w, h) = (dynamic.width(), dynamic.height());
     let max_w = 1920u32;
@@ -415,22 +563,43 @@ pub fn capture_and_save(
     };
     let saved_marker =
         marker.and_then(|m| m.scaled(scale).clamped(resized.width(), resized.height()));
-    let rgb_img = resized.to_rgb8();
+    (resized, saved_marker)
+}
+
+/// Phase B after the password check: finish the image and write the PNG.
+///
+/// Returns the marker box in the coordinate space of the **saved** image, or
+/// `None` when no marker was drawn. The crop offset, scale factor and
+/// virtual-screen offset are known only here, so this is the only place the
+/// box can be expressed in the pixels the server will actually receive.
+pub fn finish_and_save(
+    held: HeldStep,
+    output_dir: &Path,
+    step_number: u32,
+    click_position: Option<(i32, i32)>,
+    masks: &[Rect],
+) -> Result<Option<MarkerBox>, String> {
+    let started = std::time::Instant::now();
+    let (w, h) = (held.img.width(), held.img.height());
+    let (image, marker) = finish_image(held.img, held.screen, &held.keep, masks, click_position);
+
+    let path = output_dir.join(format!("step_{:02}.png", step_number));
+    let rgb_img = image.to_rgb8();
     rgb_img
         .save(&path)
         .map_err(|e| format!("Failed to save screenshot: {}", e))?;
 
     log::info!(
-        "Screenshot saved: {} (canvas {}x{}, saved {}x{}, capture {} ms, total {} ms)",
+        "Screenshot saved: {} (canvas {}x{}, saved {}x{}, {} mask(s), finish {} ms)",
         path.display(),
         w,
         h,
         rgb_img.width(),
         rgb_img.height(),
-        captured_in.as_millis(),
+        masks.len(),
         started.elapsed().as_millis(),
     );
-    Ok(saved_marker)
+    Ok(marker)
 }
 
 #[cfg(test)]
@@ -799,6 +968,130 @@ mod tests {
             if let Some(b) = drawn_box(cx, cy).scaled(0.5).clamped(1920, 1080) {
                 assert!(b.x0 <= b.x1 && b.y0 <= b.y1, "inverted box at ({cx}, {cy})");
             }
+        }
+    }
+
+    // ------------------------------------------------------------- task 3.5
+
+    /// A 4K monitor whose clicked control is a solid green block, cropped to
+    /// a window, finished and downsized as phase B does.
+    fn finish_cropped(
+        click: (i32, i32),
+        window: Rect,
+    ) -> (DynamicImage, Option<MarkerBox>, VirtualScreen) {
+        let mut monitor = blank(3840, 2160);
+        for y in click.1 - 12..click.1 + 12 {
+            for x in click.0 - 12..click.0 + 12 {
+                monitor.put_pixel(x as u32, y as u32, GREEN);
+            }
+        }
+        let (img, screen) = crop_to(&monitor, screen((0, 0), 1.0), &window).unwrap();
+        let (out, marker) = finish_image(img, screen, &[window], &[], Some(click));
+        (out, marker, screen)
+    }
+
+    const GREEN: Rgba<u8> = Rgba([0, 200, 0, 255]);
+
+    #[test]
+    fn the_clicked_pixel_survives_the_crop_and_downsize() {
+        // 2400x1600 window: downsized by 1080/1600 on the way to the PNG.
+        let window = Rect::new(1000, 300, 3400, 1900);
+        let click = (2000, 1000);
+        let (out, _, _) = finish_cropped(click, window);
+
+        let scale = f64::min(1920.0 / 2400.0, 1080.0 / 1600.0);
+        let saved = (
+            ((click.0 - window.left) as f64 * scale) as u32,
+            ((click.1 - window.top) as f64 * scale) as u32,
+        );
+        let pixel = out.to_rgba8().get_pixel(saved.0, saved.1).0;
+        assert!(
+            pixel[1] > 150 && pixel[0] < 60,
+            "the click lands on {pixel:?}, not the green control"
+        );
+    }
+
+    /// `marker_box` is in saved-image pixels: translated by the crop offset,
+    /// then scaled by the downsize. The click itself stays in desktop units.
+    #[test]
+    fn the_marker_box_follows_the_crop_and_downsize() {
+        let window = Rect::new(1000, 300, 3400, 1900);
+        let click = (2000, 1000);
+        let (out, marker, screen) = finish_cropped(click, window);
+        assert_eq!(screen.origin, (1000, 300));
+
+        let scale = f64::min(1920.0 / 2400.0, 1080.0 / 1600.0);
+        let expected = marker_box_at(click.0 - window.left, click.1 - window.top, 1.0)
+            .scaled(scale)
+            .clamped(out.width(), out.height());
+        assert_eq!(marker, expected);
+    }
+
+    #[test]
+    fn a_small_window_is_saved_at_its_own_size() {
+        let window = Rect::new(100, 100, 900, 700);
+        let (out, marker, _) = finish_cropped((300, 300), window);
+        assert_eq!((out.width(), out.height()), (800, 600));
+        assert_eq!(marker, marker_box_at(200, 200, 1.0).clamped(800, 600));
+    }
+
+    /// Pixels between a dialog and its owner are inside the crop but in
+    /// neither window: filled, never shown.
+    #[test]
+    fn the_gap_between_two_kept_windows_is_filled() {
+        let monitor = blank(1920, 1080);
+        let owner = Rect::new(100, 100, 600, 500);
+        let dialog = Rect::new(1200, 600, 1600, 900);
+        let crop = owner.bounding(&dialog);
+        let (img, screen) = crop_to(&monitor, screen((0, 0), 1.0), &crop).unwrap();
+        let (out, _) = finish_image(img, screen, &[owner, dialog], &[], None);
+        let out = out.to_rgba8();
+
+        assert_eq!(*out.get_pixel(50, 50), GROUND, "inside the owner");
+        assert_eq!(*out.get_pixel(1200, 600), GROUND, "inside the dialog");
+        assert_eq!(*out.get_pixel(800, 200), MASK, "the gap");
+    }
+
+    #[test]
+    fn a_mask_is_filled_in_the_cropped_image_at_its_desktop_position() {
+        let monitor = blank(1920, 1080);
+        let window = Rect::new(500, 200, 1300, 800);
+        let field = Rect::new(700, 400, 900, 430);
+        let (img, screen) = crop_to(&monitor, screen((0, 0), 1.0), &window).unwrap();
+        let (out, _) = finish_image(img, screen, &[window], &[field], None);
+        let out = out.to_rgba8();
+
+        assert_eq!(
+            *out.get_pixel(200, 200),
+            MASK,
+            "field's top-left, crop-relative"
+        );
+        assert_eq!(*out.get_pixel(399, 229), MASK, "field's bottom-right");
+        assert_eq!(*out.get_pixel(400, 230), GROUND, "just outside the field");
+    }
+
+    /// A monitor left of the primary has a negative origin; the crop offset
+    /// has to be taken from it, not from zero.
+    #[test]
+    fn a_crop_on_a_monitor_left_of_the_primary_keeps_the_desktop_origin() {
+        let monitor = blank(1920, 1080);
+        let window = Rect::new(-1500, 100, -500, 900);
+        let (img, cropped) = crop_to(&monitor, screen((-1920, 0), 1.0), &window).unwrap();
+        assert_eq!((img.width(), img.height()), (1000, 800));
+        assert_eq!(cropped.origin, (-1500, 100));
+        assert_eq!(cropped.to_canvas(-1500, 100), (0, 0));
+    }
+
+    /// Captures the real desktop through both phases:
+    /// `SPIKE_OUT=<dir> cargo test --lib live_two_phase -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn live_two_phase() {
+        let dir = std::path::PathBuf::from(std::env::var("SPIKE_OUT").expect("SPIKE_OUT"));
+        for (step, monitor_mode) in [(1, false), (2, true)] {
+            let held = capture_step(step, None, monitor_mode).unwrap();
+            println!("step {step}: scope {:?}", held.scope);
+            finish_and_save(held, &dir, step, None, &[]).unwrap();
         }
     }
 }

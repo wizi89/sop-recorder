@@ -229,3 +229,16 @@ desktop needs no resample on either platform. More generally: this module has tw
 that coincide on Windows and do not on macOS, so a change that is verified on one platform is not
 verified. The log line is the cheap check. If "Rescaling monitor capture" appears on a
 single-monitor machine, the units are wrong again.
+
+## 2026-11-01 LNK1318 "Unerwarteter PDB-Fehler: LIMIT (12)" was a full disk
+
+A debug `cargo build` on Windows failed to link with `LNK1318 ... LIMIT (12)` on
+`cogniclone_recorder.pdb`. That message reads like a PDB size or record limit, and the timing
+pointed the same way (new `windows` crate features had just been added), so the first fix tried
+was a larger `/PDBPAGESIZE`. The next build failed earlier with `os error 112` (disk full): D: had
+0.22 GB left, because the main checkout's `src-tauri/target` had grown to 70 GB. After `cargo
+clean` there, the original build linked unchanged.
+
+**Rule:** on LNK1318 or any odd linker error, check free space on the build drive first
+(`Get-PSDrive D`). Each worktree has its own `target/` (about 9 GB here), and the main checkout's
+grows without bound; `cargo clean` in an idle checkout is the fix, not a linker flag.

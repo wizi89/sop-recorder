@@ -15,12 +15,12 @@
 
 ## 3. Capture phases and the window area (Windows)
 
-- [ ] 3.1 Enable the `windows` crate features from 1.6 (at least `Win32_Graphics_Dwm`, `Win32_UI_Accessibility`, `Win32_System_Com`)
-- [ ] 3.2 Split capture into phase A (pixels, geometry snapshot, crop to area, under a new 2-permit capture pool) and phase B (check, mask, save), with the existing `permits.rs` pool raised to 6 as buffer slots held across both phases and the in-flight counter covering both, per design D3. Tests with a mock check: five quick steps against a slow check are not delayed; twenty against a hanging check never hold more than six buffers and all twenty are saved; Stop waits for a phase B blocked on a slow check
-- [ ] 3.3 Geometry snapshot before and after the pixel read (design D3): foreground window, window under the click, root owners, DWM extended frame bounds, z-ordered visible top-level windows with cloaked/layered/transparent marked; visible in either counts as visible; flag when the foreground differs; test with two synthetic snapshots
-- [ ] 3.4 Pure function for the area (design D2): bounding box of window and owner clipped to the monitor, gap fill, desktop as no window, other shell UI (taskbar, Start, tray flyouts) as the step's window, `monitor_fallback`; tests for normal, dialog away from owner, partly off screen, desktop click, taskbar click, click on a background window, click on a context menu item reaching past the window edge
-- [ ] 3.5 Apply area before the marker; `marker_box` translated by crop offset and downscale, `click_x`/`click_y` left in desktop coordinates (design D7a); tests that the clicked pixel survives and the marker box matches after crop and downsize
-- [ ] 3.6 Log one line per step: mode, area or fallback reason
+- [x] 3.1 Enable the `windows` crate features from 1.6 (at least `Win32_Graphics_Dwm`, `Win32_UI_Accessibility`, `Win32_System_Com`)
+- [x] 3.2 Split capture into phase A (pixels, geometry snapshot, crop to area, under a new 2-permit capture pool) and phase B (check, mask, save), with the existing `permits.rs` pool raised to 6 as buffer slots held across both phases and the in-flight counter covering both, per design D3. Tests with a mock check: five quick steps against a slow check are not delayed; twenty against a hanging check never hold more than six buffers and all twenty are saved; Stop waits for a phase B blocked on a slow check
+- [x] 3.3 Geometry snapshot before and after the pixel read (design D3): foreground window, window under the click, root owners, DWM extended frame bounds, z-ordered visible top-level windows with cloaked/layered/transparent marked; visible in either counts as visible; flag when the foreground differs; test with two synthetic snapshots
+- [x] 3.4 Pure function for the area (design D2): bounding box of window and owner clipped to the monitor, gap fill, desktop as no window, other shell UI (taskbar, Start, tray flyouts) as the step's window, `monitor_fallback`; tests for normal, dialog away from owner, partly off screen, desktop click, taskbar click, click on a background window, click on a context menu item reaching past the window edge
+- [x] 3.5 Apply area before the marker; `marker_box` translated by crop offset and downscale, `click_x`/`click_y` left in desktop coordinates (design D7a); tests that the clicked pixel survives and the marker box matches after crop and downsize
+- [x] 3.6 Log one line per step: mode, area or fallback reason
 
 ## 4. Password check (Windows)
 
