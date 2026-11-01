@@ -25,6 +25,10 @@ function mockCommands(opts: {
     switch (cmd) {
       case "list_session_screenshots":
         return Promise.resolve(["/tmp/step_01.png"]);
+      case "list_capture_records":
+        return Promise.resolve(
+            ["/tmp/step_01.png"].map((path) => ({ path, capture_scope: "window", password_check: "ok" })),
+          );
       case "read_screenshot_bytes":
         return Promise.resolve([1, 2, 3]);
       case "get_pipelines":

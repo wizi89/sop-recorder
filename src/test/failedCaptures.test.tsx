@@ -28,6 +28,10 @@ describe("ReviewScreen failed-capture notice", () => {
       switch (cmd) {
         case "list_session_screenshots":
           return Promise.resolve(["/tmp/step_01.png", "/tmp/step_03.png", "/tmp/step_04.png"]);
+        case "list_capture_records":
+          return Promise.resolve(
+            ["/tmp/step_01.png", "/tmp/step_03.png", "/tmp/step_04.png"].map((path) => ({ path, capture_scope: "window", password_check: "ok" })),
+          );
         case "read_screenshot_bytes":
           return Promise.resolve([1, 2, 3]);
         // The pipeline selector runs on this screen too; it needs a list

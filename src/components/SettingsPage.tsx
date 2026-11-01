@@ -31,6 +31,10 @@ const FALLBACK_GENERATION_SETTINGS: GenerationSettings = {
   default_model: "azure/gpt-5.4",
 };
 
+// macOS keeps monitor capture without masking in this version
+// (privacy-capture D10). WKWebView reports "Macintosh"; WebView2 never does.
+const IS_MAC = navigator.userAgent.includes("Mac");
+
 function modelLabel(model: string): string {
   const name = model.split("/").pop() || model;
   return name
@@ -51,6 +55,8 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
     generation_model: "azure/gpt-5.4",
     error_reports: "ask",
     beta_updates: false,
+    capture_mode: "active_window",
+    mask_passwords: true,
   });
   // Until the stored settings arrive, the form shows defaults the user must not
   // be able to act on: the load used to replace the whole form state when it
@@ -201,6 +207,65 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             />
           </button>
         </div>
+
+        {/* Capture privacy (privacy-capture D8, D10). Applies from the next
+            recording: the running one keeps what it started with. */}
+        <fieldset className="flex flex-col gap-2" disabled={!loaded}>
+          <legend className="label-sm mb-2">{t("settings.capture_privacy")}</legend>
+          {!IS_MAC && (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="capture-mode"
+                checked={settings.capture_mode !== "monitor"}
+                onChange={() => setSettings((s) => ({ ...s, capture_mode: "active_window" }))}
+              />
+              <span>
+                {t("settings.capture_active_window")}
+                <span className="block text-on-surface-variant" style={{ fontSize: "0.625rem" }}>
+                  {t("settings.capture_active_window_hint")}
+                </span>
+              </span>
+            </label>
+          )}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="capture-mode"
+              checked={IS_MAC || settings.capture_mode === "monitor"}
+              onChange={() => setSettings((s) => ({ ...s, capture_mode: "monitor" }))}
+            />
+            <span>
+              {t("settings.capture_monitor")}
+              <span className="block text-on-surface-variant" style={{ fontSize: "0.625rem" }}>
+                {t("settings.capture_monitor_warning")}
+              </span>
+            </span>
+          </label>
+          {IS_MAC ? (
+            <p className="text-on-surface-variant leading-snug" style={{ fontSize: "0.625rem" }}>
+              {t("settings.capture_mac_note")}
+            </p>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.mask_passwords}
+                  onChange={(e) =>
+                    setSettings((s) => ({ ...s, mask_passwords: e.target.checked }))
+                  }
+                />
+                {t("settings.mask_passwords")}
+              </label>
+              {!settings.mask_passwords && (
+                <p className="text-on-surface-variant leading-snug" style={{ fontSize: "0.625rem" }}>
+                  {t("settings.mask_passwords_off")}
+                </p>
+              )}
+            </>
+          )}
+        </fieldset>
 
         {/* Skip PII check */}
         <div className="flex items-center justify-between">

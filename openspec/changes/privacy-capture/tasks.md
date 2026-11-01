@@ -9,9 +9,9 @@
 
 ## 2. Settings
 
-- [ ] 2.1 `capture_mode` and `mask_passwords` with defaults `active_window` / `true` in `get_settings`, `save_settings` and the recording-start read for keys missing from the store; tests through those paths with a store lacking the keys (design D8)
-- [ ] 2.2 `SettingsPage.tsx` section "Datenschutz bei der Aufnahme": two radio options with the monitor warning, the masking checkbox with "Passwortfelder werden mit aufgenommen." when off; macOS shows the monitor option only, no masking checkbox, plus the note; strings in `i18n/de.ts` with real umlauts
-- [ ] 2.3 Read both settings once at recording start into recording state; test that a change during a recording does not affect it
+- [x] 2.1 `capture_mode` and `mask_passwords` with defaults `active_window` / `true` in `get_settings`, `save_settings` and the recording-start read for keys missing from the store; tests through those paths with a store lacking the keys (design D8)
+- [x] 2.2 `SettingsPage.tsx` section "Datenschutz bei der Aufnahme": two radio options with the monitor warning, the masking checkbox with "Passwortfelder werden mit aufgenommen." when off; macOS shows the monitor option only, no masking checkbox, plus the note; strings in `i18n/de.ts` with real umlauts
+- [x] 2.3 Read both settings once at recording start into recording state; test that a change during a recording does not affect it
 
 ## 3. Capture phases and the window area (Windows)
 
@@ -28,16 +28,16 @@
 - [ ] 4.2 UIA query workers (MTA) with the per-step budget from 1.5 and the abandoned-query cap (design D6); tests with a mock that hangs: two abandoned, the third step skips and is flagged
 - [ ] 4.3 Warm-up and cache (design D5): all visible windows at recording start, `SetWinEventHook` for foreground and show events, UIA focus-changed events for `IsPassword` elements; warm-ups through the same capped workers; union of cached and fresh results; flag on first-seen window (minus exemptions) and on disagreement; tests for each flag rule
 - [ ] 4.4 Translate the visible field rectangles by the crop offset and fill them on the cropped in-memory image (design D3); no unmasked image is written anywhere, including temp files
-- [ ] 4.5 `StepMeta.capture_scope` and `password_check`; missing reads as `unknown`; serialisation round-trip tests
+- [x] 4.5 `StepMeta.capture_scope` and `password_check`; missing reads as `unknown`; serialisation round-trip tests
 
 ## 5. Review screen
 
-- [ ] 5.1 Tauri command returning `capture_scope` and `password_check` per step, with a missing sidecar as `unknown`; listed in `lib/tauri.ts`
-- [ ] 5.2 `ReviewScreen.tsx` marks steps per design D7; the confirmation "Ich habe die markierten Schritte geprüft" shown only with marked steps; Generate disabled until ticked; component tests for marked, unmarked and legacy recordings
+- [x] 5.1 Tauri command returning `capture_scope` and `password_check` per step, with a missing sidecar as `unknown`; listed in `lib/tauri.ts`
+- [x] 5.2 `ReviewScreen.tsx` marks steps per design D7; the confirmation "Ich habe die markierten Schritte geprüft" shown only with marked steps; Generate disabled until ticked; component tests for marked, unmarked and legacy recordings
 
 ## 6. Upload metadata
 
-- [ ] 6.1 `upload.rs`: `capture_scopes` and `password_checks` counted per uploaded screenshot, a missing sidecar or field as `unknown` (design D9); tests for a normal, a regenerated, a legacy folder and one screenshot without sidecar
+- [x] 6.1 `upload.rs`: `capture_scopes` and `password_checks` counted per uploaded screenshot, a missing sidecar or field as `unknown` (design D9); tests for a normal, a regenerated, a legacy folder and one screenshot without sidecar
 - [ ] 6.2 `sop-sorcery` server: new log line after metadata parsing in `/generate` with both objects, plus trace metadata (separate PR into master there)
 
 ## 7. macOS

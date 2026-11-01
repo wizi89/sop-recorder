@@ -21,6 +21,10 @@ export interface AppSettings {
   error_reports: ErrorReportMode;
   /** Opt in to the beta channel instead of stable releases. */
   beta_updates: boolean;
+  /** What a step captures; read once at recording start. */
+  capture_mode: "active_window" | "monitor";
+  /** Password fields filled before a screenshot is written (Windows only). */
+  mask_passwords: boolean;
 }
 
 export async function login(
@@ -112,6 +116,17 @@ export async function discardRecording(outputDir: string): Promise<void> {
 
 export async function listSessionScreenshots(outputDir: string): Promise<string[]> {
   return invoke("list_session_screenshots", { outputDir });
+}
+
+export interface StepCaptureRecord {
+  path: string;
+  capture_scope: "window" | "monitor" | "monitor_fallback" | "unknown";
+  password_check: "ok" | "flagged" | "off" | "unknown";
+}
+
+/** How each screenshot was captured; a missing sidecar reads as `unknown`. */
+export async function listCaptureRecords(outputDir: string): Promise<StepCaptureRecord[]> {
+  return invoke("list_capture_records", { outputDir });
 }
 
 /**

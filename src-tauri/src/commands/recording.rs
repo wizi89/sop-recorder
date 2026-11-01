@@ -13,6 +13,7 @@ use crate::capture::audio::AudioHandle;
 use crate::capture::input_hooks;
 use crate::capture::permits::CapturePermits;
 use crate::capture::screenshot;
+use crate::commands::settings::{read_capture_settings, CaptureSettings};
 use crate::output::pending;
 use crate::output::step_meta::{self, StepMeta};
 use crate::state::{AppState, RecordingSession, RecordingStatus};
@@ -53,6 +54,10 @@ fn note_capture_outcome(
             click_y: click_pos.map(|(_, y)| y),
             trigger: trigger.to_string(),
             marker_box,
+            // ponytail: what every platform captures until the window area and
+            // the password check exist (sections 3-4 of privacy-capture).
+            capture_scope: step_meta::CaptureScope::Monitor,
+            password_check: step_meta::PasswordCheck::Off,
         })),
         Err(e) => {
             let total = failed.fetch_add(1, Ordering::SeqCst) + 1;
@@ -63,6 +68,20 @@ fn note_capture_outcome(
                 e
             );
             CaptureOutcome::Failed { total }
+        }
+    }
+}
+
+/// The privacy settings a recording runs with. macOS keeps monitor capture and
+/// no password masking in this version, whatever is stored (privacy-capture
+/// D10).
+fn recording_capture_settings(stored: CaptureSettings) -> CaptureSettings {
+    if cfg!(windows) {
+        stored
+    } else {
+        CaptureSettings {
+            monitor_mode: true,
+            mask_passwords: false,
         }
     }
 }
@@ -109,15 +128,18 @@ pub async fn start_recording(
     fs::create_dir_all(&screenshots_dir)
         .map_err(|e| format!("Failed to create output dir: {}", e))?;
 
+    let store = app.store("settings.json").ok();
     // Apply hide-from-screenshots setting
-    let hide = if let Ok(store) = app.store("settings.json") {
-        store
-            .get("hide_from_screenshots")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true)
-    } else {
-        true
-    };
+    let hide = store
+        .as_ref()
+        .and_then(|store| store.get("hide_from_screenshots"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    // Read once, here, and moved into the capture callback by value: a change
+    // made in the settings while this recording runs applies to the next one.
+    let capture_settings = recording_capture_settings(read_capture_settings(|key| {
+        store.as_ref().and_then(|store| store.get(key))
+    }));
     if let Err(e) = crate::commands::window::set_display_affinity(app.clone(), hide) {
         log::warn!("Failed to set display affinity: {}", e);
     }
@@ -324,7 +346,20 @@ pub async fn start_recording(
     crate::error_reports::set_phase(crate::error_reports::Phase::Recording);
 
     let _ = app.emit("recording:started", ());
-    log::info!("Recording started: {}", output_dir.display());
+    log::info!(
+        "Recording started: {} (capture: {}, password masking: {})",
+        output_dir.display(),
+        if capture_settings.monitor_mode {
+            "monitor"
+        } else {
+            "active_window"
+        },
+        if capture_settings.mask_passwords {
+            "on"
+        } else {
+            "off"
+        },
+    );
     Ok(())
 }
 
@@ -521,7 +556,14 @@ pub async fn discard_recording(output_dir: String) {
 /// review screen even after `stop_recording` has finalized the session.
 #[tauri::command]
 pub async fn list_session_screenshots(output_dir: String) -> Result<Vec<String>, String> {
-    let screenshots_dir = PathBuf::from(&output_dir).join("screenshots");
+    Ok(session_screenshots(&output_dir)?
+        .into_iter()
+        .map(|(_, p)| p.to_string_lossy().to_string())
+        .collect())
+}
+
+fn session_screenshots(output_dir: &str) -> Result<Vec<(u32, PathBuf)>, String> {
+    let screenshots_dir = PathBuf::from(output_dir).join("screenshots");
     if !screenshots_dir.exists() {
         return Ok(Vec::new());
     }
@@ -546,9 +588,37 @@ pub async fn list_session_screenshots(output_dir: String) -> Result<Vec<String>,
     }
 
     entries.sort_by_key(|(n, _)| *n);
-    Ok(entries
+    Ok(entries)
+}
+
+/// How one screenshot was captured, for the review screen's marks
+/// (privacy-capture D7).
+#[derive(serde::Serialize)]
+pub struct StepCaptureRecord {
+    pub path: String,
+    pub capture_scope: step_meta::CaptureScope,
+    pub password_check: step_meta::PasswordCheck,
+}
+
+/// The capture record of every screenshot in the folder, in the order of
+/// `list_session_screenshots`. A screenshot without a readable sidecar reads
+/// as `unknown` on both, so a legacy recording is marked rather than trusted.
+#[tauri::command]
+pub async fn list_capture_records(output_dir: String) -> Result<Vec<StepCaptureRecord>, String> {
+    let screenshots = session_screenshots(&output_dir)?;
+    let orders: Vec<u32> = screenshots.iter().map(|(n, _)| *n).collect();
+    let records =
+        step_meta::capture_records(&PathBuf::from(&output_dir).join("screenshots"), &orders);
+    Ok(screenshots
         .into_iter()
-        .map(|(_, p)| p.to_string_lossy().to_string())
+        .zip(records)
+        .map(
+            |((_, path), (capture_scope, password_check))| StepCaptureRecord {
+                path: path.to_string_lossy().to_string(),
+                capture_scope,
+                password_check,
+            },
+        )
         .collect())
 }
 
@@ -637,6 +707,49 @@ pub async fn wait_for_captures(counter: &AtomicU32, timeout: std::time::Duration
 mod tests {
     use super::*;
     use crate::capture::screenshot::MarkerBox;
+
+    #[test]
+    fn macos_records_the_monitor_without_masking() {
+        let stored = CaptureSettings {
+            monitor_mode: false,
+            mask_passwords: true,
+        };
+        let used = recording_capture_settings(stored);
+        if cfg!(windows) {
+            assert_eq!(used, stored);
+        } else {
+            assert!(used.monitor_mode && !used.mask_passwords);
+        }
+    }
+
+    /// The settings are read once at start (privacy-capture D8). A source
+    /// guard, as in `settings.rs`: the property is that the capture callback
+    /// never reads the store, so a change made mid-recording cannot reach it.
+    #[test]
+    fn the_capture_callback_never_rereads_the_settings() {
+        let source = include_str!("recording.rs").replace(
+            "
+", "
+",
+        );
+        let start = source
+            .find("start_listener_with_callback(")
+            .expect("capture callback not found");
+        let end = start
+            + source[start..]
+                .find(
+                    "
+    });
+",
+                )
+                .expect("callback end");
+        let body = &source[start..end];
+        assert!(
+            !body.contains("store"),
+            "the callback reads the store:
+{body}"
+        );
+    }
 
     #[tokio::test]
     async fn the_capture_wait_returns_once_the_last_capture_finishes() {

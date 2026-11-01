@@ -2,9 +2,47 @@ use reqwest::multipart;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::output::step_meta::StepMeta;
+use crate::output::step_meta::{self, CaptureScope, PasswordCheck, StepMeta};
 
 const UPLOAD_TIMEOUT_SECS: u64 = 300;
+
+/// How the uploaded screenshots were protected, counted per value
+/// (privacy-capture D9). Read from the sidecars next to the PNGs at upload
+/// time, never from settings, so a regenerated or legacy folder reports what
+/// its files say; a screenshot without a sidecar counts as `unknown`.
+fn capture_counts(screenshot_paths: &[(u32, &Path)]) -> (serde_json::Value, serde_json::Value) {
+    let mut scopes = serde_json::Map::new();
+    for scope in [
+        CaptureScope::Window,
+        CaptureScope::Monitor,
+        CaptureScope::MonitorFallback,
+        CaptureScope::Unknown,
+    ] {
+        scopes.insert(scope.as_str().into(), 0.into());
+    }
+    let mut checks = serde_json::Map::new();
+    for check in [
+        PasswordCheck::Ok,
+        PasswordCheck::Flagged,
+        PasswordCheck::Off,
+        PasswordCheck::Unknown,
+    ] {
+        checks.insert(check.as_str().into(), 0.into());
+    }
+    // Every screenshot of an upload lives in one `screenshots` folder.
+    let dir = screenshot_paths
+        .first()
+        .and_then(|(_, path)| path.parent())
+        .unwrap_or(Path::new("."));
+    let orders: Vec<u32> = screenshot_paths.iter().map(|(order, _)| *order).collect();
+    for (scope, check) in step_meta::capture_records(dir, &orders) {
+        for (map, key) in [(&mut scopes, scope.as_str()), (&mut checks, check.as_str())] {
+            let count = map[key].as_u64().unwrap_or(0) + 1;
+            map.insert(key.into(), count.into());
+        }
+    }
+    (scopes.into(), checks.into())
+}
 
 /// Upload audio + screenshots to the generation endpoint.
 /// Returns the SSE stream URL or response.
@@ -80,6 +118,9 @@ pub async fn upload_multipart(
     if let Some(id) = pipeline_id.filter(|s| !s.is_empty()) {
         metadata["pipeline_id"] = serde_json::json!(id);
     }
+    let (capture_scopes, password_checks) = capture_counts(screenshot_paths);
+    metadata["capture_scopes"] = capture_scopes;
+    metadata["password_checks"] = password_checks;
     form = form.text("metadata", metadata.to_string());
 
     if skip_pii_check {
@@ -198,4 +239,107 @@ pub async fn upload_with_retry(
     }
 
     Err(last_err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::output::step_meta::write_sidecar;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+
+    fn recording(
+        dir: &Path,
+        steps: &[(u32, Option<(CaptureScope, PasswordCheck)>)],
+    ) -> Vec<(u32, PathBuf)> {
+        steps
+            .iter()
+            .map(|(order, record)| {
+                let png = dir.join(format!("step_{:02}.png", order));
+                std::fs::write(&png, b"png").unwrap();
+                if let Some((capture_scope, password_check)) = record {
+                    write_sidecar(
+                        dir,
+                        &StepMeta {
+                            order: *order,
+                            capture_scope: *capture_scope,
+                            password_check: *password_check,
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+                }
+                (*order, png)
+            })
+            .collect()
+    }
+
+    fn counts(paths: &[(u32, PathBuf)]) -> (serde_json::Value, serde_json::Value) {
+        let refs: Vec<(u32, &Path)> = paths.iter().map(|(n, p)| (*n, p.as_path())).collect();
+        capture_counts(&refs)
+    }
+
+    /// The spec's "default settings" scenario: five window steps, one flagged.
+    #[test]
+    fn a_normal_recording_is_counted_from_its_sidecars() {
+        let dir = tempdir().unwrap();
+        let mut steps: Vec<_> = (1..=4)
+            .map(|n| (n, Some((CaptureScope::Window, PasswordCheck::Ok))))
+            .collect();
+        steps.push((5, Some((CaptureScope::Window, PasswordCheck::Flagged))));
+        let (scopes, checks) = counts(&recording(dir.path(), &steps));
+        assert_eq!(scopes["window"], 5);
+        assert_eq!(scopes["unknown"], 0);
+        assert_eq!(checks["ok"], 4);
+        assert_eq!(checks["flagged"], 1);
+    }
+
+    #[test]
+    fn regenerating_a_folder_reports_the_same_counts() {
+        let dir = tempdir().unwrap();
+        let paths = recording(
+            dir.path(),
+            &[
+                (1, Some((CaptureScope::Monitor, PasswordCheck::Off))),
+                (2, Some((CaptureScope::MonitorFallback, PasswordCheck::Ok))),
+            ],
+        );
+        assert_eq!(counts(&paths), counts(&paths));
+        assert_eq!(counts(&paths).0["monitor_fallback"], 1);
+    }
+
+    #[test]
+    fn a_legacy_folder_reports_unknown() {
+        let dir = tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("step_01.json"),
+            r#"{"order":1,"timestamp_seconds":1.0,"click_x":null,"click_y":null,"trigger":"enter_key"}"#,
+        )
+        .unwrap();
+        let paths = recording(dir.path(), &[(1, None), (2, None)]);
+        let (scopes, checks) = counts(&paths);
+        assert_eq!(scopes["unknown"], 2);
+        assert_eq!(checks["unknown"], 2);
+    }
+
+    #[test]
+    fn a_screenshot_without_a_sidecar_counts_as_unknown() {
+        let dir = tempdir().unwrap();
+        let paths = recording(
+            dir.path(),
+            &[
+                (1, Some((CaptureScope::Window, PasswordCheck::Ok))),
+                (2, None),
+            ],
+        );
+        let (scopes, checks) = counts(&paths);
+        assert_eq!(
+            (scopes["window"].clone(), scopes["unknown"].clone()),
+            (1.into(), 1.into())
+        );
+        assert_eq!(
+            (checks["ok"].clone(), checks["unknown"].clone()),
+            (1.into(), 1.into())
+        );
+    }
 }

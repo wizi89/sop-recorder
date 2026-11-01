@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "../hooks/useTranslation";
-import { listSessionScreenshots, readScreenshotBytes } from "../lib/tauri";
+import {
+  listCaptureRecords,
+  listSessionScreenshots,
+  readScreenshotBytes,
+  type StepCaptureRecord,
+} from "../lib/tauri";
 import { formatElapsed } from "../hooks/useElapsedTime";
 import { usePipelines } from "../hooks/usePipelines";
 
@@ -22,6 +27,21 @@ interface ReviewScreenProps {
   failedCaptures?: number;
   onConfirm: () => void;
   onCancel: () => void;
+}
+
+/**
+ * A step the user has to look at before generating (privacy-capture D7): the
+ * password check may have missed a field, the active window could not be
+ * determined, or the step carries no record of how it was captured.
+ */
+function needsReview(record: StepCaptureRecord | undefined): boolean {
+  if (!record) return true;
+  return (
+    record.password_check === "flagged" ||
+    record.password_check === "unknown" ||
+    record.capture_scope === "monitor_fallback" ||
+    record.capture_scope === "unknown"
+  );
 }
 
 /**
@@ -53,7 +73,10 @@ export function ReviewScreen({
   onCancel,
 }: ReviewScreenProps) {
   const { t } = useTranslation();
-  const [thumbs, setThumbs] = useState<Array<{ path: string; url: string }>>([]);
+  const [thumbs, setThumbs] = useState<Array<{ path: string; url: string; marked: boolean }>>(
+    [],
+  );
+  const [reviewed, setReviewed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { pipelines, selectedId, select, visible: showPipelines } = usePipelines();
@@ -65,7 +88,11 @@ export function ReviewScreen({
 
     (async () => {
       try {
-        const paths = await listSessionScreenshots(outputDir);
+        const [paths, records] = await Promise.all([
+          listSessionScreenshots(outputDir),
+          // A failed read marks every step: no record is never read as safe.
+          listCaptureRecords(outputDir).catch((): StepCaptureRecord[] => []),
+        ]);
         // Read each file's bytes and wrap in a Blob URL for display.
         const entries = await Promise.all(
           paths.map(async (p) => {
@@ -73,7 +100,7 @@ export function ReviewScreen({
             const blob = new Blob([bytes], { type: "image/png" });
             const url = URL.createObjectURL(blob);
             createdUrls.push(url);
-            return { path: p, url };
+            return { path: p, url, marked: needsReview(records.find((r) => r.path === p)) };
           }),
         );
         if (cancelled) {
@@ -95,6 +122,9 @@ export function ReviewScreen({
       createdUrls.forEach((u) => URL.revokeObjectURL(u));
     };
   }, [outputDir]);
+
+  const markedCount = thumbs.filter((thumb) => thumb.marked).length;
+  const blocked = loading || thumbs.length === 0 || (markedCount > 0 && !reviewed);
 
   return (
     <div className="flex flex-col h-full bg-surface">
@@ -214,11 +244,35 @@ export function ReviewScreen({
                 >
                   {t("review.step_label", { n: idx + 1 })}
                 </div>
+                {thumb.marked && (
+                  <div
+                    className="text-center"
+                    style={{ fontSize: "0.625rem", color: "rgba(255, 190, 80, 0.9)" }}
+                  >
+                    {t("review.marked_badge")}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {markedCount > 0 && (
+        <div className="px-4 pt-2 flex flex-col gap-1.5">
+          <p className="text-on-surface-variant leading-snug" style={{ fontSize: "0.6875rem" }}>
+            {t("review.marked_hint", { count: markedCount })}
+          </p>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={reviewed}
+              onChange={(e) => setReviewed(e.target.checked)}
+            />
+            {t("review.marked_confirm")}
+          </label>
+        </div>
+      )}
 
       {/* Action buttons */}
       <div className="flex gap-2 px-4 pb-3 pt-2">
@@ -231,10 +285,10 @@ export function ReviewScreen({
         <button
           onClick={onConfirm}
           className="btn-primary flex-1 py-2 text-xs"
-          disabled={loading || thumbs.length === 0}
+          disabled={blocked}
           style={{
-            opacity: loading || thumbs.length === 0 ? 0.4 : 1,
-            cursor: loading || thumbs.length === 0 ? "not-allowed" : "pointer",
+            opacity: blocked ? 0.4 : 1,
+            cursor: blocked ? "not-allowed" : "pointer",
           }}
         >
           {t("review.confirm")}
