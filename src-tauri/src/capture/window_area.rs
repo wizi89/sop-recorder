@@ -251,6 +251,21 @@ fn belongs_to(popup: &WindowInfo, fg: &WindowInfo) -> bool {
 /// both: then the root window under the click decides. A click fires before
 /// its own activation, so clicking a background window has to capture that
 /// window, not the one about to lose the foreground.
+/// Whether every kept rectangle lies inside a shell window (taskbar, Start,
+/// flyouts). Such an area holds no app window, so a foreground change during
+/// the read cannot put one in it; whatever is drawn over it is in the
+/// snapshots and checked anyway (8.1 run: every app-switching taskbar click
+/// was flagged).
+pub fn shell_only(snapshot: &Snapshot, keep: &[Rect]) -> bool {
+    !keep.is_empty()
+        && keep.iter().all(|k| {
+            snapshot
+                .windows
+                .iter()
+                .any(|w| !w.cloaked && kind(w) == Kind::Shell && w.rect.intersect(k) == Some(*k))
+        })
+}
+
 pub fn capture_area(snapshot: &Snapshot, click: Option<(i32, i32)>, monitor: Rect) -> Area {
     // A cloaked window is in the list but never drawn (a closed Start menu,
     // another virtual desktop), so it can be no step's window.
@@ -636,6 +651,23 @@ mod tests {
     #[test]
     fn a_field_behind_an_opaque_window_is_not_masked() {
         assert_eq!(field_behind(cover()), vec![]);
+    }
+
+    #[test]
+    fn only_an_area_inside_shell_windows_is_shell_only() {
+        let taskbar = Rect::new(0, 1368, 2560, 1440);
+        let s = snapshot(
+            EDITOR,
+            None,
+            vec![
+                window(MENU, taskbar, "Shell_TrayWnd", 5),
+                window(EDITOR, Rect::new(0, 0, 2560, 1368), "Notepad", 10),
+            ],
+        );
+        assert!(shell_only(&s, &[taskbar]));
+        assert!(!shell_only(&s, &[Rect::new(0, 0, 2560, 1368)]));
+        assert!(!shell_only(&s, &[taskbar, Rect::new(0, 0, 100, 100)]));
+        assert!(!shell_only(&s, &[]));
     }
 
     /// Found in the 8.1 run: a context menu closed by the click had no

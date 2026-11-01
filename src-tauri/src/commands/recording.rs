@@ -96,7 +96,9 @@ fn check_step(
     };
     let windows = window_area::visible_windows(geometry, &held.shown());
     let started = Instant::now();
-    let outcome = checker.check(&windows, held.pixels_at, geometry.foreground_changed);
+    let foreground_changed = geometry.foreground_changed
+        && !window_area::shell_only(&geometry.snapshots[0], &held.shown());
+    let outcome = checker.check(&windows, held.pixels_at, foreground_changed);
     if outcome.flags.is_empty() {
         log::info!(
             "Step {step_num}: password check ok, {} window(s), {} field area(s) masked, {} ms",
