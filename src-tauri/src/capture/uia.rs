@@ -291,6 +291,18 @@ impl Watch {
                 0,
                 WINEVENT_OUTOFCONTEXT,
             );
+            // A window restored from the taskbar comes to the front while it
+            // still has its minimised size, which the size filter drops; its
+            // warm-up runs when the restore ends (found in the 8.1 run).
+            let restored = SetWinEventHook(
+                EVENT_SYSTEM_MINIMIZEEND,
+                EVENT_SYSTEM_MINIMIZEEND,
+                None,
+                Some(on_window_event),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            );
             let mut msg = MSG::default();
             // Creates the queue before the thread id is handed out, so the
             // WM_QUIT `drop` posts cannot arrive before there is a queue.
@@ -301,6 +313,7 @@ impl Watch {
             }
             let _ = UnhookWinEvent(foreground);
             let _ = UnhookWinEvent(show);
+            let _ = UnhookWinEvent(restored);
         });
         let hook_thread = ready_rx.recv().unwrap_or(0);
 

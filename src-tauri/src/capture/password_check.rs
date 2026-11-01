@@ -5,7 +5,7 @@
 //! timing and flag rule here is tested without a desktop.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -211,21 +211,16 @@ impl Checker {
                 "{ABANDONED_CAP} earlier checks are still hanging; this step was not checked"
             ));
         } else if !windows.is_empty() {
+            // One thread per window, so the budget covers the slowest window
+            // rather than the sum: in the 8.1 run two Chrome windows at ~400 ms
+            // each ran a step past 500 ms one after the other.
             let (tx, rx) = mpsc::channel();
-            let cancelled = Arc::new(AtomicBool::new(false));
-            let checker = self.clone();
-            let hwnds: Vec<isize> = windows.iter().map(|(h, _)| *h).collect();
-            let stop = cancelled.clone();
-            std::thread::spawn(move || {
-                for hwnd in hwnds {
-                    if stop.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    if tx.send((hwnd, checker.run_query(hwnd))).is_err() {
-                        break;
-                    }
-                }
-            });
+            for (hwnd, _) in windows {
+                let (tx, checker, hwnd) = (tx.clone(), self.clone(), *hwnd);
+                std::thread::spawn(move || {
+                    let _ = tx.send((hwnd, checker.run_query(hwnd)));
+                });
+            }
 
             let deadline = Instant::now() + self.budget;
             for _ in windows {
@@ -243,9 +238,8 @@ impl Checker {
                         flags.push(format!("window {hwnd:#x} is not checked: {why}"));
                     }
                     Err(_) => {
-                        // The rest of the batch is not started; the query
-                        // running now is abandoned and counts against the cap.
-                        cancelled.store(true, Ordering::SeqCst);
+                        // The queries still running are abandoned and count
+                        // against the cap.
                         flags.push(format!(
                             "the check ran out of its {} ms budget",
                             self.budget.as_millis()
@@ -526,6 +520,22 @@ mod tests {
         );
         assert!(out.flags.iter().any(|f| f.contains("still hanging")));
         assert_eq!(out.masks, vec![FIELD]);
+    }
+
+    /// 8.1 run: windows are queried side by side, so three windows that each
+    /// take most of the budget fit into it together.
+    #[test]
+    fn windows_are_checked_side_by_side_within_one_budget() {
+        let c = checker(|_| {
+            std::thread::sleep(BUDGET * 6 / 10);
+            QueryResult::Fields(vec![])
+        });
+        let windows: Vec<_> = (1..=3).map(|h| (h, vec![WHOLE])).collect();
+        for (h, _) in &windows {
+            warmed(&c, *h, vec![]);
+        }
+        let out = c.check(&windows, Instant::now(), false);
+        assert_eq!(out.flags, Vec::<String>::new());
     }
 
     /// Warm-ups go through the same cap: with two queries hanging, none start.
