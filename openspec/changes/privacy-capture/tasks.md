@@ -1,11 +1,11 @@
 ## 1. Spike: UIA password query (gate for sections 3-4)
 
-- [ ] 1.1 Throwaway binary (not committed) that finds `IsPassword` elements in given windows and prints count, rectangles and time; at least 20 runs per case: Chrome and Edge login page, Firefox, one Electron app (Teams or Slack), a Win32 dialog with a password box, an elevated window
-- [ ] 1.2 First query on a window just created or just raised by a click vs repeated queries (Chrome, Edge, Electron, Win32): decide the D5 exemptions per window class
-- [ ] 1.3 Submit by Enter in the password field and by clicking the submit button: what a query 0-500 ms after the event returns; plus a login page loaded inside an existing tab, filled by keyboard and submitted by Enter: do UIA focus-changed events report the password field and its rectangle
-- [ ] 1.4 Monitor mode on a realistic desktop (10+ windows, several Chromium, Outlook, an IDE, one elevated): total query time and resulting flag rate
-- [ ] 1.5 Record results (hit rate, p50/p95, flag rate per case) in design.md, set the budgets, exemptions and processing permit count; pass bar: every field found in non-elevated cases (counting cached rectangles per D5), p95 within budget, flag rate on ordinary work low enough that the confirmation stays meaningful. If the bar is not met, stop here and bring the results to the user before section 3
-- [ ] 1.6 Note the `windows` crate features the spike needed, for task 3.1
+- [x] 1.1 Throwaway binary (not committed) that finds `IsPassword` elements in given windows and prints count, rectangles and time; at least 20 runs per case: Chrome and Edge login page, Firefox, one Electron app (Teams or Slack), a Win32 dialog with a password box, an elevated window (Firefox and an Electron login not available; moved to 8.1)
+- [x] 1.2 First query on a window just created or just raised by a click vs repeated queries (Chrome, Edge, Electron, Win32): decide the D5 exemptions per window class
+- [x] 1.3 Submit by Enter in the password field and by clicking the submit button: what a query 0-500 ms after the event returns; plus a login page loaded inside an existing tab, filled by keyboard and submitted by Enter: do UIA focus-changed events report the password field and its rectangle
+- [x] 1.4 Monitor mode on a realistic desktop (10+ windows, several Chromium, Outlook, an IDE, one elevated): total query time and resulting flag rate (measured on a 14-window desktop without Outlook or an elevated window; the real desktop is in 8.1)
+- [x] 1.5 Record results (hit rate, p50/p95, flag rate per case) in design.md, set the budgets, exemptions and processing permit count; pass bar: every field found in non-elevated cases (counting cached rectangles per D5), p95 within budget, flag rate on ordinary work low enough that the confirmation stays meaningful. If the bar is not met, stop here and bring the results to the user before section 3
+- [x] 1.6 Note the `windows` crate features the spike needed, for task 3.1
 
 ## 2. Settings
 
@@ -25,8 +25,8 @@
 ## 4. Password check (Windows)
 
 - [ ] 4.1 Pure function for each window's visible part and the visible part of each found field (opaque windows only, design D4); tests for a field behind an opaque window, behind a layered window, behind a cloaked window, behind a window excluded from capture (the recording bar)
-- [ ] 4.2 UIA query workers (MTA) with the per-step budget from 1.5 and the abandoned-query cap (design D6); tests with a mock that hangs: two abandoned, the third step skips and is flagged
-- [ ] 4.3 Warm-up and cache (design D5): all visible windows at recording start, `SetWinEventHook` for foreground and show events, UIA focus-changed events for `IsPassword` elements; warm-ups through the same capped workers; union of cached and fresh results; flag on first-seen window (minus exemptions) and on disagreement; tests for each flag rule
+- [ ] 4.2 UIA query workers (MTA) with the per-step budget from 1.5 and the abandoned-query cap (design D6); tests with a mock that hangs: two abandoned, the third step skips and is flagged; elevated or unopenable window processes are not queried and flag the step (amendment A1)
+- [ ] 4.3 Warm-up and cache (design D5): all visible windows at recording start, `SetWinEventHook` for foreground and show events, UIA focus-changed events for `IsPassword` elements; warm-ups through the same capped workers; union of cached and fresh results; a window counts as checked after two completed queries at least 100 ms apart, warm-ups query twice, an empty or zero-sized field rectangle flags (amendment A2); flag on a window not yet checked and on disagreement; tests for each flag rule
 - [ ] 4.4 Translate the visible field rectangles by the crop offset and fill them on the cropped in-memory image (design D3); no unmasked image is written anywhere, including temp files
 - [x] 4.5 `StepMeta.capture_scope` and `password_check`; missing reads as `unknown`; serialisation round-trip tests
 
@@ -46,6 +46,6 @@
 
 ## 8. Verification
 
-- [ ] 8.1 Manual Windows run: maximised and windowed browser, a Save As dialog moved away from its owner, a context menu, click on a background window, desktop click, taskbar click, two monitors, a login page submitted by Enter and by click with masking on, a login page loaded inside an existing tab and filled by keyboard, a click that activates a window partly covered by another, masking off, an elevated window in the area, an always-on-top window over the captured window
+- [ ] 8.1 Manual Windows run: maximised and windowed browser, a Save As dialog moved away from its owner, a context menu, click on a background window, desktop click, taskbar click, two monitors, a login page submitted by Enter and by click with masking on, a login page loaded inside an existing tab and filled by keyboard, a click that activates a window partly covered by another, masking off, an elevated window in the area, an always-on-top window over the captured window; plus the spike gaps from 1.1/1.4: a Firefox login page, an Electron app's login screen, and monitor mode on the real working desktop with Outlook, the IDE and one elevated window
 - [ ] 8.2 Offline comparison: record three short workflows in monitor mode with the active-window area logged per step, derive the cropped variant of each from the same files, generate each variant three times on staging (cost estimate first); ship the active window default unless the cropped guides name the wrong element or lose a step more often than the monitor guides in a blind comparison
 - [ ] 8.3 CHANGELOG entry: new defaults, review marks, and how to switch back

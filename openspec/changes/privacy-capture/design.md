@@ -30,10 +30,11 @@
 - The in-flight counter that `stop_recording` and the generate path wait on covers both phases and drops only after the sidecar is written.
 The check runs after the pixels by design: what it must protect is what the pixels show.
 
-**D4. The check covers every window visible in the captured area, in both modes.** The windows checked are all windows from the phase A snapshot with a visible part in the final area (active window mode) or on the monitor (monitor mode); a window's visible part is its rectangle minus the rectangles of opaque windows above it in the z-order. A found field is masked only where it is visible, so a password field of a window hidden behind another does not black out the window in front. Only windows that certainly hide what is below count as opaque: cloaked windows (`DWMWA_CLOAKED`, e.g. other virtual desktops) layered or transparent windows (`WS_EX_LAYERED`, `WS_EX_TRANSPARENT`), and windows excluded from capture (display affinity other than `WDA_NONE`, which includes the recorder's own recording bar when `hide_from_screenshots` is on) never hide anything in this calculation, so an error here over-masks rather than leaks. Cloaked windows are not drawn, so they are not checked either. For each: `ElementFromHandle`, then `FindAll(TreeScope_Descendants, IsPasswordProperty == true)`, reading each `BoundingRectangle` (physical screen pixels). Queries run on worker threads with MTA COM, with a total budget per step (initially 500 ms in active window mode; monitor mode gets its own budget from the spike), `IUIAutomation2` connection and transaction timeouts set below it. A window whose query errors, is denied (elevated), or does not finish in the budget makes the step flagged; fields found so far are still masked.
+**D4. The check covers every window visible in the captured area, in both modes.** The windows checked are all windows from the phase A snapshot with a visible part in the final area (active window mode) or on the monitor (monitor mode); a window's visible part is its rectangle minus the rectangles of opaque windows above it in the z-order. A found field is masked only where it is visible, so a password field of a window hidden behind another does not black out the window in front. Only windows that certainly hide what is below count as opaque: cloaked windows (`DWMWA_CLOAKED`, e.g. other virtual desktops) layered or transparent windows (`WS_EX_LAYERED`, `WS_EX_TRANSPARENT`), and windows excluded from capture (display affinity other than `WDA_NONE`, which includes the recorder's own recording bar when `hide_from_screenshots` is on) never hide anything in this calculation, so an error here over-masks rather than leaks. Cloaked windows are not drawn, so they are not checked either. For each: `ElementFromHandle`, then `FindAll(TreeScope_Descendants, IsPasswordProperty == true)`, reading each `BoundingRectangle` (physical screen pixels). Queries run on worker threads with MTA COM, with a total budget per step (initially 500 ms in active window mode; monitor mode gets its own budget from the spike), `IUIAutomation2` connection and transaction timeouts set below it. A window whose query errors or does not finish in the budget makes the step flagged; fields found so far are still masked. An elevated window does not refuse the query: it returns no fields and no error (spike). So a window whose process the recorder cannot open with `PROCESS_QUERY_LIMITED_INFORMATION` and read the token of, or whose token is elevated while the recorder's is not, is not queried at all and flags the step (amendment A1).
 
 **D5. Masking uses the union of cached and fresh results, and flags disagreement.** A per-window cache holds the password rectangles from the last completed query of each window. The cache is filled by warm-up queries: at recording start for every visible top-level window, and on each `EVENT_SYSTEM_FOREGROUND` and top-level `EVENT_OBJECT_SHOW` (`SetWinEventHook`) during recording. Because a page can change inside one window without either event (in-tab navigation to a login page), the recorder also subscribes to UIA focus-changed events and adds the rectangle of every focused `IsPassword` element to its window's cache: typing a password requires focusing the field. Warm-up queries run on the same workers, under the same budget and abandoned-query cap as step queries (D6). For each step, masked = cached rectangles of checked windows union the fresh results. Rules:
-- A window with no completed query before the step's pixel time is flagged, because a first query cannot tell "no fields" from "tree not built yet" (Chromium builds its tree lazily). The spike may exempt window classes whose first query is shown to be complete; exemptions are listed here after task 1.
+- A window is checked only after two completed queries at least 100 ms apart before the step's pixel time; otherwise the step is flagged. A first query cannot tell "no fields" from "tree not built yet": in the spike, Chromium's first query on a new or raised window returned 0 fields with no error and the second found the field. Warm-ups therefore query twice (amendment A2). No window class is exempt (spike results below).
+- A field whose rectangle is empty or zero-sized is still being built: the step is flagged (A2).
 - If cached and fresh results differ for a window (a field vanished after Enter or a submit click, the page navigated), mask the union and flag the step. The cached rectangle still covers the field the pixels show.
 Over-masking a stale rectangle is the accepted cost; the flag sends the user to look.
 
@@ -65,4 +66,37 @@ Ships in a normal recorder release. Existing Windows installs start recording in
 
 ## Open Questions
 
-- Budgets, exemptions and the buffer slot count: set by the spike within D3-D6 as written.
+- None left from the spike. Firefox, an Electron login screen and a real desktop with Outlook and an elevated window were not measured; they are checked in task 8.1 against the rules above.
+
+## Spike notes
+
+**`windows` crate features (task 1.6).** The spike built against `windows` 0.58, the recorder's version, with `Win32_Graphics_Dwm` (cloaked state, extended frame bounds), `Win32_UI_Accessibility` (UIA, `SetWinEventHook`), `Win32_System_Com` (MTA, `CoCreateInstance`), `Win32_System_Variant` (the `IsPassword` condition value) and `implement` plus a `windows-core` 0.58 dependency (the focus-changed event handler), on top of the recorder's existing four. `Win32_Security` and `Win32_System_Threading` were only for the spike's elevation readout, and `Win32_UI_Input_KeyboardAndMouse` only for its own Enter hook; the recorder needs neither for D2-D6.
+
+**Results (tasks 1.1-1.5, 2026-11-01, Windows 11, one 4K-class desktop).** 20 queries per case unless stated; times are one `ElementFromHandle` + `FindAll` on an MTA thread.
+
+| Case | Field found | First query | p50 / p95 |
+|---|---|---|---|
+| Chrome 156, test login page | 19/20 | 0 fields, 150 ms | 47 / 93 ms |
+| Edge, test login page | 19/20 | 0 fields, 127 ms | 57 / 127 ms |
+| Brave 1.98 (page already open) | 20/20 | 1 field, 243 ms | 52 / 78 ms |
+| Win32 CredUI dialog (`#32770`) | 20/20 | 1 field, 179 ms | 62 / 78 ms |
+| Same dialog, elevated | 0/20, **no error** | 0 fields, 48 ms | 2 / 23 ms |
+| Desktop, 14 windows, sequential | - | - | 782 / 1049 ms per step |
+
+Not measured: Firefox (not installed), an Electron login screen (Teams signed in). Other Electron/Chromium windows (VS Code, Orca, Aqua Voice) answered in 20-60 ms with no fields; Explorer (`CabinetWClass`) is the slowest common window at about 180 ms.
+
+Watch mode (1.2, 1.3):
+- A Chromium window's first query after it is created or raised often returns 0 fields and is complete: no error, no timeout. The second query 100-500 ms later finds the field. A newly inserted field can first report an empty rectangle (`0,0 0x0`).
+- Enter in the password field: the field is gone at +0 ms after the key event, in every run. Click on the submit button: present at +0 ms, gone at +100 ms. A query after the event therefore never covers a submit; the cached rectangle does.
+- UIA focus-changed events reported the password field with its correct rectangle on every focus, by click and by Tab, including the login form inserted into an existing tab without any window event.
+- Errors seen: `0x80131505` and `0x80040201` on a Chrome window closing during the query; both are ordinary failures and flag.
+
+**Budgets and counts.** Active window mode: 500 ms per step (one to three windows, first queries up to about 400 ms). Monitor mode: 2000 ms per step (at 1000 ms, 2 of 20 steps on a 14-window desktop would be flagged, at 2000 ms none); parallel workers would lower it but are not needed to pass. Buffer slots stay at 6. Abandoned-query cap stays at 2.
+
+**D5 exemptions.** None. Chromium windows are the opposite of exempt (first query empty); Win32 dialogs answered completely on the first query, but one class is too little evidence to exempt anything.
+
+**Pass bar.** Met, provided the two amendments below are adopted: every field in the non-elevated cases is covered by a cached or fresh rectangle, p95 is within budget in both modes, and with a two-query warm-up the only flags on ordinary work are the first step on a newly opened window and failures.
+
+**Amendments (adopted 2026-11-01, folded into D4 and D5 above).**
+- *A1, to D4:* an elevated window returns no fields and no error, so a failed or refused query is not how it shows. A window whose process the recorder cannot open for `PROCESS_QUERY_LIMITED_INFORMATION` with a readable token, or whose token is elevated while the recorder's is not, is treated as not checkable: the step is flagged and no query is run. Needs `Win32_Security` and `Win32_System_Threading` after all, contrary to the feature note above.
+- *A2, to D5:* a window counts as checked only after two completed queries at least 100 ms apart. Warm-ups therefore query twice. A rectangle that is empty or zero-sized counts as a field still being built: the step is flagged.

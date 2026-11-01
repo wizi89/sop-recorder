@@ -212,6 +212,11 @@ When password masking is on, a step SHALL be saved and flagged if any window vis
 - **WHEN** a window appears and is captured before the recorder has checked it once
 - **THEN** the step is flagged
 
+#### Scenario: A window checked only once
+
+- **WHEN** a window has been checked once before the step, and that check found no password field
+- **THEN** the step is flagged, because a first check may run before the window's contents are ready
+
 #### Scenario: An application keeps hanging
 
 - **WHEN** an application's checks keep running past their budget
