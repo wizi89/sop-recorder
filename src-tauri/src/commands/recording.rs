@@ -370,7 +370,16 @@ pub async fn start_recording(
         // `stop_recording` and the generate path wait on, and a queued capture
         // is exactly the kind they must not race past.
         flight.fetch_add(1, Ordering::SeqCst);
+        #[cfg(windows)]
+        let latest = counter_clone.clone();
         std::thread::spawn(move || {
+            // Before the capture: the bar is excluded from captures, and a save
+            // can finish seconds later, out of order with newer clicks. Only the
+            // newest click moves it, or the bar jumps back and forth.
+            #[cfg(windows)]
+            if let Some(click) = click_pos.filter(|_| latest.load(Ordering::SeqCst) == step_num) {
+                crate::commands::window::follow_click(&app, click);
+            }
             // Phase A takes the pixels at once; phase B checks and writes. The
             // buffer slot is released on the way out however the capture ends.
             let saved = permits::two_phase(
@@ -400,11 +409,6 @@ pub async fn start_recording(
                 trigger,
                 &failed,
             );
-            // After the capture, so the bar never moves while pixels are read.
-            #[cfg(windows)]
-            if let Some(click) = click_pos {
-                crate::commands::window::follow_click(&app, click);
-            }
             match outcome {
                 CaptureOutcome::Captured(meta) => {
                     // Written AFTER the PNG so a crash between the two leaves an
