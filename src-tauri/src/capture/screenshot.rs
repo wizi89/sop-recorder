@@ -381,6 +381,21 @@ pub struct HeldStep {
     pub scope: CaptureScope,
     /// Both snapshots merged, for the password check. `None` off Windows.
     pub geometry: Option<Geometry>,
+    /// Just before the pixel read: a window counts as checked only by queries
+    /// that completed before it (amendment A2).
+    pub pixels_at: std::time::Instant,
+}
+
+impl HeldStep {
+    /// The desktop rectangles the saved image shows: the kept window
+    /// rectangles, or the whole image.
+    pub fn shown(&self) -> Vec<Rect> {
+        if self.keep.is_empty() {
+            vec![monitor_rect(&self.screen, &self.img)]
+        } else {
+            self.keep.clone()
+        }
+    }
 }
 
 /// The monitor a `VirtualScreen` was captured from, in desktop units.
@@ -436,6 +451,7 @@ pub fn capture_step(
 ) -> Result<HeldStep, String> {
     let started = std::time::Instant::now();
     let before = super::geometry::snapshot(click_position);
+    let pixels_at = std::time::Instant::now();
     let (img, screen) = capture_active_monitor(click_position)?;
     let after = super::geometry::snapshot(click_position);
     let geometry = before
@@ -492,6 +508,7 @@ pub fn capture_step(
         keep,
         scope,
         geometry,
+        pixels_at,
     })
 }
 

@@ -24,10 +24,10 @@
 
 ## 4. Password check (Windows)
 
-- [ ] 4.1 Pure function for each window's visible part and the visible part of each found field (opaque windows only, design D4); tests for a field behind an opaque window, behind a layered window, behind a cloaked window, behind a window excluded from capture (the recording bar)
-- [ ] 4.2 UIA query workers (MTA) with the per-step budget from 1.5 and the abandoned-query cap (design D6); tests with a mock that hangs: two abandoned, the third step skips and is flagged; elevated or unopenable window processes are not queried and flag the step (amendment A1)
-- [ ] 4.3 Warm-up and cache (design D5): all visible windows at recording start, `SetWinEventHook` for foreground and show events, UIA focus-changed events for `IsPassword` elements; warm-ups through the same capped workers; union of cached and fresh results; a window counts as checked after two completed queries at least 100 ms apart, warm-ups query twice, an empty or zero-sized field rectangle flags (amendment A2); flag on a window not yet checked and on disagreement; tests for each flag rule
-- [ ] 4.4 Translate the visible field rectangles by the crop offset and fill them on the cropped in-memory image (design D3); no unmasked image is written anywhere, including temp files
+- [x] 4.1 Pure function for each window's visible part and the visible part of each found field (opaque windows only, design D4); tests for a field behind an opaque window, behind a layered window, behind a cloaked window, behind a window excluded from capture (the recording bar)
+- [x] 4.2 UIA query workers (MTA) with the per-step budget from 1.5 and the abandoned-query cap (design D6); tests with a mock that hangs: two abandoned, the third step skips and is flagged; elevated or unopenable window processes are not queried and flag the step (amendment A1)
+- [x] 4.3 Warm-up and cache (design D5): all visible windows at recording start, `SetWinEventHook` for foreground and show events, UIA focus-changed events for `IsPassword` elements; warm-ups through the same capped workers; union of cached and fresh results; a window counts as checked after two completed queries at least 100 ms apart, warm-ups query twice, an empty or zero-sized field rectangle flags (amendment A2); flag on a window not yet checked and on disagreement; tests for each flag rule
+- [x] 4.4 Translate the visible field rectangles by the crop offset and fill them on the cropped in-memory image (design D3); no unmasked image is written anywhere, including temp files
 - [x] 4.5 `StepMeta.capture_scope` and `password_check`; missing reads as `unknown`; serialisation round-trip tests
 
 ## 5. Review screen

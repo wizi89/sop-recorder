@@ -11,8 +11,10 @@ use tauri_plugin_store::StoreExt;
 
 use crate::capture::audio::AudioHandle;
 use crate::capture::input_hooks;
+use crate::capture::password_check::{self, Checker};
 use crate::capture::permits::{self, CapturePermits};
 use crate::capture::screenshot;
+use crate::capture::window_area::{self, Rect};
 use crate::commands::settings::{read_capture_settings, CaptureSettings};
 use crate::output::pending;
 use crate::output::step_meta::{self, StepMeta};
@@ -75,6 +77,42 @@ fn note_capture_outcome(
             );
             CaptureOutcome::Failed { total }
         }
+    }
+}
+
+/// Phase B's password check (privacy-capture D4-D6): what to mask, and what
+/// the step's sidecar records. `None` checker means masking is off.
+fn check_step(
+    checker: Option<&Arc<Checker>>,
+    held: &screenshot::HeldStep,
+    step_num: u32,
+) -> (Vec<Rect>, step_meta::PasswordCheck) {
+    let Some(checker) = checker else {
+        return (Vec::new(), step_meta::PasswordCheck::Off);
+    };
+    let Some(geometry) = &held.geometry else {
+        log::warn!("Step {step_num}: password check flagged: no window geometry");
+        return (Vec::new(), step_meta::PasswordCheck::Flagged);
+    };
+    let windows = window_area::visible_windows(geometry, &held.shown());
+    let started = Instant::now();
+    let outcome = checker.check(&windows, held.pixels_at, geometry.foreground_changed);
+    if outcome.flags.is_empty() {
+        log::info!(
+            "Step {step_num}: password check ok, {} window(s), {} field area(s) masked, {} ms",
+            windows.len(),
+            outcome.masks.len(),
+            started.elapsed().as_millis()
+        );
+        (outcome.masks, step_meta::PasswordCheck::Ok)
+    } else {
+        log::warn!(
+            "Step {step_num}: password check flagged, {} field area(s) masked, {} ms: {}",
+            outcome.masks.len(),
+            started.elapsed().as_millis(),
+            outcome.flags.join("; ")
+        );
+        (outcome.masks, step_meta::PasswordCheck::Flagged)
     }
 }
 
@@ -243,6 +281,29 @@ pub async fn start_recording(
     let capture_permits = Arc::new(CapturePermits::default());
     let read_permits = Arc::new(CapturePermits::new(permits::PIXEL_READ_PERMITS));
 
+    // The password check and its warm-up triggers, from the start of the
+    // recording so windows already open are checked before the first step.
+    #[cfg(windows)]
+    let (checker, password_watch) = if capture_settings.mask_passwords {
+        let budget = if capture_settings.monitor_mode {
+            password_check::MONITOR_BUDGET
+        } else {
+            password_check::ACTIVE_WINDOW_BUDGET
+        };
+        let timeout_ms = budget.as_millis() as u32;
+        let checker = Checker::new(
+            Arc::new(crate::capture::uia::UiaQuery { timeout_ms }),
+            budget,
+        );
+        let watch = crate::capture::uia::Watch::start(checker.clone(), timeout_ms);
+        (Some(checker), Some(watch))
+    } else {
+        (None, None)
+    };
+    #[cfg(not(windows))]
+    let (checker, password_watch): (Option<Arc<Checker>>, Option<password_check::Watch>) =
+        (None, None);
+
     // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
 
@@ -267,6 +328,7 @@ pub async fn start_recording(
     let failed_clone = failed_captures.clone();
     let permits_clone = capture_permits.clone();
     let readers_clone = read_permits.clone();
+    let checker_clone = checker.clone();
     let stop_clone = stop_flag.clone();
     let screenshots_dir_clone = screenshots_dir.clone();
     let app_clone = app.clone();
@@ -297,6 +359,7 @@ pub async fn start_recording(
         let failed = failed_clone.clone();
         let permits = permits_clone.clone();
         let readers = readers_clone.clone();
+        let checker = checker_clone.clone();
         // Incremented before the spawn, so the counter covers a capture that is
         // still queued for a permit as well as one already running. That is what
         // `stop_recording` and the generate path wait on, and a queued capture
@@ -312,13 +375,14 @@ pub async fn start_recording(
                 |held| {
                     let held = held?;
                     let capture_scope = held.scope;
-                    // ponytail: no password check until section 4 of
-                    // privacy-capture, so nothing is masked and the record says so.
-                    screenshot::finish_and_save(held, &dir, step_num, click_pos, &[]).map(
+                    // Masks are filled before the PNG is encoded: the only
+                    // screenshot file ever written is the masked one.
+                    let (masks, password_check) = check_step(checker.as_ref(), &held, step_num);
+                    screenshot::finish_and_save(held, &dir, step_num, click_pos, &masks).map(
                         |marker_box| SavedStep {
                             marker_box,
                             capture_scope,
-                            password_check: step_meta::PasswordCheck::Off,
+                            password_check,
                         },
                     )
                 },
@@ -360,6 +424,7 @@ pub async fn start_recording(
         in_flight: Some(in_flight),
         step_counter: Some(step_counter),
         failed_captures: Some(failed_captures),
+        password_watch,
     };
 
     *state
@@ -455,6 +520,10 @@ async fn stop_recording_inner(
         if let Some(hook) = session.input_hook.take() {
             hook.stop();
         }
+
+        // Stops the warm-ups. Steps still in their check finish on their
+        // own: each holds the checker, not the watch.
+        session.password_watch.take();
 
         (
             session.in_flight.take(),
@@ -950,5 +1019,53 @@ mod tests {
         }
 
         assert_eq!(failed.load(Ordering::SeqCst), 16);
+    }
+
+    /// The real password check on the real desktop, end to end:
+    /// `SPIKE_OUT=<dir> cargo test --lib live_password_check -- --ignored --nocapture`
+    /// with a login page open, then look at the PNG.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn live_password_check() {
+        // What main.rs does: without it UIA reports scaled rectangles while DWM
+        // reports physical ones, and every mask lands in the wrong place.
+        unsafe {
+            let _ = windows::Win32::UI::HiDpi::SetProcessDpiAwareness(
+                windows::Win32::UI::HiDpi::PROCESS_PER_MONITOR_DPI_AWARE,
+            );
+        }
+        let dir = PathBuf::from(std::env::var("SPIKE_OUT").expect("SPIKE_OUT"));
+        let budget = password_check::MONITOR_BUDGET;
+        let checker = Checker::new(
+            Arc::new(crate::capture::uia::UiaQuery {
+                timeout_ms: budget.as_millis() as u32,
+            }),
+            budget,
+        );
+        let _watch = crate::capture::uia::Watch::start(checker.clone(), budget.as_millis() as u32);
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        for (hwnd, completions, fields) in checker.debug_cache() {
+            println!("cache {hwnd:#x}: {completions} completion(s), fields {fields:?}");
+        }
+
+        let held = screenshot::capture_step(1, None, true).unwrap();
+        let geometry = held.geometry.as_ref().unwrap();
+        let windows = window_area::visible_windows(geometry, &held.shown());
+        for (hwnd, parts) in &windows {
+            let class = geometry.snapshots[0]
+                .get(*hwnd)
+                .map(|w| w.class.clone())
+                .unwrap_or_default();
+            println!("visible {hwnd:#x} {class} {} part(s)", parts.len());
+        }
+        let outcome = checker.check(&windows, held.pixels_at, geometry.foreground_changed);
+        println!(
+            "flags {:#?}
+masks {:?}",
+            outcome.flags, outcome.masks
+        );
+        let masks = outcome.masks;
+        screenshot::finish_and_save(held, &dir, 1, None, &masks).unwrap();
     }
 }
