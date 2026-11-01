@@ -33,6 +33,11 @@ pub enum QueryResult {
     /// The window is not queried at all (A1): an elevated process answers with
     /// no fields and no error, which would read as "checked, nothing there".
     NotCheckable(&'static str),
+    /// The window closed after the pixels were read, so nothing in it can have
+    /// changed since: what was cached stands, and a window that was never
+    /// checked is flagged as such already (8.1 run: closed windows flagged
+    /// two steps in five on a real desktop).
+    Gone,
 }
 
 /// One blocking query of one top-level window.
@@ -234,6 +239,7 @@ impl Checker {
                     Ok((hwnd, QueryResult::Failed(e))) => {
                         flags.push(format!("window {hwnd:#x} could not be checked: {e}"));
                     }
+                    Ok((_, QueryResult::Gone)) => {}
                     Ok((hwnd, QueryResult::NotCheckable(why))) => {
                         flags.push(format!("window {hwnd:#x} is not checked: {why}"));
                     }
@@ -452,6 +458,26 @@ mod tests {
         warmed(&c, W, vec![]);
         let out = c.check(&one_window(), Instant::now(), false);
         assert!(out.flags.iter().any(|f| f.contains("administrator")));
+    }
+
+    #[test]
+    fn a_window_closed_after_the_read_keeps_its_cached_fields_unflagged() {
+        let c = checker(|_| QueryResult::Gone);
+        warmed(&c, W, vec![FIELD]);
+        let out = c.check(&one_window(), Instant::now(), false);
+        assert_eq!(out.flags, Vec::<String>::new());
+        assert_eq!(out.masks, vec![FIELD]);
+    }
+
+    #[test]
+    fn a_window_closed_before_it_was_ever_checked_is_flagged() {
+        let c = checker(|_| QueryResult::Gone);
+        let out = c.check(&one_window(), Instant::now(), false);
+        assert!(
+            out.flags.iter().any(|f| f.contains("not been checked")),
+            "{:?}",
+            out.flags
+        );
     }
 
     #[test]

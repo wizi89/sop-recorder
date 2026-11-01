@@ -166,6 +166,7 @@ impl FieldQuery for UiaQuery {
                 QueryResult::Fields(f) => format!("{} field(s)", f.len()),
                 QueryResult::Failed(e) => format!("failed, {e}"),
                 QueryResult::NotCheckable(why) => format!("not checkable, {why}"),
+                QueryResult::Gone => "closed".to_string(),
             }
         );
         result
@@ -174,6 +175,9 @@ impl FieldQuery for UiaQuery {
 
 impl UiaQuery {
     fn query_uncounted(&self, hwnd: isize) -> QueryResult {
+        if !unsafe { IsWindow(HWND(hwnd as *mut _)) }.as_bool() {
+            return QueryResult::Gone;
+        }
         if let Some(why) = not_checkable(hwnd) {
             return QueryResult::NotCheckable(why);
         }

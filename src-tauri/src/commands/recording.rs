@@ -96,7 +96,10 @@ fn check_step(
     };
     let windows = window_area::visible_windows(geometry, &held.shown());
     let started = Instant::now();
+    // A foreground change matters only where it picks the area: the active
+    // window mode, unless the area is the taskbar alone (8.1 run).
     let foreground_changed = geometry.foreground_changed
+        && held.scope == step_meta::CaptureScope::Window
         && !window_area::shell_only(&geometry.snapshots[0], &held.shown());
     let outcome = checker.check(&windows, held.pixels_at, foreground_changed);
     if outcome.flags.is_empty() {
