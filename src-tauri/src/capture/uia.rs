@@ -152,6 +152,28 @@ pub struct UiaQuery {
 
 impl FieldQuery for UiaQuery {
     fn query(&self, hwnd: isize) -> QueryResult {
+        // ponytail: one line per query, warm-ups included, to set the step
+        // budget from real desktops (8.1). Down to debug once it is set.
+        let started = std::time::Instant::now();
+        let result = self.query_uncounted(hwnd);
+        let mut class = [0u16; 64];
+        let len = unsafe { GetClassNameW(HWND(hwnd as *mut _), &mut class) } as usize;
+        log::info!(
+            "Password check: window {hwnd:#x} ({}) answered in {} ms: {}",
+            String::from_utf16_lossy(&class[..len]),
+            started.elapsed().as_millis(),
+            match &result {
+                QueryResult::Fields(f) => format!("{} field(s)", f.len()),
+                QueryResult::Failed(e) => format!("failed, {e}"),
+                QueryResult::NotCheckable(why) => format!("not checkable, {why}"),
+            }
+        );
+        result
+    }
+}
+
+impl UiaQuery {
+    fn query_uncounted(&self, hwnd: isize) -> QueryResult {
         if let Some(why) = not_checkable(hwnd) {
             return QueryResult::NotCheckable(why);
         }

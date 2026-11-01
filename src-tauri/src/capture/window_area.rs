@@ -161,7 +161,9 @@ fn visible_in(snapshot: &Snapshot, shown: &[Rect]) -> Vec<(isize, Vec<Rect>)> {
         for above in snapshot.windows[..i].iter().filter(|a| hides(a)) {
             parts = parts.iter().flat_map(|p| p.subtract(&above.rect)).collect();
         }
-        if !parts.is_empty() {
+        // A `#32768` menu still hides what is below it, but holds no input
+        // field, and is usually closed by the click before the check runs.
+        if !parts.is_empty() && w.class != "#32768" {
             out.push((w.hwnd, parts));
         }
     }
@@ -634,6 +636,26 @@ mod tests {
     #[test]
     fn a_field_behind_an_opaque_window_is_not_masked() {
         assert_eq!(field_behind(cover()), vec![]);
+    }
+
+    /// Found in the 8.1 run: a context menu closed by the click had no
+    /// process left to ask, which flagged the step for nothing.
+    #[test]
+    fn a_menu_is_not_checked_but_still_hides_what_is_below() {
+        let menu = window(MENU, Rect::new(250, 250, 600, 400), "#32768", 20);
+        let login = window(
+            BROWSER,
+            Rect::new(100, 100, 900, 700),
+            "Chrome_WidgetWin_1",
+            20,
+        );
+        let s = snapshot(BROWSER, Some(MENU), vec![menu, login]);
+        let visible = visible_windows(&merge(&s, &s), &[MONITOR]);
+        assert_eq!(hwnds(&visible), vec![BROWSER]);
+        let fields = visible_fields(&[Rect::new(300, 300, 500, 330)], &visible[0].1);
+        assert!(fields
+            .iter()
+            .all(|f| f.intersect(&Rect::new(250, 250, 600, 400)).is_none()));
     }
 
     #[test]
