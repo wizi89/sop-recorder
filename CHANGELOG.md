@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - On Windows, a screenshot now shows only the window you clicked in, together with its dialogs and menus, instead of the whole screen. The taskbar, notifications and other windows are no longer captured.
-- To go back to the old behaviour, open "Einstellungen" → "Datenschutz bei der Aufnahme" and choose "Ganzer Bildschirm". Untick "Passwortfelder schwärzen" to stop the blacking out.
+- To go back to the old behaviour, open "Einstellungen", set "Aufnahmebereich" to "Ganzer Bildschirm". Switch off "Passwortfelder schwärzen" to stop the blacking out.
 - On macOS nothing changes yet: the whole screen is captured and passwords are not blacked out.
 
 ## [0.20.1] - 2026-10-25

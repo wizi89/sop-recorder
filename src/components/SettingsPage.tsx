@@ -208,64 +208,65 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           </button>
         </div>
 
-        {/* Capture privacy (privacy-capture D8, D10). Applies from the next
-            recording: the running one keeps what it started with. */}
-        <fieldset className="flex flex-col gap-2" disabled={!loaded}>
-          <legend className="label-sm mb-2">{t("settings.capture_privacy")}</legend>
-          {!IS_MAC && (
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="radio"
-                name="capture-mode"
-                checked={settings.capture_mode !== "monitor"}
-                onChange={() => setSettings((s) => ({ ...s, capture_mode: "active_window" }))}
-              />
-              <span>
-                {t("settings.capture_active_window")}
-                <span className="block text-on-surface-variant" style={{ fontSize: "0.625rem" }}>
-                  {t("settings.capture_active_window_hint")}
-                </span>
-              </span>
-            </label>
-          )}
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="radio"
-              name="capture-mode"
-              checked={IS_MAC || settings.capture_mode === "monitor"}
-              onChange={() => setSettings((s) => ({ ...s, capture_mode: "monitor" }))}
-            />
-            <span>
-              {t("settings.capture_monitor")}
-              <span className="block text-on-surface-variant" style={{ fontSize: "0.625rem" }}>
-                {t("settings.capture_monitor_warning")}
-              </span>
-            </span>
+        {/* Capture area and password masking (privacy-capture D8, D10). Apply
+            from the next recording: the running one keeps what it started with. */}
+        <div className="flex items-center justify-between">
+          <label className="label-sm" htmlFor="capture-mode">
+            {t("settings.capture_privacy")}
           </label>
-          {IS_MAC ? (
-            <p className="text-on-surface-variant leading-snug" style={{ fontSize: "0.625rem" }}>
-              {t("settings.capture_mac_note")}
-            </p>
-          ) : (
-            <>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={settings.mask_passwords}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, mask_passwords: e.target.checked }))
-                  }
-                />
-                {t("settings.mask_passwords")}
-              </label>
-              {!settings.mask_passwords && (
-                <p className="text-on-surface-variant leading-snug" style={{ fontSize: "0.625rem" }}>
-                  {t("settings.mask_passwords_off")}
-                </p>
-              )}
-            </>
-          )}
-        </fieldset>
+          <select
+            id="capture-mode"
+            value={IS_MAC ? "monitor" : settings.capture_mode}
+            disabled={!loaded || IS_MAC}
+            onChange={(e) => setSettings((s) => ({ ...s, capture_mode: e.target.value as AppSettings["capture_mode"] }))}
+            className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
+          >
+            {!IS_MAC && (
+              <option value="active_window">{t("settings.capture_active_window")}</option>
+            )}
+            <option value="monitor">{t("settings.capture_monitor")}</option>
+          </select>
+        </div>
+        <p
+          className="text-on-surface-variant leading-snug"
+          style={{ fontSize: "0.625rem", marginTop: "-0.75rem" }}
+        >
+          {IS_MAC
+            ? t("settings.capture_mac_note")
+            : settings.capture_mode === "monitor"
+              ? t("settings.capture_monitor_warning")
+              : t("settings.capture_active_window_hint")}
+        </p>
+
+        {!IS_MAC && (
+          <div className="flex items-center justify-between">
+            <label className="label-sm">{t("settings.mask_passwords")}</label>
+            <button
+              className="switch-track"
+              role="switch"
+              aria-checked={settings.mask_passwords}
+              aria-label={t("settings.mask_passwords")}
+              data-checked={settings.mask_passwords}
+              disabled={!loaded}
+              onClick={() =>
+                setSettings((s) => ({ ...s, mask_passwords: !s.mask_passwords }))
+              }
+            >
+              <span
+                className="switch-thumb"
+                style={{ left: settings.mask_passwords ? 21 : 3 }}
+              />
+            </button>
+          </div>
+        )}
+        {!IS_MAC && !settings.mask_passwords && (
+          <p
+            className="text-on-surface-variant leading-snug"
+            style={{ fontSize: "0.625rem", marginTop: "-0.75rem" }}
+          >
+            {t("settings.mask_passwords_off")}
+          </p>
+        )}
 
         {/* Skip PII check */}
         <div className="flex items-center justify-between">

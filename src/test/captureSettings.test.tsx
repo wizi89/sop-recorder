@@ -40,23 +40,25 @@ const WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/130.0";
 const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
 
 describe("capture privacy settings", () => {
-  it("offers both modes on Windows with the monitor warning", async () => {
+  it("offers both areas on Windows, active window first, with what it captures", async () => {
     await renderOn(WINDOWS);
-    expect(screen.getByLabelText(/Nur das aktive Fenster/)).toBeChecked();
-    expect(screen.getByLabelText(/Ganzer Bildschirm/)).not.toBeChecked();
-    expect(
-      screen.getByText(/Taskleiste, Benachrichtigungen und alle sichtbaren Fenster/),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("Passwortfelder schwärzen")).toBeChecked();
+    const area = screen.getByLabelText("Aufnahmebereich") as HTMLSelectElement;
+    expect(area.value).toBe("active_window");
+    expect([...area.options].map((o) => o.text)).toEqual(["Aktives Fenster", "Ganzer Bildschirm"]);
+    expect(screen.getByText(/Gespeichert wird das Fenster, in dem geklickt wird/)).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Passwortfelder schwärzen" })).toBeChecked();
     expect(screen.queryByText("Passwortfelder werden mit aufgenommen.")).not.toBeInTheDocument();
   });
 
-  it("says plainly that password fields are captured when masking is off, and saves both", async () => {
+  it("warns about the monitor, says plainly that password fields are captured when masking is off, and saves both", async () => {
     await renderOn(WINDOWS);
     const user = userEvent.setup();
-    await user.click(screen.getByLabelText("Passwortfelder schwärzen"));
+    await user.click(screen.getByRole("switch", { name: "Passwortfelder schwärzen" }));
     expect(screen.getByText("Passwortfelder werden mit aufgenommen.")).toBeInTheDocument();
-    await user.click(screen.getByLabelText(/Ganzer Bildschirm/));
+    await user.selectOptions(screen.getByLabelText("Aufnahmebereich"), "monitor");
+    expect(
+      screen.getByText(/Taskleiste, Benachrichtigungen und alle sichtbaren Fenster/),
+    ).toBeInTheDocument();
     await user.click(screen.getByText("Speichern"));
 
     const save = vi.mocked(invoke).mock.calls.find(([cmd]) => cmd === "save_settings");
@@ -67,9 +69,10 @@ describe("capture privacy settings", () => {
 
   it("offers only the monitor and no masking on macOS, with a note", async () => {
     await renderOn(MAC);
-    expect(screen.queryByLabelText(/Nur das aktive Fenster/)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/Ganzer Bildschirm/)).toBeChecked();
-    expect(screen.queryByLabelText("Passwortfelder schwärzen")).not.toBeInTheDocument();
+    const area = screen.getByLabelText("Aufnahmebereich") as HTMLSelectElement;
+    expect([...area.options].map((o) => o.value)).toEqual(["monitor"]);
+    expect(area).toBeDisabled();
+    expect(screen.queryByRole("switch", { name: "Passwortfelder schwärzen" })).not.toBeInTheDocument();
     expect(screen.getByText(/folgen später/)).toBeInTheDocument();
   });
 });

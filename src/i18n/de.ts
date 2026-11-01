@@ -114,8 +114,8 @@ const de = {
   "settings.beta_updates": "Beta-Versionen erhalten",
   "settings.beta_updates_leaving":
     "Sie bleiben auf {version}, bis {stable} erscheint – ein Update setzt immer eine höhere Version voraus.",
-  "settings.capture_privacy": "Datenschutz bei der Aufnahme",
-  "settings.capture_active_window": "Nur das aktive Fenster",
+  "settings.capture_privacy": "Aufnahmebereich",
+  "settings.capture_active_window": "Aktives Fenster",
   "settings.capture_active_window_hint":
     "Gespeichert wird das Fenster, in dem geklickt wird, bei Dialogen zusammen mit dem zugehörigen Hauptfenster.",
   "settings.capture_monitor": "Ganzer Bildschirm",
