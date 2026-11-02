@@ -14,11 +14,11 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 **Symptom:** on CI only the first test of the run fails, 30 s after launch, before any UI
 step; the other six launch the same exe and pass. A rerun of the job passes.
 
-**Cause:** not established. It looks like the first WebView2 start on a fresh runner being
-slower than the launch timeout. The code under test had not changed its startup.
+**Cause:** the CI runners' first WebView2 start got slow. The same `main` commit took 6 to
+12 s for its first test on 2026-10-31 and 35.6 s when rerun on 2026-11-02. The wait was 30 s.
 
-**Rule:** rerun the job once before diagnosing. If it fails twice, look at `e2e/app.ts`'s
-launch timeout and the app's startup, not the test.
+**Rule:** `e2e/app.ts` waits 60 s for the DevTools port, and the test timeout is 90 s. If the
+first test fails here again, rerun `main`'s last green e2e job before blaming the branch.
 
 ---
 

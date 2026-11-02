@@ -7,6 +7,6 @@ export default defineConfig({
   testMatch: "*.e2e.ts",
   // One app at a time: they share the debug build's keyring entries.
   workers: 1,
-  timeout: 60_000,
+  timeout: 90_000,
   reporter: [["list"]],
 });
