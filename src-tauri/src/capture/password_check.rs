@@ -548,15 +548,15 @@ mod tests {
         assert_eq!(out.masks, vec![FIELD]);
     }
 
-    /// 8.1 run: windows are queried side by side, so three windows that each
-    /// take most of the budget fit into it together.
+    /// 8.1 run: windows are queried side by side, so four windows that would
+    /// take 160% of the budget one after another fit into it together.
     #[test]
     fn windows_are_checked_side_by_side_within_one_budget() {
         let c = checker(|_| {
-            std::thread::sleep(BUDGET * 6 / 10);
+            std::thread::sleep(BUDGET * 4 / 10);
             QueryResult::Fields(vec![])
         });
-        let windows: Vec<_> = (1..=3).map(|h| (h, vec![WHOLE])).collect();
+        let windows: Vec<_> = (1..=4).map(|h| (h, vec![WHOLE])).collect();
         for (h, _) in &windows {
             warmed(&c, *h, vec![]);
         }
