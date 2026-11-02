@@ -9,6 +9,19 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-11-02 The first e2e test failed with "never opened its DevTools port (9333)"
+
+**Symptom:** on CI only the first test of the run fails, 30 s after launch, before any UI
+step; the other six launch the same exe and pass. A rerun of the job passes.
+
+**Cause:** not established. It looks like the first WebView2 start on a fresh runner being
+slower than the launch timeout. The code under test had not changed its startup.
+
+**Rule:** rerun the job once before diagnosing. If it fails twice, look at `e2e/app.ts`'s
+launch timeout and the app's startup, not the test.
+
+---
+
 ## 2026-10-24 The UI shows the main window by itself once, after mount
 
 **Symptom:** an e2e test hid the main window and it was visible again a moment later. Passed
