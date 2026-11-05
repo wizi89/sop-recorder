@@ -16,9 +16,18 @@ use super::window_area::{visible_fields, Rect};
 pub const ACTIVE_WINDOW_BUDGET: Duration = Duration::from_millis(500);
 /// Per-step budget in monitor mode: a 14-window desktop took up to 1.75 s.
 pub const MONITOR_BUDGET: Duration = Duration::from_millis(2000);
-/// Queries past their budget that may still be running before steps skip the
-/// check (D6): a hung app costs at most this many threads.
+/// Queries past their deadline that may still be running before steps skip the
+/// check and warm-ups stop (D6). A step never queries a window whose earlier
+/// query is past its deadline, so the threads stuck in a hung window stop
+/// growing once its first query is overdue, and once this many are stuck
+/// nothing new is started.
 pub const ABANDONED_CAP: usize = 2;
+/// How long a warm-up query may run before it counts as abandoned. Longer than
+/// a step's budget: at recording start every visible window is warmed up at
+/// once on one UIA client, and a 14-window pass took up to 1.75 s in the
+/// spike. Under the step budget, ordinary slow warm-ups counted as hanging
+/// and the first steps skipped their check (review of #26).
+pub const WARM_UP_DEADLINE: Duration = Duration::from_secs(5);
 /// A window counts as checked after two completed queries this far apart
 /// (A2): Chromium's first query on a new window is complete but empty.
 pub const WARM_UP_GAP: Duration = Duration::from_millis(100);
@@ -169,14 +178,25 @@ impl Checker {
             .count()
     }
 
+    /// A query of this window is still running past its deadline: the window
+    /// is not answering, and another query would only be stuck beside it.
+    fn hung(&self, hwnd: isize) -> bool {
+        let now = Instant::now();
+        self.running
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .any(|(_, h, deadline)| *h == hwnd && *deadline < now)
+    }
+
     /// One query, registered while it runs and recorded in the cache when it
-    /// completes with fields.
-    fn run_query(&self, hwnd: isize) -> QueryResult {
+    /// completes with fields. It counts as abandoned once `allowed` has passed.
+    fn run_query(&self, hwnd: isize, allowed: Duration) -> QueryResult {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
         self.running
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .push((id, hwnd, Instant::now() + self.budget));
+            .push((id, hwnd, Instant::now() + allowed));
         let result = self.query.query(hwnd);
         self.running
             .lock()
@@ -211,9 +231,9 @@ impl Checker {
         }
         let checker = self.clone();
         std::thread::spawn(move || {
-            if let QueryResult::Fields(_) = checker.run_query(hwnd) {
+            if let QueryResult::Fields(_) = checker.run_query(hwnd, WARM_UP_DEADLINE) {
                 std::thread::sleep(WARM_UP_GAP);
-                checker.run_query(hwnd);
+                checker.run_query(hwnd, WARM_UP_DEADLINE);
             }
         });
     }
@@ -275,15 +295,23 @@ impl Checker {
             // rather than the sum: in the 8.1 run two Chrome windows at ~400 ms
             // each ran a step past 500 ms one after the other.
             let (tx, rx) = mpsc::channel();
+            let mut asked = 0;
             for (hwnd, _) in windows {
-                let (tx, checker, hwnd) = (tx.clone(), self.clone(), *hwnd);
+                if self.hung(*hwnd) {
+                    flags.push(format!(
+                        "window {hwnd:#x} is not answering an earlier check; this step did not check it"
+                    ));
+                    continue;
+                }
+                let (tx, checker, hwnd, budget) = (tx.clone(), self.clone(), *hwnd, self.budget);
                 std::thread::spawn(move || {
-                    let _ = tx.send((hwnd, checker.run_query(hwnd)));
+                    let _ = tx.send((hwnd, checker.run_query(hwnd, budget)));
                 });
+                asked += 1;
             }
 
             let deadline = Instant::now() + self.budget;
-            for _ in windows {
+            for _ in 0..asked {
                 match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
                     Ok((hwnd, QueryResult::Fields(found))) => {
                         if found.iter().any(Rect::is_empty) {
@@ -626,8 +654,9 @@ mod tests {
         assert_eq!(out.masks, vec![Rect::new(300, 300, 400, 330)]);
     }
 
-    /// D6, task 4.2: a hanging app. Two steps run out of budget and leave
-    /// their queries running; the third skips the check and is flagged.
+    /// D6, task 4.2: a hanging app. Two steps each run out of budget on a
+    /// different hung window and leave their queries running; the third skips
+    /// the check and is flagged.
     #[test]
     fn after_two_abandoned_queries_the_next_step_skips_the_check() {
         let calls = Arc::new(AtomicUsize::new(0));
@@ -637,11 +666,13 @@ mod tests {
             std::thread::sleep(Duration::from_secs(2));
             QueryResult::Fields(vec![])
         });
-        warmed(&c, W, vec![FIELD]);
+        for h in 1..=3 {
+            warmed(&c, h, vec![FIELD]);
+        }
 
         for step in 1..=2 {
             let started = Instant::now();
-            let out = c.check(&one_window(), Instant::now(), false);
+            let out = c.check(&[(step, vec![WHOLE])], Instant::now(), false);
             assert!(
                 started.elapsed() < BUDGET * 3,
                 "step {step} waited past its budget"
@@ -657,7 +688,7 @@ mod tests {
         std::thread::sleep(BUDGET);
         assert_eq!(c.abandoned(), 2);
 
-        let out = c.check(&one_window(), Instant::now(), false);
+        let out = c.check(&[(3, vec![WHOLE])], Instant::now(), false);
         assert_eq!(
             calls.load(Ordering::SeqCst),
             2,
@@ -665,6 +696,71 @@ mod tests {
         );
         assert!(out.flags.iter().any(|f| f.contains("still hanging")));
         assert_eq!(out.masks, vec![FIELD]);
+    }
+
+    /// Review of #26: a slow warm-up is not a hung app. Two warm-ups running
+    /// past the step budget, but within their own deadline, leave the next
+    /// step's check in place.
+    #[test]
+    fn slow_warm_ups_do_not_make_a_step_skip_its_check() {
+        let c = checker(|h| {
+            if h != W {
+                std::thread::sleep(BUDGET * 4);
+            }
+            QueryResult::Fields(vec![])
+        });
+        warmed(&c, W, vec![]);
+        c.warm_up(1);
+        c.warm_up(2);
+        std::thread::sleep(BUDGET * 2);
+        assert_eq!(c.abandoned(), 0);
+        let out = c.check(&one_window(), Instant::now(), false);
+        assert_eq!(out.flags, Vec::<String>::new());
+    }
+
+    /// Review of #26: a window whose earlier query is stuck is not queried
+    /// again, so steps over a hung app do not pile up threads in it.
+    #[test]
+    fn a_window_with_a_stuck_query_is_not_queried_again() {
+        const HUNG: isize = 0x20;
+        let calls = Arc::new(AtomicUsize::new(0));
+        let counted = calls.clone();
+        let c = checker(move |h| {
+            if h == HUNG {
+                counted.fetch_add(1, Ordering::SeqCst);
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            QueryResult::Fields(vec![])
+        });
+        warmed(&c, W, vec![]);
+        warmed(&c, HUNG, vec![FIELD]);
+        let windows = vec![(W, vec![WHOLE]), (HUNG, vec![WHOLE])];
+
+        let first = c.check(&windows, Instant::now(), false);
+        assert!(
+            first.flags.iter().any(|f| f.contains("budget")),
+            "{:?}",
+            first.flags
+        );
+        std::thread::sleep(BUDGET);
+
+        let second = c.check(&windows, Instant::now(), false);
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "the hung window must not be asked again"
+        );
+        assert!(
+            second.flags.iter().any(|f| f.contains("not answering")),
+            "{:?}",
+            second.flags
+        );
+        assert!(
+            !second.flags.iter().any(|f| f.contains("budget")),
+            "the healthy window answered in time: {:?}",
+            second.flags
+        );
+        assert_eq!(second.masks, vec![FIELD], "cached fields still masked");
     }
 
     /// 8.1 run: windows are queried side by side, so four windows that would
@@ -693,9 +789,10 @@ mod tests {
             std::thread::sleep(Duration::from_secs(2));
             QueryResult::Fields(vec![])
         });
-        c.warm_up(1);
-        c.warm_up(2);
-        std::thread::sleep(BUDGET * 2);
+        c.check(&[(1, vec![WHOLE])], Instant::now(), false);
+        c.check(&[(2, vec![WHOLE])], Instant::now(), false);
+        std::thread::sleep(BUDGET);
+        assert_eq!(c.abandoned(), 2);
         c.warm_up(3);
         std::thread::sleep(Duration::from_millis(50));
         assert_eq!(calls.load(Ordering::SeqCst), 2);
