@@ -442,6 +442,17 @@ fn crop_to(
     ))
 }
 
+/// Pixels of the largest monitor, for sizing the buffer slots. In xcap's
+/// units, which are points on macOS; masking is off there, so the count is
+/// not used.
+pub fn largest_monitor_pixels() -> Option<u64> {
+    Monitor::all()
+        .ok()?
+        .iter()
+        .filter_map(|m| Some(u64::from(m.width().ok()?) * u64::from(m.height().ok()?)))
+        .max()
+}
+
 /// Phase A: geometry snapshot, pixel read, second snapshot, crop (D2, D3).
 /// No UIA work, so it is as quick as the pixel read.
 pub fn capture_step(

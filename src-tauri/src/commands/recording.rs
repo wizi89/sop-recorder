@@ -283,7 +283,12 @@ pub async fn start_recording(
     // Buffer slots bound how many screenshots are resident at once; read
     // permits serialise the monitor reads (privacy-capture D3). Per recording
     // rather than global: nothing captures between recordings.
-    let capture_permits = Arc::new(CapturePermits::default());
+    let slots = permits::buffer_slots(
+        capture_settings.mask_passwords,
+        screenshot::largest_monitor_pixels(),
+    );
+    log::info!("Recording holds at most {slots} screenshot(s) in memory at once");
+    let capture_permits = Arc::new(CapturePermits::new(slots));
     let read_permits = Arc::new(CapturePermits::new(permits::PIXEL_READ_PERMITS));
 
     // The password check and its warm-up triggers, from the start of the

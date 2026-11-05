@@ -26,12 +26,37 @@ use std::time::{Duration, Instant};
 /// from before a step's pixels are read until its PNG is written
 /// (privacy-capture D3).
 ///
-/// Six rather than the two this used to be, because a step now spends most of
-/// its life in the password check after its pixels are taken, and a slow check
-/// must not hold up the next click's pixels. Still a fixed bound: the unbounded
-/// buffers of a burst are what the pool was introduced for. In active window
-/// mode a held buffer is the cropped area, not the monitor.
+/// Up to six rather than the two this used to be, because with masking on a
+/// step spends most of its life in the password check after its pixels are
+/// taken, and a slow check must not hold up the next click's pixels. Still a
+/// bound: the unbounded buffers of a burst are what the pool was introduced
+/// for. `buffer_slots` picks the count per recording.
 pub const DEFAULT_CAPTURE_PERMITS: usize = 6;
+
+/// The slot count without masking: no check runs after the read, so a step
+/// holds its buffer only while it encodes, as before the password check.
+pub const UNMASKED_CAPTURE_PERMITS: usize = 2;
+
+/// What the held buffers may add up to. A held buffer is at most one monitor
+/// of RGBA pixels (the active window area is a crop of it), so on a 4K
+/// display (about 33 MB each) six slots would hold about 200 MB during a burst
+/// of clicks; this bounds it to about 100 MB (review of #26).
+const HELD_BYTES_BUDGET: u64 = 100 * 1024 * 1024;
+
+/// Buffer slots for one recording: two without masking; with masking as many
+/// full-monitor buffers as fit `HELD_BYTES_BUDGET` for the largest monitor,
+/// between two and six. Six on a 1080p or 1440p display, three on 4K.
+pub fn buffer_slots(mask_passwords: bool, largest_monitor_pixels: Option<u64>) -> usize {
+    if !mask_passwords {
+        return UNMASKED_CAPTURE_PERMITS;
+    }
+    match largest_monitor_pixels.filter(|px| *px > 0) {
+        Some(px) => usize::try_from(HELD_BYTES_BUDGET / (px * 4))
+            .unwrap_or(DEFAULT_CAPTURE_PERMITS)
+            .clamp(UNMASKED_CAPTURE_PERMITS, DEFAULT_CAPTURE_PERMITS),
+        None => UNMASKED_CAPTURE_PERMITS,
+    }
+}
 
 /// How many monitor pixel reads may run at once. Two, as the whole capture was
 /// before D3: the read is the expensive moment for memory, and two pipeline.
@@ -131,6 +156,28 @@ impl Drop for CapturePermit<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn buffer_slots_fit_the_memory_budget() {
+        assert_eq!(
+            buffer_slots(false, Some(3840 * 2160)),
+            UNMASKED_CAPTURE_PERMITS
+        );
+        assert_eq!(
+            buffer_slots(true, Some(1920 * 1080)),
+            DEFAULT_CAPTURE_PERMITS
+        );
+        assert_eq!(
+            buffer_slots(true, Some(2560 * 1440)),
+            DEFAULT_CAPTURE_PERMITS
+        );
+        assert_eq!(buffer_slots(true, Some(3840 * 2160)), 3);
+        assert_eq!(
+            buffer_slots(true, Some(7680 * 4320)),
+            UNMASKED_CAPTURE_PERMITS
+        );
+        assert_eq!(buffer_slots(true, None), UNMASKED_CAPTURE_PERMITS);
+    }
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
