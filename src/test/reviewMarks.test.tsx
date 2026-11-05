@@ -5,12 +5,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { ReviewScreen } from "../components/ReviewScreen";
 
 const PATHS = ["/tmp/step_01.png", "/tmp/step_02.png", "/tmp/step_03.png"];
-let records: unknown[];
+let records: unknown[] | "fail";
 
 beforeEach(() => {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
     if (cmd === "list_session_screenshots") return PATHS;
-    if (cmd === "list_capture_records") return records;
+    if (cmd === "list_capture_records") {
+      if (records === "fail") throw new Error("sidecars unreadable");
+      return records;
+    }
     if (cmd === "read_screenshot_bytes") return [1, 2, 3];
     if (cmd === "get_pipelines") return [];
     return;
@@ -53,6 +56,13 @@ describe("review marks", () => {
     expect(screen.queryByText("Prüfen")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Ich habe die markierten Schritte geprüft")).not.toBeInTheDocument();
     expect(generate()).toBeEnabled();
+  });
+
+  it("lists the folder and marks every step when the records cannot be read", async () => {
+    records = "fail";
+    await renderReview();
+    expect(screen.getAllByText("Prüfen")).toHaveLength(3);
+    expect(generate()).toBeDisabled();
   });
 
   it("marks every step of a legacy recording", async () => {

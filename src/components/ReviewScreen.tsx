@@ -88,19 +88,26 @@ export function ReviewScreen({
 
     (async () => {
       try {
-        const [paths, records] = await Promise.all([
-          listSessionScreenshots(outputDir),
-          // A failed read marks every step: no record is never read as safe.
-          listCaptureRecords(outputDir).catch((): StepCaptureRecord[] => []),
-        ]);
+        // The records list every screenshot, so they are also the list of
+        // paths. Only if they cannot be read is the folder listed on its own,
+        // and then every step is marked: no record is never read as safe.
+        let shots: Array<{ path: string; record?: StepCaptureRecord }>;
+        try {
+          shots = (await listCaptureRecords(outputDir)).map((record) => ({
+            path: record.path,
+            record,
+          }));
+        } catch {
+          shots = (await listSessionScreenshots(outputDir)).map((path) => ({ path }));
+        }
         // Read each file's bytes and wrap in a Blob URL for display.
         const entries = await Promise.all(
-          paths.map(async (p) => {
-            const bytes = await readScreenshotBytes(p);
+          shots.map(async ({ path, record }) => {
+            const bytes = await readScreenshotBytes(path);
             const blob = new Blob([bytes], { type: "image/png" });
             const url = URL.createObjectURL(blob);
             createdUrls.push(url);
-            return { path: p, url, marked: needsReview(records.find((r) => r.path === p)) };
+            return { path, url, marked: needsReview(record) };
           }),
         );
         if (cancelled) {

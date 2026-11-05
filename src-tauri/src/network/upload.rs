@@ -7,10 +7,17 @@ use crate::output::step_meta::{self, CaptureScope, PasswordCheck, StepMeta};
 const UPLOAD_TIMEOUT_SECS: u64 = 300;
 
 /// How the uploaded screenshots were protected, counted per value
-/// (privacy-capture D9). Read from the sidecars next to the PNGs at upload
-/// time, never from settings, so a regenerated or legacy folder reports what
-/// its files say; a screenshot without a sidecar counts as `unknown`.
-fn capture_counts(screenshot_paths: &[(u32, &Path)]) -> (serde_json::Value, serde_json::Value) {
+/// (privacy-capture D9). Taken from the sidecars next to the PNGs, never from
+/// settings, so a regenerated or legacy folder reports what its files say; a
+/// screenshot without a sidecar counts as `unknown`.
+///
+/// `steps` are those sidecars, already read by the caller, when they pair one
+/// to one with the screenshots; only when they do not is the folder read
+/// again, to count the screenshots that have one.
+fn capture_counts(
+    screenshot_paths: &[(u32, &Path)],
+    steps: Option<&[StepMeta]>,
+) -> (serde_json::Value, serde_json::Value) {
     let mut scopes = serde_json::Map::new();
     for scope in [
         CaptureScope::Window,
@@ -29,13 +36,22 @@ fn capture_counts(screenshot_paths: &[(u32, &Path)]) -> (serde_json::Value, serd
     ] {
         checks.insert(check.as_str().into(), 0.into());
     }
-    // Every screenshot of an upload lives in one `screenshots` folder.
-    let dir = screenshot_paths
-        .first()
-        .and_then(|(_, path)| path.parent())
-        .unwrap_or(Path::new("."));
-    let orders: Vec<u32> = screenshot_paths.iter().map(|(order, _)| *order).collect();
-    for (scope, check) in step_meta::capture_records(dir, &orders) {
+    let records: Vec<(CaptureScope, PasswordCheck)> = match steps {
+        Some(steps) if steps.len() == screenshot_paths.len() => steps
+            .iter()
+            .map(|m| (m.capture_scope, m.password_check))
+            .collect(),
+        _ => {
+            // Every screenshot of an upload lives in one `screenshots` folder.
+            let dir = screenshot_paths
+                .first()
+                .and_then(|(_, path)| path.parent())
+                .unwrap_or(Path::new("."));
+            let orders: Vec<u32> = screenshot_paths.iter().map(|(order, _)| *order).collect();
+            step_meta::capture_records(dir, &orders)
+        }
+    };
+    for (scope, check) in records {
         for (map, key) in [(&mut scopes, scope.as_str()), (&mut checks, check.as_str())] {
             let count = map[key].as_u64().unwrap_or(0) + 1;
             map.insert(key.into(), count.into());
@@ -118,7 +134,7 @@ pub async fn upload_multipart(
     if let Some(id) = pipeline_id.filter(|s| !s.is_empty()) {
         metadata["pipeline_id"] = serde_json::json!(id);
     }
-    let (capture_scopes, password_checks) = capture_counts(screenshot_paths);
+    let (capture_scopes, password_checks) = capture_counts(screenshot_paths, steps);
     metadata["capture_scopes"] = capture_scopes;
     metadata["password_checks"] = password_checks;
     form = form.text("metadata", metadata.to_string());
@@ -276,7 +292,7 @@ mod tests {
 
     fn counts(paths: &[(u32, PathBuf)]) -> (serde_json::Value, serde_json::Value) {
         let refs: Vec<(u32, &Path)> = paths.iter().map(|(n, p)| (*n, p.as_path())).collect();
-        capture_counts(&refs)
+        capture_counts(&refs, None)
     }
 
     /// The spec's "default settings" scenario: five window steps, one flagged.
@@ -306,6 +322,26 @@ mod tests {
         );
         assert_eq!(counts(&paths), counts(&paths));
         assert_eq!(counts(&paths).0["monitor_fallback"], 1);
+    }
+
+    /// The upload counts from the sidecars it already read for
+    /// `metadata.steps`, and gets what reading the folder again would give.
+    #[test]
+    fn counting_from_the_steps_already_read_matches_the_folder() {
+        let dir = tempdir().unwrap();
+        let paths = recording(
+            dir.path(),
+            &[
+                (1, Some((CaptureScope::Window, PasswordCheck::Ok))),
+                (
+                    3,
+                    Some((CaptureScope::MonitorFallback, PasswordCheck::Flagged)),
+                ),
+            ],
+        );
+        let refs: Vec<(u32, &Path)> = paths.iter().map(|(n, p)| (*n, p.as_path())).collect();
+        let steps = step_meta::read_all(dir.path());
+        assert_eq!(capture_counts(&refs, Some(&steps)), counts(&paths));
     }
 
     #[test]
