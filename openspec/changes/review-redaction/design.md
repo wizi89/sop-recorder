@@ -2,7 +2,7 @@
 
 ## Context
 
-`ReviewScreen.tsx` shows thumbnails loaded via `list_session_screenshots` and `read_screenshot_bytes` and offers Cancel or Generate. It labels steps by list position (`idx + 1`), and thumbnails are 96x54 with `objectFit: "cover"`. The failed-capture notice computes its total as shown screenshots plus failed captures. The unfinished-recording offer (`useOfferUnfinished`) and "generate from folder" (`generateFromDir`, any folder the user picks, not only under the configured output directory) both open the recording on the review screen, never upload directly. Step numbers on disk can already have gaps (failed captures). The server pairs `metadata.steps` to the screenshots by position and only when the counts agree (`steps_for_upload`). Every upload goes through `run_generation_inner` (`commands/generate.rs`), which collects `step_NN.png` with `collect_step_screenshots` and calls `upload::upload_with_retry` (twice on the 401 path); `upload_multipart` reads each PNG from disk per attempt. Saved screenshots are at most 1920x1080 and already carry the click marker and any password masking. The server slices the transcript per step by the neighbouring steps' timestamps (`sop-sorcery` `server/pipeline.py`). See proposal.md for motivation.
+`ReviewScreen.tsx` shows thumbnails loaded via `list_session_screenshots` and `read_screenshot_bytes` and offers Cancel or Generate. It labels steps by list position (`idx + 1`), and thumbnails are 96x54 with `objectFit: "cover"`. The failed-capture notice computes its total as shown screenshots plus failed captures. The unfinished-recording offer (`useOfferUnfinished`) and "generate from folder" (`generateFromDir`, any folder the user picks, not only under the configured output directory) both open the recording on the review screen, never upload directly. Step numbers on disk can already have gaps (failed captures). The server pairs `metadata.steps` to the screenshots by position and only when the counts agree (`steps_for_upload`). Every upload goes through `run_generation_inner` (`commands/generate.rs`), which collects `step_NN.png` with `collect_step_screenshots` and calls `upload::upload_with_retry` (twice on the 401 path); `upload_multipart` reads each PNG from disk per attempt. Saved screenshots are at most 1920x1080 and already carry the click marker and any password masking. The server slices the transcript per step by the neighbouring steps' timestamps (server side). See proposal.md for motivation.
 
 ## Goals / Non-Goals
 
@@ -14,11 +14,11 @@
 **Non-Goals:**
 - Undo history beyond removing a box; editing a box after drawing (remove and redraw).
 - Deleting steps during recording (the existing `delete_last_screenshot` stays as it is).
-- Redacting screenshots already uploaded by earlier generations, or other tools reading the folder (`sop-sorcery` `server/replay.py`, older recorder versions).
+- Redacting screenshots already uploaded by earlier generations, or other tools reading the folder (server-side tools, older recorder versions).
 
 ## Decisions
 
-**D0. Departures from the ROADMAP M2 wording, decided by the founder in the 2026-10-31 design session.** ROADMAP M2 says "The user can blur an area by dragging, or delete a step | Blur is applied to the file, not just shown". This change instead (a) fills an opaque box rather than blurring, because blur can be partly reversed and small text stays guessable; and (b) keeps the original PNG on disk and applies the boxes to the bytes at upload, so a box stays removable until upload and the only copy that leaves the machine is redacted. The intent of the M2 note (the redaction takes effect on what is used, not only on screen) holds for the upload; it does not hold for the local folder, and the privacy text says so. Task 4.4 updates the M2 row.
+**D0. An opaque box applied to the upload, not a blur applied to the file.** The obvious design blurs an area dragged by the user and writes the blur into the file. This change instead (a) fills an opaque box rather than blurring, because blur can be partly reversed and small text stays guessable; and (b) keeps the original PNG on disk and applies the boxes to the bytes at upload, so a box stays removable until upload and the only copy that leaves the machine is redacted. The redaction takes effect on what is used, not only on screen, for the upload; it does not for the local folder, and the privacy text says so.
 
 **D1. Boxes live in one file per recording, `screenshots/redactions.json`.** Shape: `{ "version": 1, "steps": { "3": [[x, y, w, h], ...] } }`, keys are the number in the file name `step_NN.png`, coordinates are integer saved-image pixels. Not in `step_NN.json`: a sidecar can be missing for a step (crash between PNG and sidecar), and the sidecar count drives metadata alignment (`steps_for_upload`), so creating one just to hold boxes would change upload behaviour. Missing file = no boxes. Present but unparsable, or a `version` other than 1, is "unreadable": upload refused (spec), review screen shows an error (D5). Written via a uniquely named temp file in the same folder and rename, so a crash never leaves half a file.
 
@@ -50,7 +50,7 @@ The app shows a two-sentence version under "Datenschutz bei der Aufnahme" (creat
 ## Risks / Trade-offs
 
 - [Re-encoding PNGs at upload costs time] → only steps with boxes are re-encoded; at most 1920x1080 each.
-- [Unredacted originals remain on the user's disk] → founder decision D0; stated in the privacy text; the user saw them already, and the threat addressed here is the upload.
+- [Unredacted originals remain on the user's disk] → decision D0; stated in the privacy text; the user saw them already, and the threat addressed here is the upload.
 - [Narration of a deleted step still reaches the server and can surface in a neighbouring step] → stated in the privacy text and in the delete confirmation.
 - [Box drawn on a thumbnail is imprecise] → drawing happens in the enlarged view (D4).
 - [A save error blocks Generate] → intended; the user retries the save or removes the box.

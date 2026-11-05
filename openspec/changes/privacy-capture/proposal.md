@@ -2,7 +2,7 @@
 
 ## Why
 
-Every step today captures the whole monitor the click landed on: taskbar, tray, notifications, every other open window, and any password field on screen. Privacy by default is the core promise to pilots (ROADMAP M2, exit criterion 2), and nothing ships to pilots before it holds. Capturing only what the step is about, and never a password field unless the user chooses so, is the largest privacy gain for the least work.
+Every step today captures the whole monitor the click landed on: taskbar, tray, notifications, every other open window, and any password field on screen. Privacy by default is a core promise of the recorder. Capturing only what the step is about, and never a password field unless the user chooses so, is the largest privacy gain for the least work.
 
 ## What Changes
 
@@ -35,4 +35,4 @@ None.
 - `src-tauri/src/commands/settings.rs`, `SettingsPage.tsx`, `i18n/de.ts`: two settings under "Datenschutz bei der Aufnahme".
 - New Tauri command for per-step capture records; `ReviewScreen.tsx`: marks and acknowledgement.
 - `src-tauri/src/network/upload.rs`: two metadata objects.
-- Server repo (`sop-sorcery`, `routes_generate.py`): a new log line and trace metadata. Old servers ignore unknown metadata keys, so the recorder can ship first.
+- Server: a new log line and trace metadata. Old servers ignore unknown metadata keys, so the recorder can ship first.

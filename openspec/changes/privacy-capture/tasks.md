@@ -38,7 +38,7 @@
 ## 6. Upload metadata
 
 - [x] 6.1 `upload.rs`: `capture_scopes` and `password_checks` counted per uploaded screenshot, a missing sidecar or field as `unknown` (design D9); tests for a normal, a regenerated, a legacy folder and one screenshot without sidecar
-- [x] 6.2 `sop-sorcery` server: new log line after metadata parsing in `/generate` with both objects, plus trace metadata (separate PR into master there) — PR wizi89/sop-sorcery#24
+- [x] 6.2 Server: log both objects in `/generate` and put them on the trace (a separate change in the server repo)
 
 ## 7. macOS
 

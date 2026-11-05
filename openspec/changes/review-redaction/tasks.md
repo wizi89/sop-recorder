@@ -26,7 +26,6 @@
 - [ ] 4.1 `docs/PRIVACY.md` in German per design D7, checked against the implemented behaviour of both changes
 - [ ] 4.2 Short in-app version and link in the settings section "Datenschutz bei der Aufnahme"
 - [ ] 4.3 English summary in `README.md`
-- [ ] 4.4 In `sop-sorcery` `docs/ROADMAP.md`: reword the M2 review row to the decided behaviour (opaque box, applied to the upload, original kept locally; design D0) and point M4's pilot agreement item at `docs/PRIVACY.md`
 
 ## 5. Verification
 
