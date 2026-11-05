@@ -27,6 +27,44 @@ pub struct AppSettings {
     /// `commands::updater`, which is the only thing that can vary the endpoint.
     #[serde(default)]
     pub beta_updates: bool,
+    /// `active_window` or `monitor` (privacy-capture D8). Missing keys read as
+    /// the privacy default, so an existing install that never chose a mode
+    /// records the active window after the update.
+    #[serde(default = "default_capture_mode")]
+    pub capture_mode: String,
+    #[serde(default = "default_mask_passwords")]
+    pub mask_passwords: bool,
+}
+
+/// The two privacy settings a recording holds from its start to its end
+/// (privacy-capture D8). Read once by `start_recording`, never re-read while
+/// the recording runs, so a change in the settings window applies to the next
+/// recording only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CaptureSettings {
+    pub monitor_mode: bool,
+    pub mask_passwords: bool,
+}
+
+/// The privacy settings from a store, by key, with the defaults for every key
+/// that is missing or holds something unexpected. The one read path behind
+/// `get_settings` and `start_recording`, so the two cannot disagree.
+pub fn read_capture_settings(get: impl Fn(&str) -> Option<serde_json::Value>) -> CaptureSettings {
+    CaptureSettings {
+        monitor_mode: get("capture_mode").and_then(|v| v.as_str().map(String::from))
+            == Some("monitor".into()),
+        mask_passwords: get("mask_passwords")
+            .and_then(|v| v.as_bool())
+            .unwrap_or_else(default_mask_passwords),
+    }
+}
+
+fn default_capture_mode() -> String {
+    "active_window".to_string()
+}
+
+fn default_mask_passwords() -> bool {
+    true
 }
 
 /// The value `logs_dir` should be corrected to, or `None` when the stored one
@@ -141,6 +179,8 @@ impl AppSettings {
             generation_model: default_generation_model(),
             error_reports: default_error_reports(),
             beta_updates: false,
+            capture_mode: default_capture_mode(),
+            mask_passwords: default_mask_passwords(),
         }
     }
 }
@@ -215,6 +255,8 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let capture = read_capture_settings(|key| store.get(key));
+
     Ok(AppSettings {
         output_dir,
         logs_dir,
@@ -225,6 +267,12 @@ pub async fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> 
         generation_model,
         error_reports,
         beta_updates,
+        capture_mode: if capture.monitor_mode {
+            "monitor".to_string()
+        } else {
+            default_capture_mode()
+        },
+        mask_passwords: capture.mask_passwords,
     })
 }
 
@@ -262,6 +310,10 @@ pub async fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Resu
     if matches!(settings.error_reports.as_str(), "ask" | "always" | "never") {
         store.set("error_reports", serde_json::json!(settings.error_reports));
     }
+    if matches!(settings.capture_mode.as_str(), "active_window" | "monitor") {
+        store.set("capture_mode", serde_json::json!(settings.capture_mode));
+    }
+    store.set("mask_passwords", serde_json::json!(settings.mask_passwords));
 
     // Written through before this returns, rather than left to the store
     // plugin's 100 ms debounce. The settings window closes the moment this
@@ -480,5 +532,59 @@ mod tests {
             let settings: AppSettings = serde_json::from_value(stored).unwrap();
             assert_eq!(settings.error_reports, mode);
         }
+    }
+
+    /// The store of an install that predates privacy-capture: neither key.
+    /// `get_settings` and `start_recording` both read through this.
+    #[test]
+    fn a_store_without_the_privacy_keys_reads_as_the_privacy_defaults() {
+        assert_eq!(
+            read_capture_settings(|_| None),
+            CaptureSettings {
+                monitor_mode: false,
+                mask_passwords: true,
+            },
+        );
+    }
+
+    #[test]
+    fn stored_privacy_choices_are_read() {
+        let store = serde_json::json!({"capture_mode": "monitor", "mask_passwords": false});
+        assert_eq!(
+            read_capture_settings(|key| store.get(key).cloned()),
+            CaptureSettings {
+                monitor_mode: true,
+                mask_passwords: false,
+            },
+        );
+    }
+
+    /// Anything but an explicit `monitor` is the active window: a corrupted
+    /// value must not widen what is captured.
+    #[test]
+    fn an_unexpected_capture_mode_reads_as_the_active_window() {
+        let store = serde_json::json!({"capture_mode": "everything", "mask_passwords": "no"});
+        assert_eq!(
+            read_capture_settings(|key| store.get(key).cloned()),
+            CaptureSettings {
+                monitor_mode: false,
+                mask_passwords: true,
+            },
+        );
+    }
+
+    /// `save_settings` receives what the settings window sends; a window from
+    /// before this change sends neither key, and saving must not write
+    /// anything weaker than the defaults.
+    #[test]
+    fn a_save_payload_without_the_privacy_keys_carries_the_defaults() {
+        let payload = serde_json::json!({
+            "output_dir": "",
+            "logs_dir": "",
+            "hide_from_screenshots": true
+        });
+        let settings: AppSettings = serde_json::from_value(payload).unwrap();
+        assert_eq!(settings.capture_mode, "active_window");
+        assert!(settings.mask_passwords);
     }
 }

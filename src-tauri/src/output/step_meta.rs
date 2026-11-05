@@ -8,7 +8,7 @@ use crate::capture::screenshot::MarkerBox;
 /// `step_NN.png`. Each capture writes its own sidecar after the PNG is
 /// successfully on disk, so an aborted recording always leaves matched
 /// (png, json) pairs and never an alignment-drifted state.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct StepMeta {
     pub order: u32,
     pub timestamp_seconds: f64,
@@ -25,6 +25,79 @@ pub struct StepMeta {
     /// lose it silently.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub marker_box: Option<MarkerBox>,
+    /// What the saved image covers (design D7). Missing in sidecars written
+    /// before this field existed, which read as `unknown` and are marked on the
+    /// review screen rather than assumed safe.
+    #[serde(default)]
+    pub capture_scope: CaptureScope,
+    #[serde(default)]
+    pub password_check: PasswordCheck,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureScope {
+    Window,
+    Monitor,
+    MonitorFallback,
+    /// Also what a value from a newer build reads as, so one unrecognised
+    /// value does not make the whole sidecar unreadable.
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PasswordCheck {
+    Ok,
+    Flagged,
+    Off,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+impl CaptureScope {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Window => "window",
+            Self::Monitor => "monitor",
+            Self::MonitorFallback => "monitor_fallback",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+impl PasswordCheck {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Flagged => "flagged",
+            Self::Off => "off",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+/// How each screenshot in `screenshots_dir` was captured, by step number. A
+/// step whose sidecar is missing or unreadable reads as `unknown` on both
+/// (design D7, D9): absence of a record is never taken as safe.
+pub fn capture_records(
+    screenshots_dir: &Path,
+    orders: &[u32],
+) -> Vec<(CaptureScope, PasswordCheck)> {
+    let metas = read_all(screenshots_dir);
+    orders
+        .iter()
+        .map(|order| {
+            metas
+                .iter()
+                .find(|m| m.order == *order)
+                .map(|m| (m.capture_scope, m.password_check))
+                .unwrap_or_default()
+        })
+        .collect()
 }
 
 fn sidecar_path(output_dir: &Path, order: u32) -> std::path::PathBuf {
@@ -121,6 +194,7 @@ mod tests {
             click_y: Some(480),
             trigger: "mouse_click".into(),
             marker_box: None,
+            ..Default::default()
         };
         write_sidecar(dir.path(), &meta).unwrap();
 
@@ -140,6 +214,7 @@ mod tests {
                     click_y: None,
                     trigger: "enter_key".into(),
                     marker_box: None,
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -219,6 +294,7 @@ mod tests {
                     x1: 3,
                     y1: 4,
                 }),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -243,12 +319,105 @@ mod tests {
             click_y: None,
             trigger: "enter_key".into(),
             marker_box: None,
+            ..Default::default()
         };
         write_sidecar(dir.path(), &meta).unwrap();
 
         let raw = fs::read_to_string(dir.path().join("step_01.json")).unwrap();
         assert!(!raw.contains("marker_box"), "keypress sidecar: {}", raw);
         assert_eq!(read_all(dir.path())[0].marker_box, None);
+    }
+
+    #[test]
+    fn capture_record_survives_the_round_trip() {
+        let dir = tempdir().unwrap();
+        for (order, (scope, check)) in [
+            (CaptureScope::Window, PasswordCheck::Ok),
+            (CaptureScope::Monitor, PasswordCheck::Off),
+            (CaptureScope::MonitorFallback, PasswordCheck::Flagged),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            write_sidecar(
+                dir.path(),
+                &StepMeta {
+                    order: order as u32 + 1,
+                    capture_scope: scope,
+                    password_check: check,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        }
+        let raw = fs::read_to_string(dir.path().join("step_03.json")).unwrap();
+        assert!(
+            raw.contains(r#""capture_scope": "monitor_fallback""#),
+            "{raw}"
+        );
+        assert!(raw.contains(r#""password_check": "flagged""#), "{raw}");
+
+        let all = read_all(dir.path());
+        assert_eq!(
+            all.iter()
+                .map(|m| (m.capture_scope, m.password_check))
+                .collect::<Vec<_>>(),
+            vec![
+                (CaptureScope::Window, PasswordCheck::Ok),
+                (CaptureScope::Monitor, PasswordCheck::Off),
+                (CaptureScope::MonitorFallback, PasswordCheck::Flagged),
+            ],
+        );
+    }
+
+    #[test]
+    fn a_sidecar_without_a_capture_record_reads_as_unknown() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("step_01.json"),
+            r#"{"order":1,"timestamp_seconds":1.5,"click_x":320,"click_y":480,"trigger":"mouse_click"}"#,
+        )
+        .unwrap();
+        let meta = &read_all(dir.path())[0];
+        assert_eq!(meta.capture_scope, CaptureScope::Unknown);
+        assert_eq!(meta.password_check, PasswordCheck::Unknown);
+    }
+
+    /// A value only a newer build knows must not make the sidecar unreadable,
+    /// which would cost the recording its per-step alignment.
+    #[test]
+    fn an_unrecognised_capture_record_reads_as_unknown() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("step_01.json"),
+            r#"{"order":1,"timestamp_seconds":1.5,"click_x":null,"click_y":null,"trigger":"enter_key","capture_scope":"region","password_check":"partial"}"#,
+        )
+        .unwrap();
+        let meta = &read_all(dir.path())[0];
+        assert_eq!(meta.capture_scope, CaptureScope::Unknown);
+        assert_eq!(meta.password_check, PasswordCheck::Unknown);
+    }
+
+    #[test]
+    fn a_screenshot_without_a_sidecar_reads_as_unknown() {
+        let dir = tempdir().unwrap();
+        write_sidecar(
+            dir.path(),
+            &StepMeta {
+                order: 1,
+                capture_scope: CaptureScope::Window,
+                password_check: PasswordCheck::Ok,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            capture_records(dir.path(), &[1, 2]),
+            vec![
+                (CaptureScope::Window, PasswordCheck::Ok),
+                (CaptureScope::Unknown, PasswordCheck::Unknown),
+            ],
+        );
     }
 
     #[test]
@@ -261,6 +430,7 @@ mod tests {
             click_y: None,
             trigger: "mouse_click".into(),
             marker_box: None,
+            ..Default::default()
         };
         write_sidecar(dir.path(), &meta).unwrap();
         delete_sidecar(dir.path(), 7).unwrap();

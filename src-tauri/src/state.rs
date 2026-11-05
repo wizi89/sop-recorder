@@ -32,6 +32,9 @@ pub struct RecordingSession {
     /// has to be told the recording is short of what they did, rather than
     /// finding out from a guide that is missing a step.
     pub failed_captures: Option<Arc<AtomicU32>>,
+    /// The password check's warm-up triggers (privacy-capture D5); dropped
+    /// when the recording stops. `None` with masking off and off Windows.
+    pub password_watch: Option<crate::capture::password_check::Watch>,
 }
 
 pub struct AppState {

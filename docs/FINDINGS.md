@@ -9,6 +9,35 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-11-05 The side-by-side password check test failed on macOS CI only
+
+**Symptom:** `windows_are_checked_side_by_side_within_one_budget` fails with
+`["the check ran out of its 100 ms budget"]` on the macOS runner, on 2026-11-02 and again
+on 2026-11-05. It passes on Windows CI and every local run, and no code in the check changed.
+
+**Cause:** four 40 ms queries side by side in a 100 ms budget leave 60 ms for four thread
+starts and the channel. The macOS runner, running the whole test binary in parallel, takes
+longer than that to schedule them. Widening the margin to 40 % per query was not enough.
+
+**Rule:** a test that asserts a wall-clock budget gets a budget of its own large enough that
+scheduling is noise (here 1 s, queries 400 ms), not the module's 100 ms test budget. Keep
+the ratio, so the test still fails if the queries run one after another.
+
+---
+
+## 2026-11-02 The first e2e test failed with "never opened its DevTools port (9333)"
+
+**Symptom:** on CI only the first test of the run fails, 30 s after launch, before any UI
+step; the other six launch the same exe and pass. A rerun of the job passes.
+
+**Cause:** the CI runners' first WebView2 start got slow. The same `main` commit took 6 to
+12 s for its first test on 2026-10-31 and 35.6 s when rerun on 2026-11-02. The wait was 30 s.
+
+**Rule:** `e2e/app.ts` waits 60 s for the DevTools port, and the test timeout is 90 s. If the
+first test fails here again, rerun `main`'s last green e2e job before blaming the branch.
+
+---
+
 ## 2026-10-24 The UI shows the main window by itself once, after mount
 
 **Symptom:** an e2e test hid the main window and it was visible again a moment later. Passed
@@ -229,3 +258,40 @@ desktop needs no resample on either platform. More generally: this module has tw
 that coincide on Windows and do not on macOS, so a change that is verified on one platform is not
 verified. The log line is the cheap check. If "Rescaling monitor capture" appears on a
 single-monitor machine, the units are wrong again.
+
+## 2026-11-01 LNK1318 "Unerwarteter PDB-Fehler: LIMIT (12)" was a full disk
+
+A debug `cargo build` on Windows failed to link with `LNK1318 ... LIMIT (12)` on
+`cogniclone_recorder.pdb`. That message reads like a PDB size or record limit, and the timing
+pointed the same way (new `windows` crate features had just been added), so the first fix tried
+was a larger `/PDBPAGESIZE`. The next build failed earlier with `os error 112` (disk full): D: had
+0.22 GB left, because the main checkout's `src-tauri/target` had grown to 70 GB. After `cargo
+clean` there, the original build linked unchanged.
+
+**Rule:** on LNK1318 or any odd linker error, check free space on the build drive first
+(`Get-PSDrive D`). Each worktree has its own `target/` (about 9 GB here), and the main checkout's
+grows without bound; `cargo clean` in an idle checkout is the fix, not a linker flag.
+
+## 2026-11-01 UIA clients created on many threads at once fail with E_FAIL
+
+The password check warms up every visible window at recording start, one thread each. With a
+UIA client per thread, all but one `CoCreateInstance(CUIAutomation8)` failed with `0x80004005`
+when about 14 ran at once, and the failures were silent: a warm-up does not report, so the only
+symptom was every later step flagged "not checked twice". A single query on its own always
+worked, which is why the mocked tests and a one-window run passed. Printing the warm-up results
+found it.
+
+**Rule:** one UIA client per process (`capture::uia::client`), created once under a lock and shared;
+every thread joins the MTA before using it. Client objects created in the MTA are free-threaded.
+
+## 2026-11-01 A process that is not per-monitor DPI aware gets masks beside the field
+
+A live run from `cargo test` saved a login page with its password field unmasked and the step
+reported `ok`. UIA had returned the field at (937, 323) while it was on screen at (1406, 484):
+the test process was DPI unaware on a 150% display, so UIA reported scaled coordinates while DWM
+(window bounds) and xcap (pixels) are always physical. The recorder itself is fine because
+`main.rs` sets `PROCESS_PER_MONITOR_DPI_AWARE`, but nothing checked that.
+
+**Rule:** the check refuses to run in a thread that is not per-monitor aware
+(`uia::client` returns an error), so every step is flagged instead of masked in the wrong place.
+Any live test of the capture path must set DPI awareness first, as `live_password_check` does.

@@ -50,6 +50,10 @@ const de = {
   "status.stopping": "Aufnahmen werden verarbeitet...",
 
   // Review screen (post-stop, pre-generate)
+  "review.marked_badge": "Prüfen",
+  "review.marked_hint":
+    "{count} markierte Schritte: Passwortfelder wurden dort nicht sicher erkannt, oder es wurde der ganze Bildschirm aufgenommen. Bitte vor dem Generieren ansehen.",
+  "review.marked_confirm": "Ich habe die markierten Schritte geprüft",
   "review.title": "Aufnahme prüfen",
   "review.summary": "{count} Screenshots -- {elapsed} Min aufgenommen",
   "review.summary_count_only": "{count} Screenshots in diesem Ordner",
@@ -110,6 +114,17 @@ const de = {
   "settings.beta_updates": "Beta-Versionen erhalten",
   "settings.beta_updates_leaving":
     "Sie bleiben auf {version}, bis {stable} erscheint – ein Update setzt immer eine höhere Version voraus.",
+  "settings.capture_privacy": "Aufnahmebereich",
+  "settings.capture_active_window": "Aktives Fenster",
+  "settings.capture_active_window_hint":
+    "Gespeichert wird das Fenster, in dem geklickt wird, bei Dialogen zusammen mit dem zugehörigen Hauptfenster.",
+  "settings.capture_monitor": "Ganzer Bildschirm",
+  "settings.capture_monitor_warning":
+    "Taskleiste, Benachrichtigungen und alle sichtbaren Fenster werden mit aufgenommen.",
+  "settings.mask_passwords": "Passwortfelder schwärzen",
+  "settings.mask_passwords_off": "Passwortfelder werden mit aufgenommen.",
+  "settings.capture_mac_note":
+    "Auf macOS wird immer der ganze Bildschirm aufgenommen. Fensteraufnahme und das Schwärzen von Passwortfeldern folgen später.",
   "settings.reveal": "Anzeigen",
   "settings.loading": "Wird geladen...",
   "settings.save_failed":

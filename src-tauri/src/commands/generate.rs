@@ -553,6 +553,7 @@ mod tests {
             click_y: None,
             trigger: "enter_key".into(),
             marker_box: None,
+            ..Default::default()
         }
     }
 

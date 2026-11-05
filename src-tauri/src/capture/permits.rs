@@ -20,14 +20,81 @@
 //! hook for no gain.
 
 use std::sync::{Condvar, Mutex};
+use std::time::{Duration, Instant};
 
-/// How many captures may be in progress at once.
+/// How many steps may hold a screenshot in memory at once: buffer slots, held
+/// from before a step's pixels are read until its PNG is written
+/// (privacy-capture D3).
 ///
-/// Two rather than one because the work pipelines -- one thread can be encoding
-/// a PNG while another captures -- and rather than more because each additional
-/// permit is another full-screen buffer resident at the same time, which is the
-/// pressure being removed.
-pub const DEFAULT_CAPTURE_PERMITS: usize = 2;
+/// Up to six rather than the two this used to be, because a step spends most
+/// of its life after its pixels are taken (the password check, then resize and
+/// PNG encode: about 5 s per step in a macOS dev build, with masking off), and
+/// that must not hold up the next click's pixels. Still a bound: the unbounded
+/// buffers of a burst are what the pool was introduced for. `buffer_slots`
+/// picks the count per recording.
+pub const DEFAULT_CAPTURE_PERMITS: usize = 6;
+
+/// The fewest slots a recording gets, as many as the pool had before.
+pub const MIN_CAPTURE_PERMITS: usize = 2;
+
+/// What the held buffers may add up to. A held buffer is at most one monitor
+/// of RGBA pixels (the active window area is a crop of it), so on a 4K
+/// display (about 33 MB each) six slots would hold about 200 MB during a burst
+/// of clicks; this bounds it to about 100 MB (review of #26).
+const HELD_BYTES_BUDGET: u64 = 100 * 1024 * 1024;
+
+/// Buffer slots for one recording: as many full-monitor buffers as fit
+/// `HELD_BYTES_BUDGET` for the largest monitor, between two and six. Six on a
+/// 1080p or 1440p display, three on 4K.
+///
+/// Not tied to masking: a 2026-11-05 macOS recording with masking off spent
+/// about 5 s per step after the read, and with two slots a third quick click
+/// would have waited for one, reading its pixels seconds late.
+pub fn buffer_slots(largest_monitor_pixels: Option<u64>) -> usize {
+    match largest_monitor_pixels.filter(|px| *px > 0) {
+        Some(px) => usize::try_from(HELD_BYTES_BUDGET / (px * 4))
+            .unwrap_or(DEFAULT_CAPTURE_PERMITS)
+            .clamp(MIN_CAPTURE_PERMITS, DEFAULT_CAPTURE_PERMITS),
+        None => MIN_CAPTURE_PERMITS,
+    }
+}
+
+/// How many monitor pixel reads may run at once. Two, as the whole capture was
+/// before D3: the read is the expensive moment for memory, and two pipeline.
+pub const PIXEL_READ_PERMITS: usize = 2;
+
+/// A slot wait shorter than this is ordinary scheduling, not a queue worth a
+/// log line.
+const SLOT_WAIT_WORTH_LOGGING: Duration = Duration::from_millis(20);
+
+/// Run one step's two phases (D3): `read` under a buffer slot and a pixel-read
+/// permit, then `process` under the slot alone.
+///
+/// The slot is taken first and held across both, so at most `slots` images
+/// exist at once; the read permit is released as soon as the pixels are in
+/// memory, so a slow `process` delays no later step's pixels until every slot
+/// is taken. A wait for a slot is logged with its length.
+pub fn two_phase<T, R>(
+    slots: &CapturePermits,
+    readers: &CapturePermits,
+    read: impl FnOnce() -> T,
+    process: impl FnOnce(T) -> R,
+) -> R {
+    let asked = Instant::now();
+    let _slot = slots.acquire();
+    let waited = asked.elapsed();
+    if waited >= SLOT_WAIT_WORTH_LOGGING {
+        log::warn!(
+            "Step waited {} ms for a buffer slot: earlier steps are still being checked",
+            waited.as_millis()
+        );
+    }
+    let held = {
+        let _reader = readers.acquire();
+        read()
+    };
+    process(held)
+}
 
 /// A bounded pool of capture permits.
 pub struct CapturePermits {
@@ -90,6 +157,15 @@ impl Drop for CapturePermit<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn buffer_slots_fit_the_memory_budget() {
+        assert_eq!(buffer_slots(Some(1920 * 1080)), DEFAULT_CAPTURE_PERMITS);
+        assert_eq!(buffer_slots(Some(2560 * 1440)), DEFAULT_CAPTURE_PERMITS);
+        assert_eq!(buffer_slots(Some(3840 * 2160)), 3);
+        assert_eq!(buffer_slots(Some(7680 * 4320)), MIN_CAPTURE_PERMITS);
+        assert_eq!(buffer_slots(None), MIN_CAPTURE_PERMITS);
+    }
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
@@ -200,6 +276,127 @@ mod tests {
             written.load(Ordering::SeqCst),
             20,
             "the drain returned before every queued capture had been written",
+        );
+    }
+
+    /// Time from each step's input event to its pixel read, for steps spawned
+    /// `gap` apart whose `process` takes `slow`.
+    fn read_delays(steps: usize, gap: u64, slow: u64) -> (Vec<Duration>, usize, usize) {
+        let slots = Arc::new(CapturePermits::new(DEFAULT_CAPTURE_PERMITS));
+        let readers = Arc::new(CapturePermits::new(PIXEL_READ_PERMITS));
+        let held = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let saved = Arc::new(AtomicUsize::new(0));
+
+        let handles: Vec<_> = (0..steps)
+            .map(|_| {
+                let event = Instant::now();
+                let (slots, readers, held, peak, saved) = (
+                    slots.clone(),
+                    readers.clone(),
+                    held.clone(),
+                    peak.clone(),
+                    saved.clone(),
+                );
+                let handle = std::thread::spawn(move || {
+                    two_phase(
+                        &slots,
+                        &readers,
+                        || {
+                            let now = held.fetch_add(1, Ordering::SeqCst) + 1;
+                            peak.fetch_max(now, Ordering::SeqCst);
+                            let delay = event.elapsed();
+                            std::thread::sleep(Duration::from_millis(5)); // the pixel read
+                            delay
+                        },
+                        |delay| {
+                            std::thread::sleep(Duration::from_millis(slow)); // the check
+                            saved.fetch_add(1, Ordering::SeqCst);
+                            held.fetch_sub(1, Ordering::SeqCst);
+                            delay
+                        },
+                    )
+                });
+                std::thread::sleep(Duration::from_millis(gap));
+                handle
+            })
+            .collect();
+        let delays = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        (
+            delays,
+            peak.load(Ordering::SeqCst),
+            saved.load(Ordering::SeqCst),
+        )
+    }
+
+    /// Five clicks within a second against a check that takes its full budget:
+    /// every screenshot is taken at its own click.
+    #[test]
+    fn a_slow_check_does_not_delay_the_next_screenshots() {
+        let (delays, _, saved) = read_delays(5, 150, 500);
+        assert_eq!(saved, 5);
+        for (step, delay) in delays.iter().enumerate() {
+            assert!(
+                *delay < Duration::from_millis(100),
+                "step {} waited {:?} for its pixels",
+                step + 1,
+                delay
+            );
+        }
+    }
+
+    /// Twenty quick clicks while every check runs long: never more than six
+    /// screenshots held, and every click still produces a saved step.
+    #[test]
+    fn a_long_burst_holds_at_most_six_buffers_and_saves_every_step() {
+        let (_, peak, saved) = read_delays(20, 5, 200);
+        assert!(
+            peak <= DEFAULT_CAPTURE_PERMITS,
+            "{peak} buffers held at once"
+        );
+        assert_eq!(
+            peak, DEFAULT_CAPTURE_PERMITS,
+            "the burst should fill every slot"
+        );
+        assert_eq!(saved, 20);
+    }
+
+    /// Stop drains the in-flight counter, which drops only after phase B: a
+    /// step blocked in a slow check is waited for, not raced past.
+    #[tokio::test]
+    async fn stop_waits_for_a_step_still_in_its_check() {
+        let slots = Arc::new(CapturePermits::new(DEFAULT_CAPTURE_PERMITS));
+        let readers = Arc::new(CapturePermits::new(PIXEL_READ_PERMITS));
+        let in_flight = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let written = Arc::new(AtomicUsize::new(0));
+
+        in_flight.fetch_add(1, Ordering::SeqCst);
+        {
+            let (in_flight, written) = (in_flight.clone(), written.clone());
+            std::thread::spawn(move || {
+                two_phase(
+                    &slots,
+                    &readers,
+                    || (),
+                    |()| {
+                        std::thread::sleep(Duration::from_millis(400));
+                        written.fetch_add(1, Ordering::SeqCst);
+                    },
+                );
+                in_flight.fetch_sub(1, Ordering::SeqCst);
+            });
+        }
+
+        let left = crate::commands::recording::wait_for_captures(
+            &in_flight,
+            crate::commands::recording::CAPTURE_DRAIN_TIMEOUT,
+        )
+        .await;
+        assert_eq!(left, 0);
+        assert_eq!(
+            written.load(Ordering::SeqCst),
+            1,
+            "stop returned before the step was written"
         );
     }
 
