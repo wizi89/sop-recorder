@@ -9,6 +9,22 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-11-05 The side-by-side password check test failed on macOS CI only
+
+**Symptom:** `windows_are_checked_side_by_side_within_one_budget` fails with
+`["the check ran out of its 100 ms budget"]` on the macOS runner, on 2026-11-02 and again
+on 2026-11-05. It passes on Windows CI and every local run, and no code in the check changed.
+
+**Cause:** four 40 ms queries side by side in a 100 ms budget leave 60 ms for four thread
+starts and the channel. The macOS runner, running the whole test binary in parallel, takes
+longer than that to schedule them. Widening the margin to 40 % per query was not enough.
+
+**Rule:** a test that asserts a wall-clock budget gets a budget of its own large enough that
+scheduling is noise (here 1 s, queries 400 ms), not the module's 100 ms test budget. Keep
+the ratio, so the test still fails if the queries run one after another.
+
+---
+
 ## 2026-11-02 The first e2e test failed with "never opened its DevTools port (9333)"
 
 **Symptom:** on CI only the first test of the run fails, 30 s after launch, before any UI

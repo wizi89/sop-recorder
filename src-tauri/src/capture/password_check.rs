@@ -764,13 +764,19 @@ mod tests {
     }
 
     /// 8.1 run: windows are queried side by side, so four windows that would
-    /// take 160% of the budget one after another fit into it together.
+    /// take 160% of the budget one after another fit into it together. A
+    /// budget of its own, ten times the module's: at 100 ms the thread start
+    /// on a loaded CI runner ate the slack and the test failed on macOS.
     #[test]
     fn windows_are_checked_side_by_side_within_one_budget() {
-        let c = checker(|_| {
-            std::thread::sleep(BUDGET * 4 / 10);
-            QueryResult::Fields(vec![])
-        });
+        let budget = Duration::from_secs(1);
+        let c = Checker::new(
+            Arc::new(move |_| {
+                std::thread::sleep(budget * 4 / 10);
+                QueryResult::Fields(vec![])
+            }),
+            budget,
+        );
         let windows: Vec<_> = (1..=4).map(|h| (h, vec![WHOLE])).collect();
         for (h, _) in &windows {
             warmed(&c, *h, vec![]);
