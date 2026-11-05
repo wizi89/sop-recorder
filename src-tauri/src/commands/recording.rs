@@ -373,13 +373,6 @@ pub async fn start_recording(
         #[cfg(windows)]
         let latest = counter_clone.clone();
         std::thread::spawn(move || {
-            // Before the capture: the bar is excluded from captures, and a save
-            // can finish seconds later, out of order with newer clicks. Only the
-            // newest click moves it, or the bar jumps back and forth.
-            #[cfg(windows)]
-            if let Some(click) = click_pos.filter(|_| latest.load(Ordering::SeqCst) == step_num) {
-                crate::commands::window::follow_click(&app, click);
-            }
             // Phase A takes the pixels at once; phase B checks and writes. The
             // buffer slot is released on the way out however the capture ends.
             let saved = permits::two_phase(
@@ -387,6 +380,19 @@ pub async fn start_recording(
                 &readers,
                 || screenshot::capture_step(step_num, click_pos, capture_settings.monitor_mode),
                 |held| {
+                    // The bar follows the click only once the pixels are read,
+                    // so moving it (a call into the UI thread) never delays the
+                    // read, and only while it is hidden from captures: shown,
+                    // it would appear in the next screenshot of a monitor it
+                    // never sat on. A save can finish seconds later, out of
+                    // order with newer clicks, so only the newest click moves
+                    // it, or the bar jumps back and forth.
+                    #[cfg(windows)]
+                    if let Some(click) =
+                        click_pos.filter(|_| hide && latest.load(Ordering::SeqCst) == step_num)
+                    {
+                        crate::commands::window::follow_click(&app, click);
+                    }
                     let held = held?;
                     let capture_scope = held.scope;
                     // Masks are filled before the PNG is encoded: the only
