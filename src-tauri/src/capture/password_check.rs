@@ -51,23 +51,78 @@ impl<F: Fn(isize) -> QueryResult + Send + Sync> FieldQuery for F {
     }
 }
 
+/// Completed queries kept per window. Each warm-up adds two, so this leaves
+/// room for a few to land between a step's pixel read and its check without
+/// pushing out the completions from before the read.
+const KEPT_COMPLETIONS: usize = 8;
+
 /// What the recorder knows about one window's password fields (D5).
+///
+/// Every result is kept with its time, never overwritten: a step's check needs
+/// what was known when its pixels were read, and a query that finishes after
+/// the read (a submitted login, the field gone) must not erase the field the
+/// pixels still show.
 #[derive(Debug, Clone, Default)]
 struct Entry {
-    /// When the latest queries completed, oldest first.
-    completions: Vec<Instant>,
-    /// Fields from the last completed query, plus every field focused since.
-    fields: Vec<Rect>,
+    /// The latest completed queries and what each found, oldest first.
+    completions: Vec<(Instant, Vec<Rect>)>,
+    /// Fields reported by focus, with when.
+    focused: Vec<(Instant, Rect)>,
 }
 
 impl Entry {
     /// Two completed queries at least `WARM_UP_GAP` apart before `t` (A2).
     fn checked_before(&self, t: Instant) -> bool {
-        let done: Vec<&Instant> = self.completions.iter().filter(|c| **c <= t).collect();
+        Self::checked_between(&self.completions, None, t)
+    }
+
+    /// Two completed queries at least `WARM_UP_GAP` apart, after `since`
+    /// (when given) and not after `t`.
+    fn checked_between(
+        completions: &[(Instant, Vec<Rect>)],
+        since: Option<Instant>,
+        t: Instant,
+    ) -> bool {
+        let done: Vec<Instant> = completions
+            .iter()
+            .map(|(c, _)| *c)
+            .filter(|c| *c <= t && since.is_none_or(|s| *c > s))
+            .collect();
         match (done.first(), done.last()) {
-            (Some(first), Some(last)) => done.len() >= 2 && **last - **first >= WARM_UP_GAP,
+            (Some(first), Some(last)) => done.len() >= 2 && *last - *first >= WARM_UP_GAP,
             _ => false,
         }
+    }
+
+    /// Every field that may be on pixels read at `t`: the last query before
+    /// `t`, every query after it (a field that showed up later is masked too;
+    /// masking too much is safe), and each focused field until two queries
+    /// after its focus, both before `t`, have found it gone.
+    fn fields_at(&self, t: Instant) -> Vec<Rect> {
+        let mut fields: Vec<Rect> = Vec::new();
+        let mut add = |f: &Rect| {
+            if !fields.contains(f) {
+                fields.push(*f);
+            }
+        };
+        let last_before = self.completions.iter().rposition(|(c, _)| *c <= t);
+        for (i, (c, found)) in self.completions.iter().enumerate() {
+            if Some(i) == last_before || *c > t {
+                found.iter().for_each(&mut add);
+            }
+        }
+        for (at, field) in &self.focused {
+            let confirmed_gone = Self::checked_between(&self.completions, Some(*at), t)
+                && self
+                    .completions
+                    .iter()
+                    .filter(|(c, _)| *c > *at && *c <= t)
+                    .all(|(_, f)| !f.contains(field));
+            if !confirmed_gone {
+                add(field);
+            }
+        }
+        fields
     }
 }
 
@@ -130,11 +185,10 @@ impl Checker {
         if let QueryResult::Fields(fields) = &result {
             let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
             let entry = cache.entry(hwnd).or_default();
-            entry.completions.push(Instant::now());
-            if entry.completions.len() > 4 {
+            entry.completions.push((Instant::now(), fields.clone()));
+            if entry.completions.len() > KEPT_COMPLETIONS {
                 entry.completions.remove(0);
             }
-            entry.fields = fields.clone();
         }
         result
     }
@@ -171,9 +225,9 @@ impl Checker {
             return;
         }
         let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        let fields = &mut cache.entry(hwnd).or_default().fields;
-        if !fields.contains(&field) {
-            fields.push(field);
+        let focused = &mut cache.entry(hwnd).or_default().focused;
+        if !focused.iter().any(|(_, f)| *f == field) {
+            focused.push((Instant::now(), field));
         }
     }
 
@@ -193,8 +247,9 @@ impl Checker {
             flags.push("the foreground window changed while the pixels were read".to_string());
         }
 
-        // Taken before the fresh queries write to the cache, so "cached" is
-        // what was known when the step happened.
+        // Taken before the fresh queries write to the cache. What it knew at
+        // `pixels_at` comes from `fields_at`, not from the newest result:
+        // queries keep completing between the read and this check.
         let cached: HashMap<isize, Entry> = {
             let cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
             windows
@@ -258,7 +313,7 @@ impl Checker {
 
         let mut masks = Vec::new();
         for (hwnd, visible) in windows {
-            let mut fields = cached[hwnd].fields.clone();
+            let mut fields = cached[hwnd].fields_at(pixels_at);
             if let Some(found) = fresh.get(hwnd) {
                 let same = found.len() == fields.len() && found.iter().all(|f| fields.contains(f));
                 if !same {
@@ -286,7 +341,7 @@ impl Checker {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .iter()
-            .map(|(h, e)| (*h, e.completions.len(), e.fields.clone()))
+            .map(|(h, e)| (*h, e.completions.len(), e.fields_at(Instant::now())))
             .collect()
     }
 
@@ -295,8 +350,11 @@ impl Checker {
         self.cache.lock().unwrap_or_else(|e| e.into_inner()).insert(
             hwnd,
             Entry {
-                completions,
-                fields,
+                completions: completions
+                    .into_iter()
+                    .map(|c| (c, fields.clone()))
+                    .collect(),
+                focused: Vec::new(),
             },
         );
     }
@@ -427,6 +485,67 @@ mod tests {
         let out = c.check(&one_window(), Instant::now(), false);
         assert_eq!(out.masks, vec![FIELD]);
         assert!(!out.flags.is_empty());
+    }
+
+    /// A query that completes after this instant, as a warm-up or another
+    /// step's check would while this step waits for its own.
+    fn completed(c: &Checker, hwnd: isize, at: Instant, fields: Vec<Rect>) {
+        c.cache
+            .lock()
+            .unwrap()
+            .entry(hwnd)
+            .or_default()
+            .completions
+            .push((at, fields));
+    }
+
+    /// Review of #26: Enter in the password field, the pixels are read with the
+    /// field on screen, and a warm-up finishes after the read with the field
+    /// gone. The fresh query finds nothing either. The field is masked from
+    /// what was known at the read, and the change is flagged.
+    #[test]
+    fn a_query_finishing_after_the_read_does_not_unmask_the_field() {
+        let c = checker(|_| QueryResult::Fields(vec![]));
+        warmed(&c, W, vec![FIELD]);
+        let pixels_at = Instant::now();
+        completed(&c, W, pixels_at + Duration::from_millis(5), vec![]);
+        let out = c.check(&one_window(), pixels_at, false);
+        assert_eq!(out.masks, vec![FIELD]);
+        assert!(
+            out.flags
+                .iter()
+                .any(|f| f.contains("changed since the last check")),
+            "{:?}",
+            out.flags
+        );
+    }
+
+    /// A focused field is kept when a later query misses it (A2: Chromium's
+    /// first query can be complete and empty).
+    #[test]
+    fn a_focused_field_survives_one_query_that_misses_it() {
+        let c = checker(|_| QueryResult::Fields(vec![]));
+        warmed(&c, W, vec![]);
+        c.note_focused_field(W, FIELD);
+        completed(&c, W, Instant::now() + Duration::from_millis(1), vec![]);
+        std::thread::sleep(Duration::from_millis(5));
+        let out = c.check(&one_window(), Instant::now(), false);
+        assert_eq!(out.masks, vec![FIELD]);
+    }
+
+    /// Once the window has been checked twice since the focus, both before the
+    /// read, and neither found the field, it is gone and no longer masked.
+    #[test]
+    fn a_focused_field_is_dropped_after_two_checks_that_miss_it() {
+        let c = checker(|_| QueryResult::Fields(vec![]));
+        warmed(&c, W, vec![]);
+        c.note_focused_field(W, FIELD);
+        let after_focus = Instant::now() + Duration::from_millis(1);
+        completed(&c, W, after_focus, vec![]);
+        completed(&c, W, after_focus + WARM_UP_GAP, vec![]);
+        let pixels_at = after_focus + WARM_UP_GAP + Duration::from_millis(1);
+        let out = c.check(&one_window(), pixels_at, false);
+        assert!(out.masks.is_empty(), "{:?}", out.masks);
     }
 
     #[test]
