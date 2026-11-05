@@ -266,6 +266,22 @@ pub fn shell_only(snapshot: &Snapshot, keep: &[Rect]) -> bool {
         })
 }
 
+/// Where a key press happened, for choosing the monitor to read: the middle of
+/// the foreground window. A key press has no position of its own, and the
+/// cursor can rest on another monitor than the window being typed in; the area
+/// is the foreground window, so its monitor is the one to read. `None` (use
+/// the cursor) when there is no drawn foreground window or it is the desktop.
+pub fn key_press_point(snapshot: &Snapshot) -> Option<(i32, i32)> {
+    let w = snapshot
+        .foreground
+        .and_then(|h| snapshot.get(h))
+        .filter(|w| !w.cloaked && !w.rect.is_empty() && kind(w) != Kind::Desktop)?;
+    Some((
+        w.rect.left + (w.rect.right - w.rect.left) / 2,
+        w.rect.top + (w.rect.bottom - w.rect.top) / 2,
+    ))
+}
+
 pub fn capture_area(snapshot: &Snapshot, click: Option<(i32, i32)>, monitor: Rect) -> Area {
     // A cloaked window is in the list but never drawn (a closed Start menu,
     // another virtual desktop), so it can be no step's window.
@@ -380,6 +396,22 @@ mod tests {
             capture_area(&s, Some((300, 300)), MONITOR),
             only(Rect::new(100, 100, 900, 700))
         );
+    }
+
+    #[test]
+    fn a_key_press_is_placed_in_the_middle_of_the_foreground_window() {
+        let mut windows = desktop();
+        windows.push(window(9, Rect::new(1920, 0, 3840, 1080), "Notepad", 40));
+        let s = snapshot(9, None, windows);
+        assert_eq!(key_press_point(&s), Some((2880, 540)));
+    }
+
+    #[test]
+    fn a_key_press_on_the_desktop_or_without_a_foreground_window_has_no_point() {
+        assert_eq!(key_press_point(&snapshot(DESKTOP, None, desktop())), None);
+        let mut s = snapshot(EDITOR, None, desktop());
+        s.foreground = None;
+        assert_eq!(key_press_point(&s), None);
     }
 
     #[test]
