@@ -443,8 +443,9 @@ fn crop_to(
 }
 
 /// Pixels of the largest monitor, for sizing the buffer slots. In xcap's
-/// units, which are points on macOS; masking is off there, so the count is
-/// not used.
+/// units, which are points on macOS: a Retina display reads as a quarter of
+/// its pixels (1470x956 for a 2940x1912 canvas), so a Mac gets six slots
+/// where its true size would give four.
 pub fn largest_monitor_pixels() -> Option<u64> {
     Monitor::all()
         .ok()?
