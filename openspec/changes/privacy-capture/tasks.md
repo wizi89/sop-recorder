@@ -42,7 +42,8 @@
 
 ## 7. macOS
 
-- [ ] 7.1 Capture path ignores both settings on macOS and records `capture_scope: monitor`, `password_check: off`; existing macOS tests still pass
+- [x] 7.1 Capture path ignores both settings on macOS and records `capture_scope: monitor`, `password_check: off`; existing macOS tests still pass
+  - 2026-11-05, MacBook Air, one Retina display, dev build against staging (6 clicks): the log says `capture: monitor, password masking: off`; all six sidecars record `monitor` / `off`; no failed captures; the click that stopped the recording was ignored as landing on the recorder. `cargo test` 304 pass, vitest 209 pass. Resize and PNG encode took about 5 s per step in the dev build, so the buffer slots no longer drop to two with masking off.
 
 ## 8. Verification
 
