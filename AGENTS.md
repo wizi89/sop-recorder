@@ -8,3 +8,15 @@
 - Roadmap and current status of the whole product: `../9_sop-sorcery/docs/ROADMAP.md` and
   `project-status.md` next to it.
 - The default branch here is `main`; the server repo's is `master`.
+
+## Pre-commit checks
+
+The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
+
+- Always: `npm ci`, `npm test`, `npx tsc --noEmit`.
+- When `src-tauri/` changed, also run in `src-tauri/`: `cargo fmt --check`,
+  `cargo clippy --all-targets -- -D warnings`, `cargo test --lib`.
+- e2e (`npm run e2e`) runs only in CI on Windows; don't run it locally.
+
+A check the session can't run (for example, Rust system libraries missing in a cloud session)
+counts as not passed: stop and label the issue `needs-owner`.
