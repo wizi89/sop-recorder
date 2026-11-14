@@ -9,6 +9,20 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-11-14 `npm test` ran hundreds of extra, failing tests from agent worktrees
+
+**Symptom:** `npm test` reported 65 test files and 112 failures, all under
+`.claude/worktrees/<name>/src/...`, while the repo's own 21 files passed.
+
+**Cause:** vitest does not read `.gitignore`. Its default `exclude` covers `node_modules` and
+`.git` only, so every worktree checkout under `.claude/worktrees/` is collected as well, each
+against its own stale `node_modules`.
+
+**Rule:** keep `.claude/worktrees/**` in `exclude` in `vitest.config.ts`. A tool that walks the
+tree (test runner, linter, formatter) needs the worktrees excluded in its own config.
+
+---
+
 ## 2026-10-24 The UI shows the main window by itself once, after mount
 
 **Symptom:** an e2e test hid the main window and it was visible again a moment later. Passed
