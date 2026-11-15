@@ -8,6 +8,7 @@
 - Roadmap and current status of the whole product: `../9_sop-sorcery/docs/ROADMAP.md` and
   `project-status.md` next to it.
 - The default branch here is `main`; the server repo's is `master`.
+- Agent merges are allowed: an agent merges its own PR (squash) when every check passed and nothing had to be guessed; otherwise it labels the issue `needs-owner`.
 
 ## Pre-commit checks
 
