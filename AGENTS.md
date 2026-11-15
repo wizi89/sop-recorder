@@ -5,8 +5,8 @@
 - Surprises go to `docs/FINDINGS.md`; drain it with `drain-findings`. For a symptom, grep FINDINGS
   and the Wiki index first.
 - Modules, the life of a recording, and what leaves the machine: `docs/ARCHITECTURE.md`.
-- Roadmap and current status of the whole product: `../9_sop-sorcery/docs/ROADMAP.md` and
-  `project-status.md` next to it.
+- Server contract (endpoints, fields and SSE events the recorder uses): `docs/server-contract.md`.
+- Contract changes: breaking allowed. (Until go-live; then this line becomes "Contract changes: additive only".)
 - The default branch here is `main`; the server repo's is `master`.
 - Agent merges are allowed: an agent merges its own PR (squash) when every check passed and nothing had to be guessed; otherwise it labels the issue `needs-owner`.
 
