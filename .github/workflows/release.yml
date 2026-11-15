@@ -13,7 +13,7 @@ jobs:
   # endpoint production does not serve yet ships a feature that cannot work --
   # browser sign-in against a server without it opens a 404 page. The server
   # has to deploy first, and this is where that order is enforced rather than
-  # remembered. When the app starts depending on a new endpoint, add a line.
+  # remembered. When the app starts depending on a new endpoint, add a line and update `docs/server-contract.md`.
   server-contract:
     runs-on: ubuntu-latest
     steps:
