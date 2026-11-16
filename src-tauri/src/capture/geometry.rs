@@ -29,7 +29,11 @@ mod windows_impl {
         unsafe {
             // Top of the z-order first, which is the order D4's visibility
             // calculation reads it in.
-            let _ = EnumWindows(Some(collect), LPARAM(&mut windows as *mut _ as isize));
+            // An empty list is flagged by the password check; the error is
+            // only for the log.
+            if let Err(e) = EnumWindows(Some(collect), LPARAM(&mut windows as *mut _ as isize)) {
+                log::warn!("EnumWindows failed: {e}");
+            }
             let foreground = GetForegroundWindow();
             let under_click =
                 click.map(|(x, y)| GetAncestor(WindowFromPoint(POINT { x, y }), GA_ROOT));
@@ -73,7 +77,7 @@ mod windows_impl {
         }
 
         let mut cloaked: u32 = 0;
-        let _ = DwmGetWindowAttribute(
+        let cloaked_read = DwmGetWindowAttribute(
             hwnd,
             DWMWA_CLOAKED,
             &mut cloaked as *mut _ as *mut c_void,
@@ -82,7 +86,11 @@ mod windows_impl {
         let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
         let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
         let mut affinity: u32 = WDA_NONE.0;
-        let _ = GetWindowDisplayAffinity(hwnd, &mut affinity);
+        let affinity_read = GetWindowDisplayAffinity(hwnd, &mut affinity);
+        // A window whose cloaked state or capture exclusion cannot be read
+        // may not be drawn, so it must not hide the windows below it from
+        // the password check. It is still checked itself.
+        let unsure = cloaked_read.is_err() || affinity_read.is_err();
         let mut pid = 0;
         GetWindowThreadProcessId(hwnd, Some(&mut pid));
         let mut class = [0u16; 256];
@@ -97,7 +105,7 @@ mod windows_impl {
             root_owner: GetAncestor(hwnd, GA_ROOTOWNER).0 as isize,
             cloaked: cloaked != 0,
             layered: ex_style & WS_EX_LAYERED.0 != 0,
-            transparent: ex_style & WS_EX_TRANSPARENT.0 != 0,
+            transparent: unsure || ex_style & WS_EX_TRANSPARENT.0 != 0,
             excluded: affinity != WDA_NONE.0,
         })
     }

@@ -152,13 +152,13 @@ pub struct UiaQuery {
 
 impl FieldQuery for UiaQuery {
     fn query(&self, hwnd: isize) -> QueryResult {
-        // ponytail: one line per query, warm-ups included, to set the step
-        // budget from real desktops (8.1). Down to debug once it is set.
+        // One line per query, warm-ups included. The budgets were set from
+        // these in the 8.1 run; debug since, as warm-ups fire on every focus.
         let started = std::time::Instant::now();
         let result = self.query_uncounted(hwnd);
         let mut class = [0u16; 64];
         let len = unsafe { GetClassNameW(HWND(hwnd as *mut _), &mut class) } as usize;
-        log::info!(
+        log::debug!(
             "Password check: window {hwnd:#x} ({}) answered in {} ms: {}",
             String::from_utf16_lossy(&class[..len]),
             started.elapsed().as_millis(),

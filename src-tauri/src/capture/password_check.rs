@@ -263,6 +263,12 @@ impl Checker {
         foreground_changed: bool,
     ) -> CheckOutcome {
         let mut flags = Vec::new();
+        // Every real area holds at least one window (the desktop covers each
+        // monitor), so an empty list means the window list could not be read,
+        // and nothing was checked.
+        if windows.is_empty() {
+            flags.push("no window was found in the saved area; nothing was checked".to_string());
+        }
         if foreground_changed {
             flags.push("the foreground window changed while the pixels were read".to_string());
         }
@@ -439,6 +445,16 @@ mod tests {
                 flags: vec![]
             }
         );
+    }
+
+    /// An empty window list means the list could not be read, not that the
+    /// area holds no password field.
+    #[test]
+    fn an_empty_window_list_is_flagged() {
+        let c = checker(|_| QueryResult::Fields(vec![]));
+        let out = c.check(&[], Instant::now(), false);
+        assert_eq!(out.flags.len(), 1, "{:?}", out.flags);
+        assert!(out.flags[0].contains("no window was found"));
     }
 
     #[test]

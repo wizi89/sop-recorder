@@ -845,27 +845,17 @@ mod tests {
     /// never reads the store, so a change made mid-recording cannot reach it.
     #[test]
     fn the_capture_callback_never_rereads_the_settings() {
-        let source = include_str!("recording.rs").replace(
-            "
-", "
-",
-        );
+        // Normalised first: a CRLF checkout must not hide the callback's end
+        // (FINDINGS).
+        let source = include_str!("recording.rs").replace("\r\n", "\n");
         let start = source
             .find("start_listener_with_callback(")
             .expect("capture callback not found");
-        let end = start
-            + source[start..]
-                .find(
-                    "
-    });
-",
-                )
-                .expect("callback end");
+        let end = start + source[start..].find("\n    });\n").expect("callback end");
         let body = &source[start..end];
         assert!(
             !body.contains("store"),
-            "the callback reads the store:
-{body}"
+            "the callback reads the store:\n{body}"
         );
     }
 

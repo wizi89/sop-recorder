@@ -463,10 +463,17 @@ pub fn capture_step(
 ) -> Result<HeldStep, String> {
     let started = std::time::Instant::now();
     let before = super::geometry::snapshot(click_position);
-    // A key press reads the foreground window's monitor, not the cursor's:
-    // the area is that window, and on another monitor it would fall back to
-    // capturing the cursor's monitor whole.
-    let point = click_position.or_else(|| before.as_ref().and_then(window_area::key_press_point));
+    // In the active window mode a key press reads the foreground window's
+    // monitor, not the cursor's: the area is that window, and on another
+    // monitor it would fall back to capturing the cursor's monitor whole. In
+    // monitor mode the spec keeps the cursor's monitor.
+    let point = click_position.or_else(|| {
+        if monitor_mode {
+            None
+        } else {
+            before.as_ref().and_then(window_area::key_press_point)
+        }
+    });
     let pixels_at = std::time::Instant::now();
     let (img, screen) = capture_active_monitor(point)?;
     let after = super::geometry::snapshot(click_position);
