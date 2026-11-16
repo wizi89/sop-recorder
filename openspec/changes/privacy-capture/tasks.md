@@ -10,7 +10,7 @@
 ## 2. Settings
 
 - [x] 2.1 `capture_mode` and `mask_passwords` with defaults `active_window` / `true` in `get_settings`, `save_settings` and the recording-start read for keys missing from the store; tests through those paths with a store lacking the keys (design D8)
-- [x] 2.2 `SettingsPage.tsx` section "Datenschutz bei der Aufnahme": two radio options with the monitor warning, the masking checkbox with "Passwortfelder werden mit aufgenommen." when off; macOS shows the monitor option only, no masking checkbox, plus the note; strings in `i18n/de.ts` with real umlauts
+- [x] 2.2 `SettingsPage.tsx` section "Datenschutz bei der Aufnahme": a dropdown (active window, monitor) with the monitor warning, the masking switch with "Passwortfelder werden mit aufgenommen." when off; macOS shows the monitor option only, no masking switch, plus the note; strings in `i18n/de.ts` with real umlauts
 - [x] 2.3 Read both settings once at recording start into recording state; test that a change during a recording does not affect it
 
 ## 3. Capture phases and the window area (Windows)

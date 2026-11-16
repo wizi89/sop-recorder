@@ -12,9 +12,13 @@ A Tauri v2 app: Rust does capture, audio, input hooks, sign-in and networking; a
 |------|------|
 | `src-tauri/src/lib.rs` | Startup: backend flags, logging, panic hook, plugins, the list of registered commands |
 | `capture/input_hooks.rs` | Global input: left-click and Return become steps. Windows via `rdev`, macOS via an event tap. Double-clicks on one pixel are deduplicated |
-| `capture/screenshot.rs` | Captures the monitor that was clicked, draws a ring marker, scales to at most 1920x1080 PNG |
+| `capture/screenshot.rs` | Captures a step in two phases: reads the clicked monitor and crops it to the capture area, then masks, draws a ring marker, scales to at most 1920x1080 and writes the PNG |
+| `capture/window_area.rs` | Pure geometry: the active window area (foreground window, its owner, popups under the click), which windows are visible in it |
+| `capture/geometry.rs` | Windows only: the window snapshot (`EnumWindows`, DWM bounds) taken before and after each pixel read |
+| `capture/password_check.rs` | The password check: cached and fresh field queries per window within one budget, and every case that flags a step |
+| `capture/uia.rs` | Windows only: UI Automation query for `IsPassword` fields, and the focus/show/restore events that warm the check up |
 | `capture/audio.rs` | Microphone to 16 kHz mono WAV via `cpal`, level meter, "no sound" warning |
-| `capture/permits.rs` | Bounds concurrent captures |
+| `capture/permits.rs` | Buffer slots (2 to 6 by monitor size, about 100 MB in total) and capture permits that serialise pixel reads |
 | `commands/*` | Tauri commands: recording, generate, auth, settings, pipelines, quota, permissions, window, updater, error_reports |
 | `network/*` | HTTP: `auth` (sign-in, refresh, keyring), `loopback` (browser sign-in callback), `upload`, `sse`, `jobs` (result polling), `quota`, `pipelines`, `reports` |
 | `output/*` | `guide.md`, `pending.json`, per-step metadata |
@@ -27,8 +31,8 @@ A Tauri v2 app: Rust does capture, audio, input hooks, sign-in and networking; a
 ## Life of a recording
 
 1. **Start** (`commands/recording.rs`): creates a new folder in the output directory (set in Settings), hides the app's own windows from capture, starts audio and input hooks.
-2. **Each click or Return**: a capture thread writes `step_NN.png`, then `step_NN.json` (timestamp, click position, trigger, marker box). The UI is told whether it succeeded. **Undo** deletes the last step.
-3. **Stop**: hooks and audio stop, in-flight captures get up to 15 s, `pending.json` is written, the review screen opens.
+2. **Each click or Return**: a capture thread takes a window snapshot, reads the monitor's pixels, takes a second snapshot and crops to the capture area (the active window by default, the whole monitor in "Ganzer Bildschirm" mode). It then runs the password check, fills password fields black in memory, and writes `step_NN.png`, then `step_NN.json` (timestamp, click position, trigger, marker box, `capture_scope`, `password_check`). No unmasked file is written. The UI is told whether it succeeded. **Undo** deletes the last step. Capture area and masking are Windows only; macOS captures the monitor without masking.
+3. **Stop**: hooks and audio stop, in-flight captures get up to 15 s, `pending.json` is written, the review screen opens. Steps whose password check was not confirmed (`flagged`, `unknown`) or that fell back to the monitor carry a "Prüfen" mark, and Generate needs one confirmation tick.
 4. **Generate** (`commands/generate.rs`): refreshes the session, uploads everything to `POST /generate` (3 retries, one re-auth on 401), reads SSE progress. If the stream drops, polls `GET /generate/{id}/result`. Saves `guide.md` and downloads the PDF the server rendered; a missing PDF does not fail the guide.
 5. **Result**: open the folder. "Generate from folder" re-runs step 4 for any earlier recording.
 
@@ -40,7 +44,7 @@ Browser sign-in with PKCE: a loopback listener on `127.0.0.1:<random port>`, the
 
 | When | What | Where |
 |------|------|-------|
-| Generate | The WAV, every screenshot PNG, title, pipeline choice, per-step timestamp, click position and trigger type | `POST /generate` |
+| Generate | The WAV, every screenshot PNG (cropped and masked as captured), title, pipeline choice, per-step timestamp, click position and trigger type, per-recording counts of capture scopes (`capture_scopes`) and password check outcomes (`password_checks`) | `POST /generate` |
 | Sign-in, refresh | Auth code / refresh token | `/auth/*` |
 | App start, review screen | Nothing but the session token | `/quota`, `/pipelines` |
 | Error report, only with consent | Scrubbed log tail (emails, secrets, paths removed), a subset of settings | `/client-reports` |
@@ -48,7 +52,7 @@ Browser sign-in with PKCE: a loopback listener on `127.0.0.1:<random port>`, the
 
 Not captured: typed text (only the Return key is detected), UI element names, other mouse buttons, scrolling. Nothing is sent while recording.
 
-Not done on the client today: blurring, password-field detection, active-window-only capture. Screenshots show the whole clicked monitor. The server checks for personal data and can refuse to generate; that check can be switched off in Settings.
+On Windows, screenshots show the active window by default, and password fields that UI Automation reports (`IsPassword`) are blacked out before the PNG is written. Windows drawn over the area (notifications, always-on-top windows) stay visible where they overlap it. A field a "show password" toggle has switched to plain text is not a password field to UI Automation and is not masked. Not done on the client today: blurring, and any masking on macOS (there, screenshots show the whole clicked monitor). The server checks for personal data and can refuse to generate; that check can be switched off in Settings.
 
 ## Known gaps
 

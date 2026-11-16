@@ -104,6 +104,7 @@ In the active window mode, a step SHALL show only the area of the foreground win
 
 - **WHEN** the clicked window comes to the front while the step's pixels are being read
 - **THEN** both windows are included in the password check and the step is flagged
+- **AND** a step in monitor mode, or one whose saved area is the taskbar alone, is not flagged for this, because there the foreground window does not choose the area
 
 #### Scenario: No window can be determined
 
@@ -159,7 +160,7 @@ When password masking is on, every password field visible in the saved area SHAL
 
 ### Requirement: The password check never delays a screenshot
 
-The screenshot of every step SHALL be taken at the time of its input event, regardless of how long the password check of this or any earlier step takes, as long as fewer than six earlier steps are still being processed. Beyond that the step SHALL wait for one to finish, as when captures queue today, and the wait SHALL be logged; the number of screenshots held in memory SHALL stay bounded.
+The screenshot of every step SHALL be taken at the time of its input event, regardless of how long the password check of this or any earlier step takes, as long as fewer earlier steps are still being processed than the recording has buffer slots: six, or as many full-monitor screenshots of the largest monitor as fit in about 100 MB, whichever is less, and never fewer than two. Beyond that the step SHALL wait for one to finish, as when captures queue today, and the wait SHALL be logged; the number of screenshots held in memory SHALL stay bounded.
 
 #### Scenario: A burst of clicks against a slow application
 
@@ -169,7 +170,7 @@ The screenshot of every step SHALL be taken at the time of its input event, rega
 #### Scenario: A long burst against a hanging application
 
 - **WHEN** the user clicks twenty times quickly while every password check runs out of time
-- **THEN** no more than six screenshots are held in memory at any moment
+- **THEN** no more screenshots than the recording's buffer slots (at most six) are held in memory at any moment
 - **AND** every click still produces a saved step
 
 #### Scenario: Stopping while checks are running
