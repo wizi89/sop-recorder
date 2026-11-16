@@ -1,10 +1,21 @@
 use reqwest::multipart;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::output::step_meta::{self, CaptureScope, PasswordCheck, StepMeta};
 
 const UPLOAD_TIMEOUT_SECS: u64 = 300;
+
+/// One screenshot as it is sent: its step number, the file it came from (for
+/// the part's file name and the sidecar folder), and the bytes to upload, with
+/// the review screen's boxes already burned in (review-redaction D2). The
+/// upload never reads the file again.
+#[derive(Debug)]
+pub struct UploadScreenshot {
+    pub order: u32,
+    pub path: PathBuf,
+    pub bytes: Vec<u8>,
+}
 
 /// How the uploaded screenshots were protected, counted per value
 /// (privacy-capture D9). Taken from the sidecars next to the PNGs, never from
@@ -15,7 +26,7 @@ const UPLOAD_TIMEOUT_SECS: u64 = 300;
 /// to one with the screenshots; only when they do not is the folder read
 /// again, to count the screenshots that have one.
 fn capture_counts(
-    screenshot_paths: &[(u32, &Path)],
+    screenshots: &[UploadScreenshot],
     steps: Option<&[StepMeta]>,
 ) -> (serde_json::Value, serde_json::Value) {
     let mut scopes = serde_json::Map::new();
@@ -37,17 +48,17 @@ fn capture_counts(
         checks.insert(check.as_str().into(), 0.into());
     }
     let records: Vec<(CaptureScope, PasswordCheck)> = match steps {
-        Some(steps) if steps.len() == screenshot_paths.len() => steps
+        Some(steps) if steps.len() == screenshots.len() => steps
             .iter()
             .map(|m| (m.capture_scope, m.password_check))
             .collect(),
         _ => {
             // Every screenshot of an upload lives in one `screenshots` folder.
-            let dir = screenshot_paths
+            let dir = screenshots
                 .first()
-                .and_then(|(_, path)| path.parent())
+                .and_then(|shot| shot.path.parent())
                 .unwrap_or(Path::new("."));
-            let orders: Vec<u32> = screenshot_paths.iter().map(|(order, _)| *order).collect();
+            let orders: Vec<u32> = screenshots.iter().map(|shot| shot.order).collect();
             step_meta::capture_records(dir, &orders)
         }
     };
@@ -69,7 +80,7 @@ fn capture_counts(
 pub async fn upload_multipart(
     access_token: &str,
     audio_path: &Path,
-    screenshot_paths: &[(u32, &Path)],
+    screenshots: &[UploadScreenshot],
     guide_title: &str,
     api_url: Option<&str>,
     skip_pii_check: bool,
@@ -97,16 +108,16 @@ pub async fn upload_multipart(
         .map_err(|e| e.to_string())?;
     form = form.part("audio", audio_part);
 
-    // Screenshots
-    for (order, path) in screenshot_paths {
-        let bytes = std::fs::read(path)
-            .map_err(|e| format!("Failed to read screenshot {}: {}", order, e))?;
-        let field_name = format!("step_{:02}", order);
-        let file_name = path
+    // Screenshots, as built by the caller: never re-read from disk here, so
+    // every attempt sends the same (redacted) bytes.
+    for shot in screenshots {
+        let field_name = format!("step_{:02}", shot.order);
+        let file_name = shot
+            .path
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
             .unwrap_or_else(|| format!("{}.png", field_name));
-        let part = multipart::Part::bytes(bytes)
+        let part = multipart::Part::bytes(shot.bytes.clone())
             .file_name(file_name)
             .mime_str("image/png")
             .map_err(|e| e.to_string())?;
@@ -119,12 +130,12 @@ pub async fn upload_multipart(
     // transcript and proportional step splitting".
     let mut metadata = serde_json::json!({
         "guide_title": guide_title,
-        "step_count": screenshot_paths.len(),
+        "step_count": screenshots.len(),
         "pipeline_version": pipeline_version,
         "generation_model": generation_model,
     });
     if let Some(s) = steps {
-        if s.len() == screenshot_paths.len() && !s.is_empty() {
+        if s.len() == screenshots.len() && !s.is_empty() {
             metadata["steps"] = serde_json::json!(s);
         }
     }
@@ -134,7 +145,7 @@ pub async fn upload_multipart(
     if let Some(id) = pipeline_id.filter(|s| !s.is_empty()) {
         metadata["pipeline_id"] = serde_json::json!(id);
     }
-    let (capture_scopes, password_checks) = capture_counts(screenshot_paths, steps);
+    let (capture_scopes, password_checks) = capture_counts(screenshots, steps);
     metadata["capture_scopes"] = capture_scopes;
     metadata["password_checks"] = password_checks;
     form = form.text("metadata", metadata.to_string());
@@ -197,7 +208,7 @@ pub async fn upload_multipart(
 pub async fn upload_with_retry(
     access_token: &str,
     audio_path: &Path,
-    screenshot_paths: &[(u32, &Path)],
+    screenshots: &[UploadScreenshot],
     guide_title: &str,
     api_url: Option<&str>,
     max_retries: u32,
@@ -214,7 +225,7 @@ pub async fn upload_with_retry(
         match upload_multipart(
             access_token,
             audio_path,
-            screenshot_paths,
+            screenshots,
             guide_title,
             api_url,
             skip_pii_check,
@@ -261,7 +272,6 @@ pub async fn upload_with_retry(
 mod tests {
     use super::*;
     use crate::output::step_meta::write_sidecar;
-    use std::path::PathBuf;
     use tempfile::tempdir;
 
     fn recording(
@@ -290,9 +300,19 @@ mod tests {
             .collect()
     }
 
+    fn shots(paths: &[(u32, PathBuf)]) -> Vec<UploadScreenshot> {
+        paths
+            .iter()
+            .map(|(order, path)| UploadScreenshot {
+                order: *order,
+                path: path.clone(),
+                bytes: Vec::new(),
+            })
+            .collect()
+    }
+
     fn counts(paths: &[(u32, PathBuf)]) -> (serde_json::Value, serde_json::Value) {
-        let refs: Vec<(u32, &Path)> = paths.iter().map(|(n, p)| (*n, p.as_path())).collect();
-        capture_counts(&refs, None)
+        capture_counts(&shots(paths), None)
     }
 
     /// The spec's "default settings" scenario: five window steps, one flagged.
@@ -339,9 +359,8 @@ mod tests {
                 ),
             ],
         );
-        let refs: Vec<(u32, &Path)> = paths.iter().map(|(n, p)| (*n, p.as_path())).collect();
         let steps = step_meta::read_all(dir.path());
-        assert_eq!(capture_counts(&refs, Some(&steps)), counts(&paths));
+        assert_eq!(capture_counts(&shots(&paths), Some(&steps)), counts(&paths));
     }
 
     #[test]

@@ -664,6 +664,7 @@ function MainApp() {
           outputDir={recorder.outputDir}
           skipPiiCheck={skipPiiCheck}
           failedCaptures={recorder.failedCaptures}
+          reviewError={recorder.reviewError}
           onStart={handleStart}
           onSignOut={auth.logout}
           onOpenSettings={handleOpenSettings}

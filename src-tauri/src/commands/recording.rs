@@ -665,22 +665,36 @@ pub async fn discard_recording(output_dir: String) {
     pending::clear_pending(&PathBuf::from(output_dir));
 }
 
+/// One screenshot of a recording: the step number from its file name, and
+/// its absolute path for `read_screenshot_bytes`.
+#[derive(serde::Serialize, Debug, PartialEq)]
+pub struct SessionScreenshot {
+    pub step: u32,
+    pub path: String,
+}
+
 /// List the captured screenshot files in a session output directory, in
-/// capture order. Returns absolute file paths as strings so the React side
-/// can render them via `read_screenshot_bytes`.
+/// step order. The step number is parsed from the file name, so a gap left
+/// by a failed capture or a deleted step keeps every other step's number
+/// (review-redaction D4); the review screen labels and addresses steps by it.
 ///
 /// This works without an active session: it just scans the given
 /// `{output_dir}/screenshots/` folder, so it can be called during the
 /// review screen even after `stop_recording` has finalized the session.
 #[tauri::command]
-pub async fn list_session_screenshots(output_dir: String) -> Result<Vec<String>, String> {
+pub async fn list_session_screenshots(
+    output_dir: String,
+) -> Result<Vec<SessionScreenshot>, String> {
     Ok(session_screenshots(&output_dir)?
         .into_iter()
-        .map(|(_, p)| p.to_string_lossy().to_string())
+        .map(|(step, p)| SessionScreenshot {
+            step,
+            path: p.to_string_lossy().to_string(),
+        })
         .collect())
 }
 
-fn session_screenshots(output_dir: &str) -> Result<Vec<(u32, PathBuf)>, String> {
+pub(crate) fn session_screenshots(output_dir: &str) -> Result<Vec<(u32, PathBuf)>, String> {
     let screenshots_dir = PathBuf::from(output_dir).join("screenshots");
     if !screenshots_dir.exists() {
         return Ok(Vec::new());
@@ -713,6 +727,7 @@ fn session_screenshots(output_dir: &str) -> Result<Vec<(u32, PathBuf)>, String> 
 /// (privacy-capture D7).
 #[derive(serde::Serialize)]
 pub struct StepCaptureRecord {
+    pub step: u32,
     pub path: String,
     pub capture_scope: step_meta::CaptureScope,
     pub password_check: step_meta::PasswordCheck,
@@ -731,7 +746,8 @@ pub async fn list_capture_records(output_dir: String) -> Result<Vec<StepCaptureR
         .into_iter()
         .zip(records)
         .map(
-            |((_, path), (capture_scope, password_check))| StepCaptureRecord {
+            |((step, path), (capture_scope, password_check))| StepCaptureRecord {
+                step,
                 path: path.to_string_lossy().to_string(),
                 capture_scope,
                 password_check,
@@ -916,6 +932,25 @@ mod tests {
 
     /// The path the 2026-09-03 recordings took silently: a capture fails, the
     /// step number has already advanced, and nothing counts the loss.
+    #[tokio::test]
+    async fn screenshots_are_listed_with_the_step_from_their_file_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let shots = dir.path().join("screenshots");
+        std::fs::create_dir(&shots).unwrap();
+        for n in [4u32, 1, 3] {
+            std::fs::write(shots.join(format!("step_{n:02}.png")), b"png").unwrap();
+        }
+        std::fs::write(shots.join("step_01.json"), b"{}").unwrap();
+        let listed = list_session_screenshots(dir.path().to_string_lossy().to_string())
+            .await
+            .unwrap();
+        assert_eq!(
+            listed.iter().map(|s| s.step).collect::<Vec<_>>(),
+            vec![1, 3, 4]
+        );
+        assert!(listed[1].path.ends_with("step_03.png"));
+    }
+
     #[test]
     fn a_failed_capture_is_counted() {
         let failed = AtomicU32::new(0);

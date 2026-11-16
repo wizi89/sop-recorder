@@ -27,11 +27,15 @@ describe("ReviewScreen failed-capture notice", () => {
     mockInvoke.mockImplementation((cmd: string) => {
       switch (cmd) {
         case "list_session_screenshots":
-          return Promise.resolve(["/tmp/step_01.png", "/tmp/step_03.png", "/tmp/step_04.png"]);
+          return Promise.resolve(
+            [1, 3, 4].map((step) => ({ step, path: `/tmp/step_0${step}.png` })),
+          );
         case "list_capture_records":
           return Promise.resolve(
-            ["/tmp/step_01.png", "/tmp/step_03.png", "/tmp/step_04.png"].map((path) => ({ path, capture_scope: "window", password_check: "ok" })),
+            [1, 3, 4].map((step) => ({ step, path: `/tmp/step_0${step}.png`, capture_scope: "window", password_check: "ok" })),
           );
+        case "load_redactions":
+          return Promise.resolve({ steps: {}, leftover_steps: [], unreadable: null });
         case "read_screenshot_bytes":
           return Promise.resolve([1, 2, 3]);
         // The pipeline selector runs on this screen too; it needs a list

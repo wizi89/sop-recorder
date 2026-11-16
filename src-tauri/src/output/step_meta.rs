@@ -129,6 +129,21 @@ fn order_from_filename(name: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// The step number of every sidecar file in the folder, parsed or not. Used to
+/// find a sidecar left without its screenshot by a delete that failed part way
+/// (review-redaction D2, D5).
+pub fn sidecar_orders(output_dir: &Path) -> Vec<u32> {
+    let Ok(entries) = fs::read_dir(output_dir) else {
+        return Vec::new();
+    };
+    let mut orders: Vec<u32> = entries
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| order_from_filename(&entry.file_name().to_string_lossy()))
+        .collect();
+    orders.sort_unstable();
+    orders
+}
+
 /// Read every sidecar in the folder, in ascending step order. Used by the
 /// upload path to derive `metadata.steps`.
 ///
