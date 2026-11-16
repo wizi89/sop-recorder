@@ -110,6 +110,9 @@ pub struct Snapshot {
     /// The root window under the click; `None` for a key press.
     pub under_click: Option<isize>,
     pub windows: Vec<WindowInfo>,
+    /// The list came from `EnumWindows`, which leaves out shell windows such
+    /// as toasts: they are neither masked nor checked, so the step is flagged.
+    pub partial: bool,
 }
 
 impl Snapshot {
@@ -442,6 +445,7 @@ mod tests {
             foreground: Some(fg),
             under_click: under,
             windows,
+            partial: false,
         }
     }
 

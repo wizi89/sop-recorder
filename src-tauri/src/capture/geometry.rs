@@ -31,10 +31,8 @@ mod windows_impl {
         unsafe {
             // Top of the z-order first, which is the order D4's visibility
             // calculation reads it in.
-            let windows: Vec<WindowInfo> = top_level_windows()
-                .into_iter()
-                .filter_map(|hwnd| info(hwnd))
-                .collect();
+            let (list, partial) = top_level_windows();
+            let windows: Vec<WindowInfo> = list.into_iter().filter_map(|hwnd| info(hwnd)).collect();
             let foreground = GetForegroundWindow();
             let under_click =
                 click.map(|(x, y)| GetAncestor(WindowFromPoint(POINT { x, y }), GA_ROOT));
@@ -42,6 +40,7 @@ mod windows_impl {
                 foreground: (!foreground.0.is_null()).then_some(foreground.0 as isize),
                 under_click: under_click.filter(|h| !h.0.is_null()).map(|h| h.0 as isize),
                 windows,
+                partial,
             }
         }
     }
@@ -53,11 +52,12 @@ mod windows_impl {
     /// such windows, drawn over every app and present in the pixels (see
     /// FINDINGS). Walking the list with `FindWindowExW` returns them too.
     /// The walk breaks off when the window it continues from closes, so it is
-    /// retried, and `EnumWindows` is the last resort.
-    unsafe fn top_level_windows() -> Vec<HWND> {
+    /// retried, and `EnumWindows` is the last resort; `true` marks that list
+    /// as partial.
+    unsafe fn top_level_windows() -> (Vec<HWND>, bool) {
         for _ in 0..3 {
             if let Some(list) = walk() {
-                return list;
+                return (list, false);
             }
         }
         log::warn!("Window walk broke off three times; using EnumWindows");
@@ -67,7 +67,7 @@ mod windows_impl {
         if let Err(e) = EnumWindows(Some(collect), LPARAM(&mut list as *mut _ as isize)) {
             log::warn!("EnumWindows failed: {e}");
         }
-        list
+        (list, true)
     }
 
     /// One `FindWindowExW` walk; `None` when it broke off before the end.

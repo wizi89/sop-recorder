@@ -101,7 +101,12 @@ fn check_step(
     let foreground_changed = geometry.foreground_changed
         && held.scope == step_meta::CaptureScope::Window
         && !window_area::shell_only(&geometry.snapshots[0], &held.shown());
-    let outcome = checker.check(&windows, held.pixels_at, foreground_changed);
+    let mut outcome = checker.check(&windows, held.pixels_at, foreground_changed);
+    if geometry.snapshots.iter().any(|s| s.partial) {
+        outcome
+            .flags
+            .push("the window list left out shell windows such as notifications".to_string());
+    }
     if outcome.flags.is_empty() {
         log::info!(
             "Step {step_num}: password check ok, {} window(s), {} field area(s) masked, {} ms",
