@@ -14,7 +14,7 @@ A Tauri v2 app: Rust does capture, audio, input hooks, sign-in and networking; a
 | `capture/input_hooks.rs` | Global input: left-click and Return become steps. Windows via `rdev`, macOS via an event tap. Double-clicks on one pixel are deduplicated |
 | `capture/screenshot.rs` | Captures a step in two phases: reads the clicked monitor and crops it to the capture area, then masks, draws a ring marker, scales to at most 1920x1080 and writes the PNG |
 | `capture/window_area.rs` | Pure geometry: the active window area (foreground window, its owner, popups under the click), which windows are visible in it |
-| `capture/geometry.rs` | Windows only: the window snapshot (`EnumWindows`, DWM bounds) taken before and after each pixel read |
+| `capture/geometry.rs` | Windows only: the window snapshot (`FindWindowExW` walk, DWM bounds) taken before and after each pixel read |
 | `capture/password_check.rs` | The password check: cached and fresh field queries per window within one budget, and every case that flags a step |
 | `capture/uia.rs` | Windows only: UI Automation query for `IsPassword` fields, and the focus/show/restore events that warm the check up |
 | `capture/audio.rs` | Microphone to 16 kHz mono WAV via `cpal`, level meter, "no sound" warning |
@@ -52,7 +52,7 @@ Browser sign-in with PKCE: a loopback listener on `127.0.0.1:<random port>`, the
 
 Not captured: typed text (only the Return key is detected), UI element names, other mouse buttons, scrolling. Nothing is sent while recording.
 
-On Windows, screenshots show the active window by default, and password fields that UI Automation reports (`IsPassword`) are blacked out before the PNG is written. Windows drawn over the area (notifications, always-on-top windows) stay visible where they overlap it. A field a "show password" toggle has switched to plain text is not a password field to UI Automation and is not masked. Not done on the client today: blurring, and any masking on macOS (there, screenshots show the whole clicked monitor). The server checks for personal data and can refuse to generate; that check can be switched off in Settings.
+On Windows, screenshots show the active window by default, and password fields that UI Automation reports (`IsPassword`) are blacked out before the PNG is written. Windows of other apps drawn over the area (notifications, the notification center, quick settings, always-on-top windows) are blacked out where they overlap it; click-through overlays and the window the click lands on stay visible. A field a "show password" toggle has switched to plain text is not a password field to UI Automation and is not masked. Not done on the client today: blurring, and any masking on macOS (there, screenshots show the whole clicked monitor). The server checks for personal data and can refuse to generate; that check can be switched off in Settings.
 
 ## Known gaps
 

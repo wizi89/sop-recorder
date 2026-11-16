@@ -18,22 +18,23 @@ pub fn snapshot(_click: Option<(i32, i32)>) -> Option<Snapshot> {
 mod windows_impl {
     use super::super::window_area::{Rect, Snapshot, WindowInfo};
     use std::ffi::c_void;
-    use windows::Win32::Foundation::{BOOL, HWND, LPARAM, POINT, RECT, TRUE};
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{
+        SetLastError, BOOL, HWND, LPARAM, POINT, RECT, TRUE, WIN32_ERROR,
+    };
     use windows::Win32::Graphics::Dwm::{
         DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS,
     };
     use windows::Win32::UI::WindowsAndMessaging::*;
 
     pub fn snapshot(click: Option<(i32, i32)>) -> Snapshot {
-        let mut windows: Vec<WindowInfo> = Vec::new();
         unsafe {
             // Top of the z-order first, which is the order D4's visibility
             // calculation reads it in.
-            // An empty list is flagged by the password check; the error is
-            // only for the log.
-            if let Err(e) = EnumWindows(Some(collect), LPARAM(&mut windows as *mut _ as isize)) {
-                log::warn!("EnumWindows failed: {e}");
-            }
+            let windows: Vec<WindowInfo> = top_level_windows()
+                .into_iter()
+                .filter_map(|hwnd| info(hwnd))
+                .collect();
             let foreground = GetForegroundWindow();
             let under_click =
                 click.map(|(x, y)| GetAncestor(WindowFromPoint(POINT { x, y }), GA_ROOT));
@@ -45,11 +46,53 @@ mod windows_impl {
         }
     }
 
-    unsafe extern "system" fn collect(hwnd: HWND, out: LPARAM) -> BOOL {
-        let out = &mut *(out.0 as *mut Vec<WindowInfo>);
-        if let Some(info) = info(hwnd) {
-            out.push(info);
+    /// Every top-level window, top of the z-order first.
+    ///
+    /// Not `EnumWindows`: since Windows 8 it leaves out immersive shell
+    /// windows, and toasts, the notification center and quick settings are
+    /// such windows, drawn over every app and present in the pixels (see
+    /// FINDINGS). Walking the list with `FindWindowExW` returns them too.
+    /// The walk breaks off when the window it continues from closes, so it is
+    /// retried, and `EnumWindows` is the last resort.
+    unsafe fn top_level_windows() -> Vec<HWND> {
+        for _ in 0..3 {
+            if let Some(list) = walk() {
+                return list;
+            }
         }
+        log::warn!("Window walk broke off three times; using EnumWindows");
+        let mut list: Vec<HWND> = Vec::new();
+        // An empty list is flagged by the password check; the error is only
+        // for the log.
+        if let Err(e) = EnumWindows(Some(collect), LPARAM(&mut list as *mut _ as isize)) {
+            log::warn!("EnumWindows failed: {e}");
+        }
+        list
+    }
+
+    /// One `FindWindowExW` walk; `None` when it broke off before the end.
+    unsafe fn walk() -> Option<Vec<HWND>> {
+        let mut list = Vec::new();
+        let mut prev = HWND::default();
+        // A guard against a z-order that changes into a cycle mid-walk.
+        while list.len() < 50_000 {
+            SetLastError(WIN32_ERROR(0));
+            match FindWindowExW(HWND::default(), prev, PCWSTR::null(), PCWSTR::null()) {
+                Ok(hwnd) => {
+                    list.push(hwnd);
+                    prev = hwnd;
+                }
+                // The end of the list sets no error.
+                Err(e) if e.code().is_ok() => return Some(list),
+                Err(_) => return None,
+            }
+        }
+        None
+    }
+
+    unsafe extern "system" fn collect(hwnd: HWND, out: LPARAM) -> BOOL {
+        let out = &mut *(out.0 as *mut Vec<HWND>);
+        out.push(hwnd);
         TRUE
     }
 
@@ -106,6 +149,7 @@ mod windows_impl {
             cloaked: cloaked != 0,
             layered: ex_style & WS_EX_LAYERED.0 != 0,
             transparent: unsure || ex_style & WS_EX_TRANSPARENT.0 != 0,
+            click_through: ex_style & WS_EX_TRANSPARENT.0 != 0,
             excluded: affinity != WDA_NONE.0,
         })
     }
@@ -121,7 +165,7 @@ mod tests {
         let s = super::snapshot(None).unwrap();
         for w in &s.windows {
             println!(
-                "{:>10x} {:?} {} pid {} popup {} cloaked {} layered {} excluded {} owner {:x}",
+                "{:>10x} {:?} {} pid {} popup {} cloaked {} layered {} click-through {} excluded {} owner {:x}",
                 w.hwnd,
                 w.rect,
                 w.class,
@@ -129,6 +173,7 @@ mod tests {
                 w.popup,
                 w.cloaked,
                 w.layered,
+                w.click_through,
                 w.excluded,
                 w.root_owner
             );

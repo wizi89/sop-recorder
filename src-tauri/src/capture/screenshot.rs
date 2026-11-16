@@ -378,6 +378,9 @@ pub struct HeldStep {
     /// Desktop rectangles the step shows; everything else in `img` is filled
     /// in phase B. Empty means the whole image.
     keep: Vec<Rect>,
+    /// Where other apps' windows cover the step's windows: blacked out
+    /// in phase B, with the password masks.
+    foreign: Vec<Rect>,
     pub scope: CaptureScope,
     /// Both snapshots merged, for the password check. `None` off Windows.
     pub geometry: Option<Geometry>,
@@ -388,13 +391,16 @@ pub struct HeldStep {
 
 impl HeldStep {
     /// The desktop rectangles the saved image shows: the kept window
-    /// rectangles, or the whole image.
+    /// rectangles without the foreign windows over them, or the whole image.
     pub fn shown(&self) -> Vec<Rect> {
         if self.keep.is_empty() {
-            vec![monitor_rect(&self.screen, &self.img)]
-        } else {
-            self.keep.clone()
+            return vec![monitor_rect(&self.screen, &self.img)];
         }
+        let mut shown = self.keep.clone();
+        for cut in &self.foreign {
+            shown = shown.iter().flat_map(|r| r.subtract(cut)).collect();
+        }
+        shown
     }
 }
 
@@ -490,32 +496,53 @@ pub fn capture_step(
 
     // One line per step saying what it kept (task 3.6): the first question
     // when a guide shows too little or too much.
-    let (img, screen, keep, scope) = match area {
+    let (img, screen, keep, foreign, scope) = match area {
         None => {
             log::info!("Step {step_number}: capture monitor {monitor:?}");
-            (img, screen, Vec::new(), CaptureScope::Monitor)
+            (img, screen, Vec::new(), Vec::new(), CaptureScope::Monitor)
         }
         Some(Area::Fallback(reason)) => {
             log::warn!(
                 "Step {step_number}: capture active_window fell back to monitor {monitor:?}: {reason}"
             );
-            (img, screen, Vec::new(), CaptureScope::MonitorFallback)
+            (
+                img,
+                screen,
+                Vec::new(),
+                Vec::new(),
+                CaptureScope::MonitorFallback,
+            )
         }
-        Some(Area::Window { crop, keep }) => match crop_to(&img, screen, &crop) {
+        Some(Area::Window {
+            crop,
+            keep,
+            windows,
+        }) => match crop_to(&img, screen, &crop) {
             // Cropped at once, so what phase B holds is the area, not the monitor.
             Some((cropped, cropped_screen)) => {
+                // Both snapshots: a toast may appear or grow during the read.
+                let snapshots: Vec<_> = before.iter().chain(after.iter()).collect();
+                let foreign = window_area::foreign_rects(&snapshots, &windows);
                 log::info!(
-                    "Step {step_number}: capture active_window, area {crop:?} from {} window rectangle(s)",
-                    keep.len()
+                    "Step {step_number}: capture active_window, area {crop:?} from {} window rectangle(s), \
+                     {} foreign window area(s) masked",
+                    keep.len(),
+                    foreign.len()
                 );
-                (cropped, cropped_screen, keep, CaptureScope::Window)
+                (cropped, cropped_screen, keep, foreign, CaptureScope::Window)
             }
             None => {
                 log::warn!(
                     "Step {step_number}: capture active_window fell back to monitor {monitor:?}: \
                      area {crop:?} is not in the captured pixels"
                 );
-                (img, screen, Vec::new(), CaptureScope::MonitorFallback)
+                (
+                    img,
+                    screen,
+                    Vec::new(),
+                    Vec::new(),
+                    CaptureScope::MonitorFallback,
+                )
             }
         },
     };
@@ -529,6 +556,7 @@ pub fn capture_step(
         img,
         screen,
         keep,
+        foreign,
         scope,
         geometry,
         pixels_at,
@@ -621,7 +649,14 @@ pub fn finish_and_save(
 ) -> Result<Option<MarkerBox>, String> {
     let started = std::time::Instant::now();
     let (w, h) = (held.img.width(), held.img.height());
-    let (image, marker) = finish_image(held.img, held.screen, &held.keep, masks, click_position);
+    let all_masks: Vec<Rect> = held.foreign.iter().chain(masks).copied().collect();
+    let (image, marker) = finish_image(
+        held.img,
+        held.screen,
+        &held.keep,
+        &all_masks,
+        click_position,
+    );
 
     let path = output_dir.join(format!("step_{:02}.png", step_number));
     let rgb_img = image.to_rgb8();

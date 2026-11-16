@@ -9,6 +9,31 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-11-16 Toasts, the notification center and quick settings were missing from the window snapshot
+
+**Symptom:** a Windows toast over the captured window was in the step PNG, but no toast
+window showed up in the geometry snapshot (`live_snapshot`) or in a PowerShell `EnumWindows`
+probe fired alongside it. Read from the code: a click on a toast or the notification center
+finds no window under the click in the snapshot and falls back to the whole monitor.
+
+**Cause:** `EnumWindows` leaves out immersive shell windows on Windows 8 and later (its
+documentation says it enumerates only desktop apps' top-level windows). The toast host
+(`ShellExperienceHost.exe`, class `Windows.UI.Core.CoreWindow`, ex style
+`WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP`), the notification center and quick settings
+(`ShellHost.exe`, `ControlCenterWindow`) are such windows. They are ordinary DWM-composed
+windows, so a GDI screen grab contains them. Walking the top-level list with
+`FindWindowExW(NULL, prev, NULL, NULL)` returns them (329 windows against 262 from
+`EnumWindows` on Windows 11 build 26300). The toast host window is never destroyed: at rest
+it is visible but cloaked (`DWMWA_CLOAKED = 2`) with a zero-height rect; on a toast it
+uncloaks, and 0.25 to 0.7 s later its rect grows and pixels appear. `GetWindowRect` then
+encloses every drawn pixel, plus about 24 px of transparent margin.
+
+**Rule:** take z-ordered window lists from `FindWindowExW` (`capture/geometry.rs`), not
+`EnumWindows`. Filter on visible, not cloaked and a non-empty rect, never on localized
+titles. The walk ends early if the window it continues from closes; retry it.
+
+---
+
 ## 2026-11-14 `npm test` ran hundreds of extra, failing tests from agent worktrees
 
 **Symptom:** `npm test` reported 65 test files and 112 failures, all under

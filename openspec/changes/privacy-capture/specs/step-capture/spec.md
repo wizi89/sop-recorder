@@ -62,7 +62,7 @@ The recorder SHALL offer two capture modes, active window and monitor, as a user
 
 ### Requirement: Active window capture shows the window and its owner
 
-In the active window mode, a step SHALL show only the area of the foreground window and its root owner window; everything else on the display, including the taskbar, the tray and other windows outside that area, SHALL NOT appear, unless the step's click lands on it. Windows drawn above that area, such as notifications or always-on-top windows, remain visible where they overlap it.
+In the active window mode, a step SHALL show only the area of the foreground window and its root owner window; everything else on the display, including the taskbar, the tray and other windows outside that area, SHALL NOT appear, unless the step's click lands on it. Windows of other apps drawn above that area, such as notifications, the notification center, quick settings or always-on-top windows, SHALL be blacked out where they overlap it; click-through overlays (`WS_EX_TRANSPARENT`) and the window the click lands on remain visible.
 
 #### Scenario: Click inside a normal application window
 
@@ -87,8 +87,13 @@ In the active window mode, a step SHALL show only the area of the foreground win
 
 #### Scenario: A window drawn above the captured window
 
-- **WHEN** an always-on-top window or a notification overlaps the captured window
-- **THEN** the overlapping part is visible in the saved screenshot and is included in the password check
+- **WHEN** an always-on-top window, a notification, the notification center or quick settings overlaps the captured window, before or after the pixels are read
+- **THEN** the overlapping part is black in the saved screenshot and is left out of the password check
+
+#### Scenario: A click-through overlay over the captured window
+
+- **WHEN** a window that lets clicks through (`WS_EX_TRANSPARENT`, such as a dictation bar) overlaps the captured window
+- **THEN** it is not blacked out
 
 #### Scenario: Click on a window that is not yet in front
 
