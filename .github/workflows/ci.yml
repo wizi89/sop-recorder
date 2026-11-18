@@ -37,6 +37,8 @@ jobs:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
+        # --no-renames lists both paths of a rename, so src/x.ts -> src/x.md
+        # still counts as code.
         run: |
           code=true
           case "$EVENT" in
@@ -45,7 +47,7 @@ jobs:
             *) base="" ;;
           esac
           if [ -n "$base" ] && ! [[ "$base" =~ ^0+$ ]] \
-            && files=$(git diff --name-only "$base"...HEAD); then
+            && files=$(git diff --no-renames --name-only "$base"...HEAD); then
             if ! printf '%s\n' "$files" | grep -v -E '(\.md$|^docs/)' | grep -q .; then
               code=false
             fi
