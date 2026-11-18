@@ -2,7 +2,7 @@
 name: factory-explore
 description: The Explore Station of the Software Factory. Claims every open `agent:explore` issue in one batch, triages each against the code, and gives each exactly one Verdict in a report comment. Use when the fire payload says `station=explore`.
 ---
-<!-- vendored from Home @a7f8063, do not edit here -->
+<!-- vendored from Home @3bedada, do not edit here -->
 
 # Factory: Explore
 
@@ -61,10 +61,14 @@ Applies when a sop-sorcery issue needs changes in both sop-sorcery and sop-recor
    ```
    ~~~
 
-   Then add a native blocked-by on the server child, and the label `agent` (sop-recorder's own Routine works it). sop-recorder is **public**: the child holds the title, the contract diff and the blocked-by, and nothing else. No issue text, logs, customer or org names, file paths from sop-sorcery or links to private issues.
+   Then add a native blocked-by on the server child, and the label `agent:explore` (sop-recorder's router Routine works it). sop-recorder is **public**: the child holds the title, the contract diff and the blocked-by, and nothing else. No issue text, logs, customer or org names, file paths from sop-sorcery or links to private issues.
 4. **In doubt, fail closed.** When unsure whether something is safe to publish, or sop-recorder is not reachable from this session (403), create no child: give the parent `needs-owner` and put the drafted child text in the parent's comment.
 
 Done when the parent's report comment links both children, or says why no child was created.
+
+## Recorder-only issue
+
+A sop-sorcery issue titled `recorder:` that needs no server change is not built here: recorder issues the factory works live in sop-recorder. Never create the public issue yourself. Draft it in the report comment (title, the problem as a user sees it, the wanted behaviour, acceptance criteria; nothing from sop-sorcery, no customer, pilot or pricing detail, no link to a private issue), Verdict `needs-owner` - "owner: publish this text in sop-recorder and label it `agent:explore`".
 
 ## Shared rules
 
@@ -73,7 +77,7 @@ Done when the parent's report comment links both children, or says why no child 
 - **Station limits.** Explore writes no code and relabels only the issues it claimed (plus the children it creates). No station merges a PR or enables auto-merge.
 - **Session link.** In a cloud session it is the output of `echo "https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse_/session_}"` (the variable may hold a `cse_…` id; this rewrites it, per https://code.claude.com/docs/en/cloud-environments). If it is unset, write "session link unavailable".
 - **Friction is for the retro.** Name what cost this run time or sent it the wrong way, with the evidence (command, file, error line). It is how the factory improves; "none" only when nothing did.
-- **Every claimed issue gets its report comment**, even on failure: the router sweep treats an `agent:in-progress` older than 2 h with no `<!-- factory-report` comment as hung: it swaps `agent:in-progress` and `agent:explore` for `agent:blocked` and comments the step 6 retry line.
+- **Every claimed issue gets its report comment**, even on failure: the router sweep treats an `agent:in-progress` older than 4 h with no `<!-- factory-report` comment as hung: it swaps `agent:in-progress` and `agent:explore` for `agent:blocked` and comments the step 6 retry line.
 
 ## GitHub calls
 
