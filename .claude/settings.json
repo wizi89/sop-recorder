@@ -1,0 +1,21 @@
+{
+  "enabledPlugins": {
+    "cowork-plugin-management@synced": false,
+    "design@synced": false,
+    "legal@synced": false,
+    "product-tracking-skills@synced": false,
+    "small-business@synced": false
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/cloud-no-proxy.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
