@@ -2,7 +2,7 @@
 name: factory-review
 description: The Review Station of the Software Factory. Reviews an `agent:review` PR in fresh context against the issue and the repo's coding standards, fixes what it can, posts a verdict and marks the PR ready for the owner's merge. Use when the fire payload says `station=review`.
 ---
-<!-- vendored from Home @a7f8063, do not edit here -->
+<!-- vendored from Home @3bedada, do not edit here -->
 
 # Factory: Review
 
@@ -18,7 +18,7 @@ You are a fresh context by design. Judge the diff against the spec; Implement's 
 
 3. **Review.** Check out the PR branch, `git fetch origin <base>`, and run `/code-review` against `origin/<base>` with the spec and standards from step 2. If the skill is not loaded in this session, do its process by hand: two parallel subagents over `git diff origin/<base>...HEAD`, one for **Standards** (cite the rule per finding), one for **Spec** (missing, unasked-for, wrong; quote the spec line). Run this two-axis review on every diff, however small; if you did not run it, name that and the reason under **Friction** in the verdict. Done when you hold both reports.
 
-4. **Fix and comment.** Fix every finding you can without a product decision, in commits on the PR branch; rerun the `AGENTS.md` checks and push. Leave an inline review comment on the line for each finding you leave open. Done when every finding is fixed (commit sha) or carries an inline comment.
+4. **Fix and comment.** Fix every finding you can without a product decision, in commits on the PR branch; rerun the `AGENTS.md` checks and push (CI-only checks: poll the named CI jobs on the new head every 2 min, at most 45 min, as in factory-implement step 5). Leave an inline review comment on the line for each finding you leave open. Done when every finding is fixed (commit sha) or carries an inline comment.
 
 5. **Verdict comment** on the PR:
 
@@ -49,7 +49,7 @@ You are a fresh context by design. Judge the diff against the spec; Implement's 
 - **Station limits.** Review labels only its own PR and comments on its issue. No station merges a PR or enables auto-merge; the owner merges, whatever `AGENTS.md` says about agent merges.
 - **Session link.** In a cloud session it is the output of `echo "https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse_/session_}"` (the variable may hold a `cse_…` id; this rewrites it, per https://code.claude.com/docs/en/cloud-environments). If it is unset, write "session link unavailable".
 - **Friction is for the retro.** Name what cost this run time or sent it the wrong way, with the evidence (command, file, error line). It is how the factory improves; "none" only when nothing did.
-- **Every claim ends in a report comment**, even on failure: the router sweep treats an `agent:in-progress` older than 2 h with no `<!-- factory-report` comment as hung: it swaps `agent:in-progress` and `agent:review` for `agent:blocked` and comments the same retry line. A run that cannot finish posts the verdict comment with what it got to, swaps `agent:in-progress` and `agent:review` for `agent:blocked`, and ends with "Retry: remove `agent:blocked` and set `agent:review` again; the next run reads this comment."
+- **Every claim ends in a report comment**, even on failure: the router sweep treats an `agent:in-progress` older than 4 h with no `<!-- factory-report` comment as hung: it swaps `agent:in-progress` and `agent:review` for `agent:blocked` and comments the same retry line. A run that cannot finish posts the verdict comment with what it got to, swaps `agent:in-progress` and `agent:review` for `agent:blocked`, and ends with "Retry: remove `agent:blocked` and set `agent:review` again; the next run reads this comment."
 
 ## GitHub calls
 

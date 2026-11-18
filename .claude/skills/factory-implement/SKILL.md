@@ -2,7 +2,7 @@
 name: factory-implement
 description: The Implement Station of the Software Factory. Builds an explored issue on `agent/<n>-<slug>`, opens a draft PR with door, blast radius and check output, and hands it to Review; also does rework on a PR. Use when the fire payload says `station=implement`.
 ---
-<!-- vendored from Home @a7f8063, do not edit here -->
+<!-- vendored from Home @3bedada, do not edit here -->
 
 # Factory: Implement
 
@@ -21,6 +21,8 @@ Input is the fire payload text: `station=implement repo=<owner/name> number=<n> 
 4. **Build exactly what the spec asks.** Follow `AGENTS.md`. A migration is expand-only (works with the previous code version: additive only; a drop, rename or tightened constraint waits for a later PR) and takes its number only after merging current `origin/<base>` into the branch (never rebase a pushed branch: a cloud run cannot force-push). Done when every listed change is in a commit.
 
 5. **Run the checks** `AGENTS.md` names, plus those the issue's acceptance criteria name. Fix and rerun up to three rounds. Done when all are green, or still red after three rounds.
+
+   **CI-only checks.** A check `AGENTS.md` marks CI-only is not run in the session. Once the session checks are green, do step 7 first (the draft PR starts CI), then poll `gh api "repos/$REPO/commits/$SHA/check-runs"` for the named jobs on your head commit every 2 min, at most 45 min per round (the router's hang sweep allows 4 h per claim). A red job is a red round: read why from `gh api "repos/$REPO/actions/jobs/$JOB_ID/logs"`; if that download fails (it redirects to a host outside the allowlist), use the check run's `output` and `gh api "repos/$REPO/check-runs/$CHECK_ID/annotations"` and name the failed download under **Friction**. Fix, push, poll again, same three-round cap. Still red: step 6 with the job's log tail or annotations; the draft PR stays open. Done when the named jobs are green on the head commit.
 
 6. **Red: block.** Push the branch. Comment on the issue (format in step 9) with the failing command, the last 30 lines of its output and: "Retry: remove `agent:blocked` and set `agent:implement` again; the next run reads this comment and continues on `<branch>`." Swap `agent:in-progress` and `agent:implement` on `<n>` for `agent:blocked`. Stop.
 
@@ -58,7 +60,7 @@ Input is the fire payload text: `station=implement repo=<owner/name> number=<n> 
 - **Station limits.** Implement opens draft PRs. No station merges a PR or enables auto-merge; the owner merges (`owner-merge`), whatever `AGENTS.md` says about agent merges.
 - **Session link.** In a cloud session it is the output of `echo "https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse_/session_}"` (the variable may hold a `cse_…` id; this rewrites it, per https://code.claude.com/docs/en/cloud-environments). If it is unset, write "session link unavailable".
 - **Friction is for the retro.** Name what cost this run time or sent it the wrong way, with the evidence (command, file, error line). It is how the factory improves; "none" only when nothing did.
-- **Every claim ends in a report comment**, even on failure: the router sweep treats an `agent:in-progress` older than 2 h with no `<!-- factory-report` comment as hung: it swaps `agent:in-progress` and `agent:implement` for `agent:blocked` and comments "Retry: remove `agent:blocked` and set `agent:implement` again".
+- **Every claim ends in a report comment**, even on failure: the router sweep treats an `agent:in-progress` older than 4 h with no `<!-- factory-report` comment as hung: it swaps `agent:in-progress` and `agent:implement` for `agent:blocked` and comments "Retry: remove `agent:blocked` and set `agent:implement` again".
 
 ## GitHub calls
 
