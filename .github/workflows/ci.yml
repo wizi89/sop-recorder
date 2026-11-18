@@ -38,7 +38,8 @@ jobs:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
         # --no-renames lists both paths of a rename, so src/x.ts -> src/x.md
-        # still counts as code.
+        # still counts as code. An empty diff (an empty "[build]" commit)
+        # counts as code too.
         run: |
           code=true
           case "$EVENT" in
@@ -48,11 +49,11 @@ jobs:
           esac
           if [ -n "$base" ] && ! [[ "$base" =~ ^0+$ ]] \
             && files=$(git diff --no-renames --name-only "$base"...HEAD); then
-            if ! printf '%s\n' "$files" | grep -v -E '(\.md$|^docs/)' | grep -q .; then
+            if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -v -E '(\.md$|^docs/)' | grep -q .; then
               code=false
             fi
           fi
-          echo "Changed files:"; printf '%s\n' "${files:-<not computed>}"
+          echo "Changed files:"; printf '%s\n' "${files:-<empty or not computed>}"
           echo "code=$code" | tee -a "$GITHUB_OUTPUT"
 
   # Both platforms, because the defects that only appear on macOS are the ones
