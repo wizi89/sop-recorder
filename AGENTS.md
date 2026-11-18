@@ -25,7 +25,7 @@ Labels: `agent:explore`, `agent:implement`, `agent:review` (PR), `agent:in-progr
 `agent:blocked`, `needs-owner`, `owner-merge`, `one-way-door`.
 
 One-way door paths (Implement adds `one-way-door` and the checklist when a diff touches one):
-`.github/`, `src-tauri/tauri.conf.json`, `src-tauri/tauri.macos.conf.json`,
+`.github/workflows/release.yml`, `src-tauri/tauri.conf.json`, `src-tauri/tauri.macos.conf.json`,
 `src-tauri/tauri.signing.conf.json`, `src-tauri/Entitlements.plist`, `src-tauri/Info.plist`,
 `src-tauri/capabilities/`, `docs/server-contract.md`.
 
