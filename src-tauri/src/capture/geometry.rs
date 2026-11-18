@@ -139,6 +139,7 @@ mod windows_impl {
         let mut class = [0u16; 256];
         let len = GetClassNameW(hwnd, &mut class).max(0) as usize;
 
+        let click_through = ex_style & WS_EX_TRANSPARENT.0 != 0;
         Some(WindowInfo {
             hwnd: hwnd.0 as isize,
             rect,
@@ -148,8 +149,8 @@ mod windows_impl {
             root_owner: GetAncestor(hwnd, GA_ROOTOWNER).0 as isize,
             cloaked: cloaked != 0,
             layered: ex_style & WS_EX_LAYERED.0 != 0,
-            transparent: unsure || ex_style & WS_EX_TRANSPARENT.0 != 0,
-            click_through: ex_style & WS_EX_TRANSPARENT.0 != 0,
+            transparent: unsure || click_through,
+            click_through,
             excluded: affinity != WDA_NONE.0,
         })
     }

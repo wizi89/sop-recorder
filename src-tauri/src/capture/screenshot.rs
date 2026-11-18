@@ -697,6 +697,33 @@ mod tests {
     /// would show up.
     const LEFT_OF_PRIMARY: [MonitorBounds; 2] = [(-1920, 0, 1920, 1080), (0, 0, 1512, 982)];
 
+    /// The password check reads `shown()`: a foreign window's area is cut
+    /// out of the kept window, since it is blacked out anyway.
+    #[test]
+    fn shown_leaves_out_the_foreign_windows() {
+        let held = HeldStep {
+            img: RgbaImage::new(10, 10),
+            screen: VirtualScreen {
+                origin: (0, 0),
+                scale: 1.0,
+            },
+            keep: vec![Rect::new(0, 0, 100, 100)],
+            foreign: vec![Rect::new(50, 50, 100, 100)],
+            scope: CaptureScope::Window,
+            geometry: None,
+            pixels_at: std::time::Instant::now(),
+        };
+        let shown = held.shown();
+        let area: i32 = shown
+            .iter()
+            .map(|r| (r.right - r.left) * (r.bottom - r.top))
+            .sum();
+        assert_eq!(area, 100 * 100 - 50 * 50);
+        assert!(shown
+            .iter()
+            .all(|r| r.intersect(&Rect::new(50, 50, 100, 100)).is_none()));
+    }
+
     #[test]
     fn a_click_picks_the_monitor_it_landed_on() {
         assert_eq!(monitor_for_click(Some((10, 10)), &LAPTOP_PLUS_4K, 0), 0);

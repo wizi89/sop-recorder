@@ -196,7 +196,7 @@ Password masking SHALL be a user setting that is on by default. Switching it off
 
 - **WHEN** the user turns password masking off and then starts a recording
 - **THEN** the setting reads that password fields are captured
-- **AND** that recording's steps are saved without masking and without a password check
+- **AND** that recording's steps are saved without password masking and without a password check; areas of other windows drawn above the captured window are still blacked out
 
 ### Requirement: A step that may show an unchecked password field is flagged
 

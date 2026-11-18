@@ -383,16 +383,29 @@ pub fn foreign_rects(snapshots: &[&Snapshot], step: &[isize]) -> Vec<Rect> {
                 && !own.iter().any(|(_, s)| {
                     s.hwnd == w.hwnd
                         || w.root_owner == s.hwnd
-                        || w.root_owner == s.root_owner
+                        || (s.root_owner != 0 && w.root_owner == s.root_owner)
                         || belongs_to(w, s)
                 });
             if !foreign {
                 continue;
             }
+            // Step windows above `w` are drawn over it, so they stay visible.
+            let above: Vec<Rect> = own
+                .iter()
+                .filter(|(j, _)| *j < i)
+                .map(|(_, s)| s.rect)
+                .collect();
             for (_, s) in own.iter().filter(|(j, _)| *j > i) {
-                if let Some(r) = w.rect.intersect(&s.rect) {
-                    if !out.contains(&r) {
-                        out.push(r);
+                let Some(r) = w.rect.intersect(&s.rect) else {
+                    continue;
+                };
+                let mut pieces = vec![r];
+                for cut in &above {
+                    pieces = pieces.iter().flat_map(|p| p.subtract(cut)).collect();
+                }
+                for p in pieces {
+                    if !out.contains(&p) {
+                        out.push(p);
                     }
                 }
             }
@@ -990,10 +1003,15 @@ mod tests {
         );
         let step = step_windows(&s, Some((400, 400)));
         assert_eq!(step, vec![DIALOG, EDITOR]);
+        // The owner's overlap, minus the dialog's corner drawn above `other`.
         assert_eq!(
             foreign_rects(&[&s], &step),
-            vec![Rect::new(500, 400, 900, 700)]
+            Rect::new(500, 400, 900, 700).subtract(&Rect::new(300, 300, 600, 500))
         );
+        let masked = foreign_rects(&[&s], &step);
+        assert!(masked
+            .iter()
+            .all(|r| r.intersect(&Rect::new(300, 300, 600, 500)).is_none()));
     }
 
     #[test]
