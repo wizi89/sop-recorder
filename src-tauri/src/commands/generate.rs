@@ -663,7 +663,7 @@ mod tests {
     /// The list is built once; every attempt sends it. Even with the files
     /// gone from disk afterwards, it still holds the burned bytes.
     #[test]
-    fn a_retry_sends_the_same_burned_bytes() {
+    fn the_upload_list_holds_the_burned_bytes_independent_of_the_file() {
         let dir = tempdir().unwrap();
         let path = png(dir.path(), 1, 4, 4);
         crate::output::redactions::save_step(dir.path(), 1, vec![[0, 0, 4, 4]]).unwrap();

@@ -61,6 +61,7 @@ const de = {
     "{count} von {total} Schritten konnten nicht aufgenommen werden. Die Anleitung ist unvollständig.",
   "review.loading": "Screenshots werden geladen...",
   "review.step_label": "Schritt {n}",
+  "review.step_enlarged": "Schritt {n}, vergrößert",
   "review.confirm": "Generieren",
   "review.cancel": "Verwerfen",
   "review.pipeline_label": "Art der Anleitung",

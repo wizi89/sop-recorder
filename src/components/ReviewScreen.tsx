@@ -549,7 +549,7 @@ export function ReviewScreen({
                     <div style={{ position: "relative", width: 96, height: 54 }}>
                       <img
                         src={thumb.url}
-                        alt={`step ${thumb.step}`}
+                        alt={t("review.step_label", { n: thumb.step })}
                         onLoad={(e) => {
                           const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
                           setNatural((n) => ({ ...n, [thumb.step]: { w, h } }));
@@ -641,7 +641,11 @@ export function ReviewScreen({
           saving={pending > 0}
           saveFailed={failedSaves[open.step] !== undefined}
           confirmDelete={confirmDelete}
-          onAdd={(b) => setStepBoxes(open.step, [...(desired[open.step] ?? []), b])}
+          onAdd={(b) => {
+            // A second identical box would share its React key and its removal.
+            if (has(desired[open.step], b)) return;
+            setStepBoxes(open.step, [...(desired[open.step] ?? []), b]);
+          }}
           onRemove={(b) =>
             setStepBoxes(
               open.step,
@@ -779,7 +783,13 @@ function StepEditor({
             {t("review.redact_retry")}
           </button>
         )}
-        <button className="btn-secondary px-2 py-1 text-xs" onClick={onAskDelete}>
+        {/* With the box file unreadable a delete cannot finish its last part,
+            so only the reset is offered (D5). */}
+        <button
+          className="btn-secondary px-2 py-1 text-xs"
+          onClick={onAskDelete}
+          disabled={drawingDisabled}
+        >
           {t("review.delete_step")}
         </button>
         <button className="btn-primary px-2 py-1 text-xs" onClick={onClose}>
@@ -823,7 +833,7 @@ function StepEditor({
           <img
             ref={img}
             src={thumb.url}
-            alt={`step ${thumb.step} enlarged`}
+            alt={t("review.step_enlarged", { n: thumb.step })}
             draggable={false}
             onLoad={measure}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}

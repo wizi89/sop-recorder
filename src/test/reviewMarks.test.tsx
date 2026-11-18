@@ -29,7 +29,7 @@ async function renderReview() {
   render(
     <ReviewScreen outputDir="/tmp" captureCount={3} elapsedSec={10} onConfirm={onConfirm} onCancel={() => {}} />,
   );
-  await waitFor(() => expect(screen.getAllByAltText(/step/)).toHaveLength(3));
+  await waitFor(() => expect(screen.getAllByAltText(/^Schritt \d+$/)).toHaveLength(3));
   return onConfirm;
 }
 

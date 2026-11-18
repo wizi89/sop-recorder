@@ -930,8 +930,6 @@ mod tests {
         }
     }
 
-    /// The path the 2026-09-03 recordings took silently: a capture fails, the
-    /// step number has already advanced, and nothing counts the loss.
     #[tokio::test]
     async fn screenshots_are_listed_with_the_step_from_their_file_name() {
         let dir = tempfile::tempdir().unwrap();
@@ -951,6 +949,8 @@ mod tests {
         assert!(listed[1].path.ends_with("step_03.png"));
     }
 
+    /// The path the 2026-09-03 recordings took silently: a capture fails, the
+    /// step number has already advanced, and nothing counts the loss.
     #[test]
     fn a_failed_capture_is_counted() {
         let failed = AtomicU32::new(0);

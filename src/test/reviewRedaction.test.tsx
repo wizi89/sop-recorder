@@ -121,8 +121,8 @@ async function renderReview(props: Partial<Parameters<typeof ReviewScreen>[0]> =
 }
 
 async function openStep(n: number) {
-  await userEvent.setup().click(screen.getByAltText(`step ${n}`));
-  const big = screen.getByAltText(`step ${n} enlarged`);
+  await userEvent.setup().click(screen.getByAltText(`Schritt ${n}`));
+  const big = screen.getByAltText(`Schritt ${n}, vergrößert`);
   fireEvent.load(big);
 }
 
@@ -251,7 +251,7 @@ describe("review redaction", () => {
     await waitFor(() => expect(generate()).toBeEnabled());
   });
 
-  it("reports corrupt storage, blocks drawing and Generate, and resets after confirmation", async () => {
+  it("reports corrupt storage, blocks drawing, delete and Generate, and resets after confirmation", async () => {
     unreadable = "expected value at line 1";
     await renderReview();
     expect(screen.getByText(/Schwärzungen dieser Aufnahme sind nicht lesbar/)).toBeInTheDocument();
@@ -260,6 +260,7 @@ describe("review redaction", () => {
     await openStep(1);
     drag([10, 10], [30, 20]);
     expect(calls.some(([c]) => c === "save_redactions")).toBe(false);
+    expect(screen.getByRole("button", { name: "Schritt löschen" })).toBeDisabled();
     await userEvent.setup().click(screen.getByRole("button", { name: "Fertig" }));
 
     const user = userEvent.setup();
