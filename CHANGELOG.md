@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- On Windows, an update now downloads as the regular installer instead of a zip archive. Nothing changes for you; it removes a library with known security flaws from the updater.
+
 ## [0.20.1] - 2026-10-25
 
 ### Changed
