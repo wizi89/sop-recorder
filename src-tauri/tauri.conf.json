@@ -30,7 +30,7 @@
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": "v1Compatible",
+    "createUpdaterArtifacts": true,
     "targets": [
       "nsis"
     ],
