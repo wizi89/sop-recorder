@@ -44,9 +44,9 @@ Linux build would check neither the Windows nor the macOS code paths. There:
 - Run `npm ci`, `npm test`, `npx tsc --noEmit` in the session, and `cargo fmt --check` in
   `src-tauri/` when `cargo` is installed (it compiles nothing).
 - `cargo clippy` and `cargo test --lib` are **CI-only**: open the draft PR, then wait for CI's
-  `test (windows-latest)` and `test (macos-latest)` on the head commit
-  (`gh api repos/wizi89/sop-recorder/commits/<sha>/check-runs`). Their result is the check
-  result; a red leg counts as a failed round. `e2e` runs there too.
+  `ci` check on the head commit (`gh api repos/wizi89/sop-recorder/commits/<sha>/check-runs`).
+  It gates `test (windows-latest)`, `test (macos-latest)` and `e2e`, which a Markdown-only
+  change skips. Its result is the check result; a red `ci` counts as a failed round.
 
 The factory can't run the real app. A change to capture, input hooks, windows, permissions or
 audio needs the owner's hands-on check on Windows, and on macOS when macOS code changed, before
