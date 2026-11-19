@@ -1,0 +1,50 @@
+name: Dependabot red
+
+# When CI fails on a Dependabot PR: turn its auto-merge off and hand it to
+# the Deps Station with `agent:deps`. This workflow never enables auto-merge.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot-red:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Disable auto-merge and add agent:deps
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          pr=$(gh api -X GET "repos/$GH_REPO/pulls" \
+            -f state=open -f head="$OWNER:$HEAD_BRANCH" --jq '.[0] // empty')
+          if [ -z "$pr" ]; then
+            echo "No open PR for branch $HEAD_BRANCH"; exit 0
+          fi
+          number=$(jq -r '.number' <<<"$pr")
+          author=$(jq -r '.user.login' <<<"$pr")
+          if [ "$author" != "dependabot[bot]" ]; then
+            echo "PR #$number is by $author, not Dependabot"; exit 0
+          fi
+          for label in agent:deps agent:in-progress needs-owner; do
+            if jq -e --arg l "$label" 'any(.labels[]; .name == $l)' <<<"$pr" >/dev/null; then
+              echo "PR #$number already has $label"; exit 0
+            fi
+          done
+          if [ "$(jq -r '.auto_merge != null' <<<"$pr")" = "true" ]; then
+            gh pr merge --disable-auto "$number"
+          fi
+          gh pr edit --add-label agent:deps "$number"
