@@ -1,0 +1,82 @@
+name: Stuck Dependabot alerts
+
+# Weekly: find open Dependabot alerts older than 7 days that no open Dependabot
+# PR addresses (usually a parent package pins the vulnerable version) and keep
+# one issue, "Stuck Dependabot alerts", that lists them. In a public repo the
+# issue holds only the count and the alert links, so nothing is disclosed.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  security-events: read
+
+jobs:
+  stuck-alerts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Report stuck Dependabot alerts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          title="Stuck Dependabot alerts"
+
+          alerts=$(gh api --paginate -X GET "repos/$GH_REPO/dependabot/alerts" \
+            -f state=open -f per_page=100 --jq '.[]' | jq -s '.')
+          titles=$(gh api --paginate -X GET "repos/$GH_REPO/pulls" \
+            -f state=open -f per_page=100 \
+            --jq '.[] | select(.user.login == "dependabot[bot]") | .title' \
+            | jq -R -s 'split("\n") | map(select(. != ""))')
+
+          stuck=$(jq --argjson titles "$titles" '
+            map(select((.created_at | fromdateiso8601) < (now - 7 * 86400)))
+            | map(. as $a | select(any($titles[]; contains($a.dependency.package.name)) | not))
+          ' <<<"$alerts")
+          count=$(jq 'length' <<<"$stuck")
+          if [ "$count" -eq 0 ]; then
+            echo "No stuck Dependabot alerts"; exit 0
+          fi
+
+          # github.event.repository is not set on every event; ask the API then.
+          if [ -z "$PRIVATE" ]; then
+            PRIVATE=$(gh api "repos/$GH_REPO" --jq '.private')
+          fi
+
+          if [ "$PRIVATE" = "true" ]; then
+            label="agent:explore"
+            {
+              echo "$count open Dependabot alerts are older than 7 days and have no open Dependabot PR:"
+              echo
+              jq -r '.[] | "- \(.html_url): \(.dependency.package.name) (\(.dependency.package.ecosystem)), \(.dependency.manifest_path), severity \(.security_vulnerability.severity), first patched \(.security_vulnerability.first_patched_version.identifier // "none"), \((now - (.created_at | fromdateiso8601)) / 86400 | floor) days old"' <<<"$stuck"
+              echo
+              echo "Per alert: either a fix (raise the parent packages that pin it), or a dismiss proposal with reason (\`tolerable_risk\`, \`not_used\`, \`inaccurate\`, \`no_bandwidth\`) that the owner applies."
+            } > body.md
+          else
+            label="needs-owner"
+            {
+              echo "$count open Dependabot alerts are older than 7 days and have no open Dependabot PR:"
+              echo
+              jq -r '.[] | "- \(.html_url)"' <<<"$stuck"
+            } > body.md
+          fi
+
+          existing=$(gh api --paginate -X GET "repos/$GH_REPO/issues" \
+            -f state=open -f per_page=100 \
+            --jq ".[] | select(.pull_request == null and .title == \"$title\") | .number")
+          existing=${existing%%$'\n'*}
+
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/$existing" -F body=@body.md --jq '.html_url'
+          else
+            gh api "repos/$GH_REPO/issues" -f title="$title" -F body=@body.md \
+              -f "labels[]=$label" --jq '.html_url'
+          fi
