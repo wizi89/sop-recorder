@@ -2,7 +2,7 @@
 name: factory-review
 description: The Review Station of the Software Factory. Reviews an `agent:review` PR in fresh context against the issue and the repo's coding standards, fixes what it can, posts a verdict and marks the PR ready for the owner's merge. Use when the fire payload says `station=review`.
 ---
-<!-- vendored from Home @3bedada, do not edit here -->
+<!-- vendored from Home @cc0aa83, do not edit here -->
 
 # Factory: Review
 
@@ -19,6 +19,8 @@ You are a fresh context by design. Judge the diff against the spec; Implement's 
 3. **Review.** Check out the PR branch, `git fetch origin <base>`, and run `/code-review` against `origin/<base>` with the spec and standards from step 2. If the skill is not loaded in this session, do its process by hand: two parallel subagents over `git diff origin/<base>...HEAD`, one for **Standards** (cite the rule per finding), one for **Spec** (missing, unasked-for, wrong; quote the spec line). Run this two-axis review on every diff, however small; if you did not run it, name that and the reason under **Friction** in the verdict. Done when you hold both reports.
 
 4. **Fix and comment.** Fix every finding you can without a product decision, in commits on the PR branch; rerun the `AGENTS.md` checks and push (CI-only checks: poll the named CI jobs on the new head every 2 min, at most 45 min, as in factory-implement step 5). Leave an inline review comment on the line for each finding you leave open. Done when every finding is fixed (commit sha) or carries an inline comment.
+
+   **Door recheck.** Compare the diff with the door paths in `origin/<base>`'s `AGENTS.md`, not the PR branch's copy (the list may have changed since Implement ran). Add `one-way-door` and its checklist if a door path is touched and the label is missing; remove the label and the checklist if none is touched. Correct the PR body's **Door** line to match (PATCH `repos/$REPO/pulls/$PR` with the new `body`). Name the change under **Standards** in the verdict.
 
 5. **Verdict comment** on the PR:
 
