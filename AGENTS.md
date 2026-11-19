@@ -19,15 +19,19 @@ auto-updater. An agent never merges a PR and never enables auto-merge: when CI i
 the label `owner-merge` on the PR and stops; the owner merges. When checks fail or it had to
 guess, it labels the issue `needs-owner`.
 
+Exception (owner decision 2026-11-18): `dependabot-lane.yml` enables auto-merge on Dependabot PRs
+whose bumps are all patches. Agents still never merge or enable auto-merge.
+
 Issues the factory works live in this repo and are written for a public audience: the problem
 and the wanted behaviour, nothing from the private repo (no customer, pilot or pricing details).
 Labels: `agent:explore`, `agent:implement`, `agent:review` (PR), `agent:in-progress`,
-`agent:blocked`, `needs-owner`, `owner-merge`, `one-way-door`.
+`agent:blocked`, `agent:deps`, `needs-owner`, `owner-merge`, `one-way-door`.
 
 One-way door paths (Implement adds `one-way-door` and the checklist when a diff touches one):
 `.github/workflows/release.yml`, `src-tauri/tauri.conf.json`, `src-tauri/tauri.macos.conf.json`,
 `src-tauri/tauri.signing.conf.json`, `src-tauri/Entitlements.plist`, `src-tauri/Info.plist`,
-`src-tauri/capabilities/`, `docs/server-contract.md`.
+`src-tauri/capabilities/`, `docs/server-contract.md`, `.github/workflows/dependabot-lane.yml`,
+`.github/workflows/dependabot-red.yml`.
 
 ## Pre-commit checks
 

@@ -12,7 +12,7 @@ this file states the rules.
 
 - **G1.** This repo is public. No material from the private repo in code, commits, PR text or
   issue comments: no customer, pilot, pricing or internal infrastructure details.
-  Source: `AGENTS.md:3`, `AGENTS.md:22-23`.
+  Source: `AGENTS.md:3`, `AGENTS.md:25-26`.
 - **G2.** Default to the simplest solution that works. No abstractions the task did not ask for.
   Source: `AGENTS.md:4`.
 - **G3.** A surprise that took real debugging time and is not plain from the code gets a
@@ -80,10 +80,10 @@ this file states the rules.
   `vitest.config.ts`.
 - **T4.** An e2e test waits for the UI (a visible button) before changing window state, and checks
   the state still holds a second later. e2e runs only in CI on Windows. Source:
-  `docs/FINDINGS.md` 2026-10-24; `AGENTS.md:39`.
+  `docs/FINDINGS.md` 2026-10-24; `AGENTS.md:43`.
 - **T5.** Behaviour unit tests cannot reach (real OS input, capture, permissions) is checked by
   hand: a fixture in `docs/manual-tests/` where one fits, and the owner's hands-on check named in
-  the PR body. Source: `docs/manual-tests/README.md:1-4`; `AGENTS.md:51-53`; `README.md` CI/CD
+  the PR body. Source: `docs/manual-tests/README.md:1-4`; `AGENTS.md:55-57`; `README.md` CI/CD
   (macOS behaviour is checked by hand).
 
 ## Not yet a rule
