@@ -32,14 +32,20 @@ jobs:
 
           alerts=$(gh api --paginate -X GET "repos/$GH_REPO/dependabot/alerts" \
             -f state=open -f per_page=100 --jq '.[]' | jq -s '.')
-          titles=$(gh api --paginate -X GET "repos/$GH_REPO/pulls" \
+          # Title and body: the `security` groups in dependabot.yml give grouped
+          # PRs a title without package names; the body lists them.
+          prs=$(gh api --paginate -X GET "repos/$GH_REPO/pulls" \
             -f state=open -f per_page=100 \
-            --jq '.[] | select(.user.login == "dependabot[bot]") | .title' \
-            | jq -R -s 'split("\n") | map(select(. != ""))')
+            --jq '[.[] | select(.user.login == "dependabot[bot]") | .title + "\n" + (.body // "")]' \
+            | jq -s 'add // []')
 
-          stuck=$(jq --argjson titles "$titles" '
+          # Whole-name match, so `serde` does not match `serde_json`.
+          stuck=$(jq --argjson prs "$prs" '
+            def pattern($n): ($n | gsub("(?<c>[.*+?^${}()|\\[\\]\\\\])"; "\\\(.c)")) as $e
+              | "(^|[^A-Za-z0-9_.@/-])" + $e + "($|[^A-Za-z0-9_.@/-])";
             map(select((.created_at | fromdateiso8601) < (now - 7 * 86400)))
-            | map(. as $a | select(any($titles[]; contains($a.dependency.package.name)) | not))
+            | map(pattern(.dependency.package.name) as $re
+                | select(any($prs[]; test($re)) | not))
           ' <<<"$alerts")
           count=$(jq 'length' <<<"$stuck")
           if [ "$count" -eq 0 ]; then
