@@ -14,7 +14,10 @@ permissions:
   contents: read
   issues: write
   pull-requests: read
-  security-events: read
+  # Listing Dependabot alerts needs `vulnerability-alerts: read`
+  # (`security-events` covers code scanning only). actionlint doesn't know this
+  # scope yet; run it with -ignore 'unknown permission scope "vulnerability-alerts"'.
+  vulnerability-alerts: read
 
 jobs:
   stuck-alerts:
