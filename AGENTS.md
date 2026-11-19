@@ -25,7 +25,7 @@ whose bumps are all patches. Agents still never merge or enable auto-merge.
 Issues the factory works live in this repo and are written for a public audience: the problem
 and the wanted behaviour, nothing from the private repo (no customer, pilot or pricing details).
 Labels: `agent:explore`, `agent:implement`, `agent:review` (PR), `agent:in-progress`,
-`agent:blocked`, `needs-owner`, `owner-merge`, `one-way-door`.
+`agent:blocked`, `agent:deps`, `needs-owner`, `owner-merge`, `one-way-door`.
 
 One-way door paths (Implement adds `one-way-door` and the checklist when a diff touches one):
 `.github/workflows/release.yml`, `src-tauri/tauri.conf.json`, `src-tauri/tauri.macos.conf.json`,
