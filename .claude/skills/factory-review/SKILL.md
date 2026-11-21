@@ -2,7 +2,7 @@
 name: factory-review
 description: The Review Station of the Software Factory. Reviews an `agent:review` PR in fresh context against the issue and the repo's coding standards, fixes what it can, posts a verdict and marks the PR ready for the owner's merge. Use when the fire payload says `station=review`.
 ---
-<!-- vendored from Home @36b99db, do not edit here -->
+<!-- vendored from Home @82b033c, do not edit here -->
 
 # Factory: Review
 
@@ -18,7 +18,7 @@ You are a fresh context by design. Judge the diff against the spec; Implement's 
 
 3. **Review.** Check out the PR branch by name (`git fetch origin <base> <branch>` then `git checkout <branch>`; never check out `FETCH_HEAD`, which is `<base>` when it is fetched first). Write the spec from step 2 to a file outside the repo (`$TMPDIR/spec-<n>.md`) and run this repo's `code-review` skill (`.claude/skills/code-review/`) with the fixed point `origin/<base>` and that spec file. It runs on every diff, whatever its size. If the skill is missing from `.claude/skills/`, do not review by hand: the verdict is `needs-owner`, and **Friction** names the missing skill. Done when you hold its Standards and Spec reports.
 
-4. **Fix and comment.** Check the PR body against this repo's `pr` skill: every section of its template is there, the Evidence has a **before**, and what the run could not verify is named. Rewrite the body with the `pr` skill where it falls short. Fix every finding you can without a product decision, in commits on the PR branch; rerun the `AGENTS.md` checks and push (CI-only checks: poll the named CI jobs on the new head every 2 min, at most 45 min, as in factory-implement step 5). Leave an inline review comment on the line for each finding you leave open. Done when every finding is fixed (commit sha) or carries an inline comment.
+4. **Fix and comment.** Check the PR body against this repo's `pr` skill: every section of its template is there, the Evidence has a **before**, and what the run could not verify is named. Rewrite the body with the `pr` skill where it falls short. Fix every finding you can without a product decision, in commits on the PR branch; rerun the `AGENTS.md` checks and push (CI-only checks: poll the named CI jobs on the new head every 2 min, at most 45 min, as in factory-implement step 5). A PR body that asks the owner for a manual step (SQL, admin page, dashboard, before or after the merge) is a finding: replace the step with an idempotent migration, or set `needs-owner` naming why it cannot be automated (factory-implement step 4). Leave an inline review comment on the line for each finding you leave open. Done when every finding is fixed (commit sha) or carries an inline comment.
 
    **Door recheck.** Judge the door as Implement step 8 does: the `pr` skill's **Merge Danger** (paths and meaning) plus the door paths in `origin/<base>`'s `AGENTS.md` and `CODING_STANDARDS.md`, not the PR branch's copies (they may have changed since Implement ran). One-way and the label is missing: add `one-way-door`, and the checklist only when the repo has no `.github/workflows/one-way-door.yml`. Remove the label only when neither the paths nor the meaning make it one-way, and say why. Correct the PR body's **Door** line to match (PATCH `repos/$REPO/pulls/$PR` with the new `body`). Name the change under **Standards** in the verdict.
 
