@@ -50,6 +50,10 @@ const de = {
   "status.stopping": "Aufnahmen werden verarbeitet...",
 
   // Review screen (post-stop, pre-generate)
+  "review.marked_badge": "Prüfen",
+  "review.marked_hint":
+    "{count} markierte Schritte: Passwortfelder wurden dort nicht sicher erkannt, oder es wurde der ganze Bildschirm aufgenommen. Bitte vor dem Generieren ansehen.",
+  "review.marked_confirm": "Ich habe die markierten Schritte geprüft",
   "review.title": "Aufnahme prüfen",
   "review.summary": "{count} Screenshots -- {elapsed} Min aufgenommen",
   "review.summary_count_only": "{count} Screenshots in diesem Ordner",
@@ -57,12 +61,38 @@ const de = {
     "{count} von {total} Schritten konnten nicht aufgenommen werden. Die Anleitung ist unvollständig.",
   "review.loading": "Screenshots werden geladen...",
   "review.step_label": "Schritt {n}",
+  "review.step_enlarged": "Schritt {n}, vergrößert",
   "review.confirm": "Generieren",
   "review.cancel": "Verwerfen",
   "review.pipeline_label": "Art der Anleitung",
   "review.pipeline_default": "Standard",
   "review.pipeline_default_description":
     "Die allgemeine Generierung. Passt zu jeder Aufnahme.",
+  "review.deleted_steps": "{count} gelöscht",
+  "review.open_hint": "Auf einen Schritt klicken, um Bereiche zu schwärzen oder ihn zu löschen.",
+  "review.redact_hint":
+    "Mit der Maus einen Rahmen ziehen, um einen Bereich zu schwärzen. Nur die hochgeladene Kopie wird geschwärzt, die Datei auf diesem PC bleibt unverändert.",
+  "review.redact_saving": "Wird gespeichert...",
+  "review.redact_save_failed": "Schwärzung für Schritt {n} konnte nicht gespeichert werden: {error}",
+  "review.redact_retry": "Erneut speichern",
+  "review.redact_remove": "Schwärzung entfernen",
+  "review.redact_boxes": "{count} geschwärzt",
+  "review.close": "Fertig",
+  "review.delete_step": "Schritt löschen",
+  "review.delete_confirm":
+    "Schritt {n} löschen? Screenshot und Schritt-Daten werden entfernt. Die Sprachaufnahme bleibt erhalten und kann im Text eines benachbarten Schritts erscheinen.",
+  "review.delete_confirm_yes": "Löschen",
+  "review.delete_confirm_no": "Abbrechen",
+  "review.delete_failed": "Schritt {n} konnte nicht gelöscht werden: {error}",
+  "review.leftover":
+    "Schritt {n} wurde nicht vollständig gelöscht. Generieren ist erst möglich, wenn er erneut gelöscht wurde.",
+  "review.leftover_retry": "Erneut löschen",
+  "review.unreadable":
+    "Die gespeicherten Schwärzungen dieser Aufnahme sind nicht lesbar. Schwärzen und Generieren sind erst nach dem Zurücksetzen möglich. ({error})",
+  "review.reset": "Schwärzungen zurücksetzen",
+  "review.reset_confirm": "Alle Schwärzungen dieser Aufnahme werden gelöscht. Fortfahren?",
+  "review.reset_failed": "Schwärzungen konnten nicht zurückgesetzt werden: {error}",
+  "review.upload_refused": "Nicht hochgeladen: {error}",
 
   // Microphone permission
   "mic.permission_denied":
@@ -110,6 +140,20 @@ const de = {
   "settings.beta_updates": "Beta-Versionen erhalten",
   "settings.beta_updates_leaving":
     "Sie bleiben auf {version}, bis {stable} erscheint – ein Update setzt immer eine höhere Version voraus.",
+  "settings.capture_area": "Aufnahmebereich",
+  "settings.capture_active_window": "Aktives Fenster",
+  "settings.capture_active_window_hint":
+    "Gespeichert wird das Fenster, in dem geklickt wird, bei Dialogen zusammen mit dem zugehörigen Hauptfenster.",
+  "settings.capture_monitor": "Ganzer Bildschirm",
+  "settings.capture_monitor_warning":
+    "Taskleiste, Benachrichtigungen und alle sichtbaren Fenster werden mit aufgenommen.",
+  "settings.mask_passwords": "Passwortfelder schwärzen",
+  "settings.mask_passwords_off": "Passwortfelder werden mit aufgenommen.",
+  "settings.privacy_summary":
+    "Beim Erstellen gehen die Screenshots, so wie sie auf dem Prüfbildschirm zu sehen sind, und der ganze Ton an den Server. Was sonst sichtbar ist, schwärzen Sie dort selbst; die Dateien auf Ihrem PC bleiben unverändert.",
+  "settings.privacy_link": "Mehr zum Datenschutz bei der Aufnahme",
+  "settings.capture_mac_note":
+    "Auf macOS wird immer der ganze Bildschirm aufgenommen. Fensteraufnahme und das Schwärzen von Passwortfeldern folgen später.",
   "settings.reveal": "Anzeigen",
   "settings.loading": "Wird geladen...",
   "settings.save_failed":

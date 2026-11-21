@@ -6,7 +6,9 @@ pub mod network;
 pub mod output;
 pub mod runtime_config;
 pub mod state;
-use commands::{auth, generate, permissions, pipelines, quota, recording, settings, window};
+use commands::{
+    auth, generate, permissions, pipelines, quota, recording, review, settings, window,
+};
 
 /// The saved `error_reports` mode, read straight from the settings file.
 ///
@@ -193,9 +195,14 @@ pub fn run() {
             recording::stop_recording,
             recording::delete_last_screenshot,
             recording::list_session_screenshots,
+            recording::list_capture_records,
             recording::unfinished_recording,
             recording::discard_recording,
             recording::read_screenshot_bytes,
+            review::load_redactions,
+            review::save_redactions,
+            review::reset_redactions,
+            review::delete_step,
             generate::run_generation,
             quota::get_quota,
             pipelines::get_pipelines,

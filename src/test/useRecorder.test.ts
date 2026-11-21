@@ -146,6 +146,31 @@ describe("useRecorder", () => {
     expect(result.current.error).toContain("Upload failed");
   });
 
+  // review-redaction D5: a refusal because of the boxes goes back to review,
+  // not to the error screen whose Retry would repeat it.
+  it("returns to review with the reason when the upload is refused over the boxes", async () => {
+    mockInvoke
+      .mockResolvedValueOnce(undefined) // start
+      .mockResolvedValueOnce({ output_dir: "C:\\out", failed_captures: 0 }) // stop
+      .mockRejectedValueOnce("[redaction] Schritt 7 wurde nicht vollständig gelöscht"); // generate
+
+    const { result } = renderHook(() => useRecorder());
+    await act(async () => {
+      await result.current.start();
+    });
+    await act(async () => {
+      await result.current.stop();
+    });
+    await act(async () => {
+      await result.current.confirmGeneration();
+    });
+
+    expect(result.current.status).toBe("review");
+    expect(result.current.outputDir).toBe("C:\\out");
+    expect(result.current.error).toBeNull();
+    expect(result.current.reviewError).toBe("Schritt 7 wurde nicht vollständig gelöscht");
+  });
+
   it("updates status message via setStatusMessage", async () => {
     const { result } = renderHook(() => useRecorder());
 

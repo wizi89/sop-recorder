@@ -67,16 +67,22 @@ Parts:
 
 - `audio`: file `recording.wav`, `audio/wav`.
 - `step_NN` (two digits, one per screenshot, `NN` is the step order): `image/png`, file name from the
-  local screenshot.
+  local screenshot. `NN` may skip numbers (a failed capture, or a step deleted on the review screen);
+  the parts are paired with `metadata.steps` in ascending `NN`.
 - `metadata`: JSON text with
   - `guide_title`: string
   - `step_count`: number of screenshots
   - `pipeline_version`: integer
   - `generation_model`: string
   - `steps` (optional, only when there is one entry per screenshot): array of
-    `{order, timestamp_seconds, click_x, click_y, trigger, marker_box?}`; `click_x`/`click_y` may be
-    null, `marker_box` is `{x0, y0, x1, y1}` and is left out when absent
-    (`src-tauri/src/output/step_meta.rs`).
+    `{order, timestamp_seconds, click_x, click_y, trigger, marker_box?, capture_scope, password_check}`;
+    `click_x`/`click_y` may be null, `marker_box` is `{x0, y0, x1, y1}` and is left out when absent,
+    `capture_scope` is `window`, `monitor`, `monitor_fallback` or `unknown`, `password_check` is
+    `ok`, `flagged`, `off` or `unknown` (`src-tauri/src/output/step_meta.rs`).
+  - `capture_scopes`: object counting the recording's screenshots per capture scope, every key
+    present, `{window, monitor, monitor_fallback, unknown}`; steps without a record count as `unknown`.
+  - `password_checks`: object counting them per password check outcome, every key present,
+    `{ok, flagged, off, unknown}` (`src-tauri/src/network/upload.rs`).
   - `pipeline_id` (optional, left out when nothing is selected): an id from `GET /pipelines`.
 - `skip_pii_check` (optional): the text `true`, sent only when the check is skipped.
 

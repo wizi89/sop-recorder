@@ -27,6 +27,9 @@ interface RecorderScreenProps {
   skipPiiCheck?: boolean;
   /** Captures that failed during the recording just stopped. */
   failedCaptures?: number;
+  /** Why the last upload was refused on account of the review screen's boxes;
+   *  shown on the review screen it returned to. */
+  reviewError?: string | null;
   micPermission?: MicPermissionState;
   screenRecordingPermission?: ScreenRecordingPermissionState;
   accessibilityPermission?: AccessibilityPermissionState;
@@ -63,6 +66,7 @@ export function RecorderScreen({
   outputDir,
   skipPiiCheck,
   failedCaptures = 0,
+  reviewError = null,
   micPermission,
   screenRecordingPermission,
   accessibilityPermission,
@@ -113,6 +117,7 @@ export function RecorderScreen({
         captureCount={captureCount}
         elapsedSec={elapsedSec}
         failedCaptures={failedCaptures}
+        uploadError={reviewError}
         onConfirm={onConfirmGeneration}
         onCancel={onCancelFromReview}
       />

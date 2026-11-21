@@ -5,6 +5,7 @@ pub mod permissions;
 pub mod pipelines;
 pub mod quota;
 pub mod recording;
+pub mod review;
 pub mod settings;
 pub mod updater;
 pub mod window;
