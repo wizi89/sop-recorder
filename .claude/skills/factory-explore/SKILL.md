@@ -2,7 +2,7 @@
 name: factory-explore
 description: The Explore Station of the Software Factory. Claims every open `agent:explore` issue in one batch, triages each against the code, and gives each exactly one Verdict in a report comment. Use when the fire payload says `station=explore`.
 ---
-<!-- vendored from Home @82b033c, do not edit here -->
+<!-- vendored from Home @45e15d0, do not edit here -->
 
 # Factory: Explore
 
@@ -24,6 +24,7 @@ Explore is read-only on code: no commits, no branches, no PRs. Repro scripts sta
    <!-- factory-report station=explore -->
    ## Explore: <one-line problem>
    **Plan** (pseudocode or diff sketch of the change)
+   **Acceptance criteria**: one line each, `AC1: <observable result>`, `AC2: ...`; take the issue's criteria in their wording and add what the plan needs, each one checkable by a command or by reading the repo
    **Files**: `path:line` for each place the change touches, at `<sha>` from `git fetch origin && git rev-parse --short origin/<base>` run in this session, never a commit quoted in the issue or prompt
    **Evidence**: repro or test output that confirms the claim, or "claim did not hold: <why>"
    **Blast radius**: <one word> - <what could break>
