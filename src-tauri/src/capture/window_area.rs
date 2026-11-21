@@ -88,6 +88,10 @@ pub struct WindowInfo {
     /// through, so it never counts as hiding anything (D4).
     pub layered: bool,
     pub transparent: bool,
+    /// `WS_EX_TRANSPARENT` alone: a click-through overlay (a dictation bar),
+    /// never masked as a foreign window. Unlike `transparent`, not set
+    /// when a window's state cannot be read.
+    pub click_through: bool,
     /// Display affinity other than `WDA_NONE`: absent from the pixels.
     pub excluded: bool,
 }
@@ -106,6 +110,9 @@ pub struct Snapshot {
     /// The root window under the click; `None` for a key press.
     pub under_click: Option<isize>,
     pub windows: Vec<WindowInfo>,
+    /// The list came from `EnumWindows`, which leaves out shell windows such
+    /// as toasts: they are neither masked nor checked, so the step is flagged.
+    pub partial: bool,
 }
 
 impl Snapshot {
@@ -204,7 +211,12 @@ pub fn visible_fields(fields: &[Rect], visible: &[Rect]) -> Vec<Rect> {
 pub enum Area {
     /// Crop to `crop`; pixels inside it but outside every `keep` rectangle are
     /// filled, so the gap between a dialog and a distant owner shows nothing.
-    Window { crop: Rect, keep: Vec<Rect> },
+    /// `windows` are the step's own windows, for `foreign_rects`.
+    Window {
+        crop: Rect,
+        keep: Vec<Rect>,
+        windows: Vec<isize>,
+    },
     /// No usable window: the whole monitor is kept and the step is marked.
     Fallback(&'static str),
 }
@@ -282,21 +294,21 @@ pub fn key_press_point(snapshot: &Snapshot) -> Option<(i32, i32)> {
     ))
 }
 
-pub fn capture_area(snapshot: &Snapshot, click: Option<(i32, i32)>, monitor: Rect) -> Area {
+pub fn capture_area<'a>(snapshot: &'a Snapshot, click: Option<(i32, i32)>, monitor: Rect) -> Area {
     // A cloaked window is in the list but never drawn (a closed Start menu,
     // another virtual desktop), so it can be no step's window.
     let drawn = |hwnd: isize| snapshot.get(hwnd).filter(|w| !w.cloaked);
-    let with_owner = |w: &WindowInfo| -> Vec<Rect> {
-        let mut rects = vec![w.rect];
+    let with_owner = |w: &'a WindowInfo| -> Vec<&'a WindowInfo> {
+        let mut rects = vec![w];
         if let Some(owner) = drawn(w.root_owner).filter(|o| o.hwnd != w.hwnd) {
-            rects.push(owner.rect);
+            rects.push(owner);
         }
         rects
     };
-    let window_rects = |w: &WindowInfo| -> Option<Vec<Rect>> {
+    let window_rects = |w: &'a WindowInfo| -> Option<Vec<&'a WindowInfo>> {
         match kind(w) {
             Kind::Desktop => None,
-            Kind::Shell => Some(vec![w.rect]),
+            Kind::Shell => Some(vec![w]),
             Kind::App => Some(with_owner(w)),
         }
     };
@@ -309,7 +321,9 @@ pub fn capture_area(snapshot: &Snapshot, click: Option<(i32, i32)>, monitor: Rec
             Some(rects) => rects,
             None => return Area::Fallback("no foreground window"),
         },
-        Some(point) if fg_rects.iter().flatten().any(|r| r.contains(point)) => fg_rects.unwrap(),
+        Some(point) if fg_rects.iter().flatten().any(|w| w.rect.contains(point)) => {
+            fg_rects.unwrap()
+        }
         Some(_) => {
             let Some(under) = snapshot.under_click.and_then(drawn) else {
                 return Area::Fallback("no window under the click");
@@ -317,7 +331,7 @@ pub fn capture_area(snapshot: &Snapshot, click: Option<(i32, i32)>, monitor: Rec
             match (fg, &fg_rects) {
                 (Some(fg), Some(fg_rects)) if kind(under) == Kind::App && belongs_to(under, fg) => {
                     let mut rects = fg_rects.clone();
-                    rects.push(under.rect);
+                    rects.push(under);
                     rects
                 }
                 _ => match window_rects(under) {
@@ -328,11 +342,76 @@ pub fn capture_area(snapshot: &Snapshot, click: Option<(i32, i32)>, monitor: Rec
         }
     };
 
-    let keep: Vec<Rect> = rects.iter().filter_map(|r| r.intersect(&monitor)).collect();
+    let keep: Vec<Rect> = rects
+        .iter()
+        .filter_map(|w| w.rect.intersect(&monitor))
+        .collect();
     let Some(crop) = keep.iter().copied().reduce(|a, b| a.bounding(&b)) else {
         return Area::Fallback("window is not on the captured monitor");
     };
-    Area::Window { crop, keep }
+    Area::Window {
+        crop,
+        keep,
+        windows: rects.iter().map(|w| w.hwnd).collect(),
+    }
+}
+
+/// Where other apps' windows cover the step's windows: toasts, the
+/// notification center, always-on-top windows, an app overlapping the owner.
+/// They are in the pixels, so these rectangles are blacked out.
+///
+/// A window counts when it is drawn, above a step window in the z-order and
+/// overlaps it, in either snapshot (it may appear or grow during the read).
+/// Not counted: the step's own windows, windows they own, their menus and
+/// dropdowns (`belongs_to`), the window under the click (the user is operating
+/// it), the desktop, and click-through overlays (`WS_EX_TRANSPARENT`, such as
+/// dictation bars), which owners chose to keep visible.
+pub fn foreign_rects(snapshots: &[&Snapshot], step: &[isize]) -> Vec<Rect> {
+    let mut out: Vec<Rect> = Vec::new();
+    for snapshot in snapshots {
+        let own: Vec<(usize, &WindowInfo)> = snapshot
+            .windows
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| step.contains(&w.hwnd))
+            .collect();
+        for (i, w) in snapshot.windows.iter().enumerate() {
+            let foreign = drawn(w)
+                && !w.click_through
+                && kind(w) != Kind::Desktop
+                && snapshot.under_click != Some(w.hwnd)
+                && !own.iter().any(|(_, s)| {
+                    s.hwnd == w.hwnd
+                        || w.root_owner == s.hwnd
+                        || (s.root_owner != 0 && w.root_owner == s.root_owner)
+                        || belongs_to(w, s)
+                });
+            if !foreign {
+                continue;
+            }
+            // Step windows above `w` are drawn over it, so they stay visible.
+            let above: Vec<Rect> = own
+                .iter()
+                .filter(|(j, _)| *j < i)
+                .map(|(_, s)| s.rect)
+                .collect();
+            for (_, s) in own.iter().filter(|(j, _)| *j > i) {
+                let Some(r) = w.rect.intersect(&s.rect) else {
+                    continue;
+                };
+                let mut pieces = vec![r];
+                for cut in &above {
+                    pieces = pieces.iter().flat_map(|p| p.subtract(cut)).collect();
+                }
+                for p in pieces {
+                    if !out.contains(&p) {
+                        out.push(p);
+                    }
+                }
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -379,13 +458,15 @@ mod tests {
             foreground: Some(fg),
             under_click: under,
             windows,
+            partial: false,
         }
     }
 
-    fn only(rect: Rect) -> Area {
+    fn only(hwnd: isize, rect: Rect) -> Area {
         Area::Window {
             crop: rect,
             keep: vec![rect],
+            windows: vec![hwnd],
         }
     }
 
@@ -394,7 +475,7 @@ mod tests {
         let s = snapshot(EDITOR, Some(EDITOR), desktop());
         assert_eq!(
             capture_area(&s, Some((300, 300)), MONITOR),
-            only(Rect::new(100, 100, 900, 700))
+            only(EDITOR, Rect::new(100, 100, 900, 700))
         );
     }
 
@@ -419,7 +500,7 @@ mod tests {
         let s = snapshot(BROWSER, None, desktop());
         assert_eq!(
             capture_area(&s, None, MONITOR),
-            only(Rect::new(800, 50, 1800, 900))
+            only(BROWSER, Rect::new(800, 50, 1800, 900))
         );
     }
 
@@ -433,7 +514,7 @@ mod tests {
         windows.insert(0, dialog);
         let s = snapshot(DIALOG, Some(DIALOG), windows);
 
-        let Area::Window { crop, keep } = capture_area(&s, Some((1500, 700)), MONITOR) else {
+        let Area::Window { crop, keep, .. } = capture_area(&s, Some((1500, 700)), MONITOR) else {
             panic!("expected a window area");
         };
         assert_eq!(crop, Rect::new(100, 100, 1800, 900));
@@ -459,7 +540,7 @@ mod tests {
         let s = snapshot(EDITOR, Some(EDITOR), windows);
         assert_eq!(
             capture_area(&s, Some((100, 1000)), MONITOR),
-            only(Rect::new(0, 900, 600, 1080))
+            only(EDITOR, Rect::new(0, 900, 600, 1080))
         );
     }
 
@@ -486,7 +567,7 @@ mod tests {
         let s = snapshot(EDITOR, Some(TASKBAR), desktop());
         assert_eq!(
             capture_area(&s, Some((500, 1050)), MONITOR),
-            only(Rect::new(0, 1032, 1920, 1080))
+            only(TASKBAR, Rect::new(0, 1032, 1920, 1080))
         );
     }
 
@@ -497,7 +578,7 @@ mod tests {
         let s = snapshot(EDITOR, Some(BROWSER), desktop());
         assert_eq!(
             capture_area(&s, Some((1500, 400)), MONITOR),
-            only(Rect::new(800, 50, 1800, 900))
+            only(BROWSER, Rect::new(800, 50, 1800, 900))
         );
     }
 
@@ -510,7 +591,7 @@ mod tests {
         );
         let s = snapshot(EDITOR, Some(MENU), windows);
 
-        let Area::Window { crop, keep } = capture_area(&s, Some((1000, 800)), MONITOR) else {
+        let Area::Window { crop, keep, .. } = capture_area(&s, Some((1000, 800)), MONITOR) else {
             panic!("expected a window area");
         };
         assert_eq!(crop, Rect::new(100, 100, 1100, 950));
@@ -553,7 +634,7 @@ mod tests {
         let s = snapshot(EDITOR, Some(MENU), windows);
         assert_eq!(
             capture_area(&s, Some((1600, 950)), MONITOR),
-            only(Rect::new(1500, 900, 1900, 1000))
+            only(MENU, Rect::new(1500, 900, 1900, 1000))
         );
     }
 
@@ -576,7 +657,7 @@ mod tests {
         let s = snapshot(EDITOR, Some(EDITOR), windows);
         assert_eq!(
             capture_area(&s, Some((300, 300)), MONITOR),
-            only(Rect::new(100, 100, 900, 700))
+            only(EDITOR, Rect::new(100, 100, 900, 700))
         );
     }
 
@@ -779,6 +860,158 @@ mod tests {
         let kept = [Rect::new(100, 100, 700, 700)];
         let visible = hwnds(&visible_windows(&merge(&s, &s), &kept));
         assert_eq!(visible, vec![EDITOR]);
+    }
+
+    // ------------------------------------------- windows over the area
+
+    const TOAST: isize = 7;
+    const EDITOR_RECT: Rect = Rect::new(100, 100, 900, 700);
+
+    /// The toast host as the spike found it: a topmost shell popup of another
+    /// process, `Windows.UI.Core.CoreWindow`, over the editor's bottom right.
+    fn toast() -> WindowInfo {
+        let mut t = window(
+            TOAST,
+            Rect::new(700, 500, 1300, 728),
+            "Windows.UI.Core.CoreWindow",
+            50,
+        );
+        t.popup = true;
+        t
+    }
+
+    fn with_on_top(on_top: WindowInfo) -> Snapshot {
+        let mut windows = desktop();
+        windows.insert(0, on_top);
+        snapshot(EDITOR, Some(EDITOR), windows)
+    }
+
+    fn step_windows(s: &Snapshot, click: Option<(i32, i32)>) -> Vec<isize> {
+        match capture_area(s, click, MONITOR) {
+            Area::Window { windows, .. } => windows,
+            Area::Fallback(reason) => panic!("fell back: {reason}"),
+        }
+    }
+
+    #[test]
+    fn a_toast_over_the_window_is_masked_where_it_overlaps() {
+        let s = with_on_top(toast());
+        let step = step_windows(&s, Some((300, 300)));
+        assert_eq!(step, vec![EDITOR]);
+        assert_eq!(
+            foreign_rects(&[&s, &s], &step),
+            vec![Rect::new(700, 500, 900, 700)]
+        );
+    }
+
+    #[test]
+    fn a_toast_that_appears_during_the_read_is_masked() {
+        let before = snapshot(EDITOR, Some(EDITOR), desktop());
+        let after = with_on_top(toast());
+        assert_eq!(
+            foreign_rects(&[&before, &after], &[EDITOR]),
+            vec![Rect::new(700, 500, 900, 700)]
+        );
+    }
+
+    #[test]
+    fn a_cloaked_or_capture_excluded_window_is_not_masked() {
+        let mut idle = toast();
+        idle.cloaked = true;
+        assert!(foreign_rects(&[&with_on_top(idle)], &[EDITOR]).is_empty());
+        let mut bar = toast();
+        bar.excluded = true;
+        assert!(foreign_rects(&[&with_on_top(bar)], &[EDITOR]).is_empty());
+    }
+
+    #[test]
+    fn a_click_through_overlay_is_not_masked() {
+        let mut overlay = window(TOAST, Rect::new(300, 200, 1000, 1000), "Overlay", 50);
+        overlay.layered = true;
+        overlay.transparent = true;
+        overlay.click_through = true;
+        assert!(foreign_rects(&[&with_on_top(overlay)], &[EDITOR]).is_empty());
+    }
+
+    /// An opaque always-on-top window of another app is masked like a toast;
+    /// a layered one too, since only click-through overlays are exempt.
+    #[test]
+    fn another_apps_window_on_top_is_masked_even_when_layered() {
+        let mut player = window(TOAST, Rect::new(0, 0, 300, 300), "PiP", 50);
+        player.layered = true;
+        assert_eq!(
+            foreign_rects(&[&with_on_top(player)], &[EDITOR]),
+            vec![Rect::new(100, 100, 300, 300)]
+        );
+    }
+
+    #[test]
+    fn a_window_below_the_step_window_is_not_masked() {
+        let s = snapshot(EDITOR, Some(EDITOR), desktop());
+        assert!(foreign_rects(&[&s], &[EDITOR]).is_empty(), "browser below");
+    }
+
+    #[test]
+    fn the_steps_own_menus_dropdowns_and_owned_windows_are_not_masked() {
+        let menu = window(MENU, Rect::new(850, 600, 1100, 950), "#32768", 99);
+        let mut dropdown = window(DIALOG, Rect::new(200, 200, 400, 400), "Drop", 10);
+        dropdown.popup = true;
+        let mut palette = window(9, Rect::new(500, 150, 700, 300), "Palette", 11);
+        palette.root_owner = EDITOR;
+        let mut windows = desktop();
+        windows.splice(0..0, [menu, dropdown, palette]);
+        let s = snapshot(EDITOR, Some(EDITOR), windows);
+        assert!(foreign_rects(&[&s], &[EDITOR]).is_empty());
+    }
+
+    /// The user clicked the toast where it lies over the window: it is what
+    /// the step documents, so it stays visible.
+    #[test]
+    fn the_window_under_the_click_is_not_masked() {
+        let mut s = with_on_top(toast());
+        s.under_click = Some(TOAST);
+        let step = step_windows(&s, Some((800, 600)));
+        assert!(foreign_rects(&[&s], &step).is_empty());
+    }
+
+    #[test]
+    fn a_click_into_the_notification_center_keeps_it_unmasked() {
+        let center = window(
+            TOAST,
+            Rect::new(1400, 0, 1920, 1032),
+            "Windows.UI.Core.CoreWindow",
+            50,
+        );
+        let mut s = with_on_top(center);
+        s.under_click = Some(TOAST);
+        let step = step_windows(&s, Some((1500, 300)));
+        assert_eq!(step, vec![TOAST]);
+        assert!(foreign_rects(&[&s], &step).is_empty());
+    }
+
+    /// A window between a dialog and its owner covers only the owner: masked
+    /// there, never over the dialog drawn above it.
+    #[test]
+    fn a_window_between_a_dialog_and_its_owner_is_masked_over_the_owner_only() {
+        let mut dialog = window(DIALOG, Rect::new(300, 300, 600, 500), "#32770", 10);
+        dialog.root_owner = EDITOR;
+        let other = window(BROWSER, Rect::new(500, 400, 1000, 800), "Chrome", 20);
+        let s = snapshot(
+            DIALOG,
+            Some(DIALOG),
+            vec![dialog, other, window(EDITOR, EDITOR_RECT, "Notepad", 10)],
+        );
+        let step = step_windows(&s, Some((400, 400)));
+        assert_eq!(step, vec![DIALOG, EDITOR]);
+        // The owner's overlap, minus the dialog's corner drawn above `other`.
+        assert_eq!(
+            foreign_rects(&[&s], &step),
+            Rect::new(500, 400, 900, 700).subtract(&Rect::new(300, 300, 600, 500))
+        );
+        let masked = foreign_rects(&[&s], &step);
+        assert!(masked
+            .iter()
+            .all(|r| r.intersect(&Rect::new(300, 300, 600, 500)).is_none()));
     }
 
     #[test]
