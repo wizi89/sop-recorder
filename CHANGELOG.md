@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On Windows, a screenshot now shows only the window you clicked in, together with its dialogs and menus, instead of the whole screen. The taskbar and other windows are no longer captured. Where a notification, the notification center, quick settings or another app's window lies over the captured one, that part is blacked out; overlays that let clicks through, such as a dictation bar, stay visible.
 - To go back to the old behaviour, open "Einstellungen", set "Aufnahmebereich" to "Ganzer Bildschirm". Switch off "Passwortfelder schwärzen" to stop blacking out password fields; parts of other windows lying over the captured one are blacked out either way.
 - On macOS nothing changes yet: the whole screen is captured and passwords are not blacked out.
+- On Windows, an update now downloads as the regular installer instead of a zip archive. Nothing changes for you; it removes a library with known security flaws from the updater.
 
 ### Fixed
 

@@ -1,0 +1,48 @@
+name: Dependabot lane
+
+# Routes a new Dependabot PR: all-patch bumps get auto-merge (squash) and
+# merge once the required `ci` check passes; anything else gets `agent:deps`
+# for the Deps Station. Owner decision 2026-11-18, see AGENTS.md.
+
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot-lane:
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      !contains(github.event.pull_request.labels.*.name, 'agent:deps') &&
+      !contains(github.event.pull_request.labels.*.name, 'agent:in-progress') &&
+      !contains(github.event.pull_request.labels.*.name, 'owner-merge') &&
+      !contains(github.event.pull_request.labels.*.name, 'needs-owner')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # For a grouped PR, update-type is the highest semver change among all
+      # its bumps, so semver-patch means every bump is a patch. An empty or
+      # unknown value counts as not-patch.
+      - name: Enable auto-merge for an all-patch PR
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+
+      - name: Hand anything else to the Deps Station
+        if: steps.metadata.outputs.update-type != 'version-update:semver-patch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr edit --add-label agent:deps "$PR_URL"

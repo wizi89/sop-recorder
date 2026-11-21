@@ -9,6 +9,21 @@ Only add things that were genuinely surprising: if it is obvious from the code, 
 
 ---
 
+## 2026-11-19 `security-events: read` does not let `GITHUB_TOKEN` list Dependabot alerts
+
+**Symptom:** a workflow that calls `repos/{repo}/dependabot/alerts` with
+`permissions: security-events: read` would get a 403 on its first run. actionlint passes it.
+
+**Cause:** `security-events` covers code scanning only. Dependabot alerts need the
+`vulnerability-alerts` scope, which actionlint (v1.7.7) doesn't know yet and reports as
+`unknown permission scope "vulnerability-alerts"`.
+
+**Rule:** grant `vulnerability-alerts: read` for Dependabot alerts (see
+`.github/workflows/stuck-alerts.yml`), and run actionlint with
+`-ignore 'unknown permission scope "vulnerability-alerts"'`.
+
+---
+
 ## 2026-11-16 Toasts, the notification center and quick settings were missing from the window snapshot
 
 **Symptom:** a Windows toast over the captured window was in the step PNG, but no toast

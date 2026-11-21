@@ -16,12 +16,54 @@ permissions:
   contents: read
 
 jobs:
+  # Markdown and docs/ feed no test or build step, so a change that touches
+  # only those skips the heavy jobs below. Anything that cannot be decided
+  # (a manual run, a new branch, a diff base missing from the clone) counts
+  # as code: the cost of a wrong guess is a skipped test on real code.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether anything but docs changed
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        # --no-renames lists both paths of a rename, so src/x.ts -> src/x.md
+        # still counts as code. An empty diff (an empty "[build]" commit)
+        # counts as code too.
+        run: |
+          code=true
+          case "$EVENT" in
+            pull_request) base="$PR_BASE" ;;
+            push) base="$PUSH_BEFORE" ;;
+            *) base="" ;;
+          esac
+          if [ -n "$base" ] && ! [[ "$base" =~ ^0+$ ]] \
+            && files=$(git diff --no-renames --name-only "$base"...HEAD); then
+            if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -v -E '(\.md$|^docs/)' | grep -q .; then
+              code=false
+            fi
+          fi
+          echo "Changed files:"; printf '%s\n' "${files:-<empty or not computed>}"
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
+
   # Both platforms, because the defects that only appear on macOS are the ones
   # this project keeps shipping: the two coordinate spaces that coincide on
   # Windows, the Keychain that has no Windows analogue, the input hook that
   # needs a permission there and not here. Windows-only tests could not have
   # caught any of them.
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +120,8 @@ jobs:
   # old server sending users into a five-minute wait). Windows only, because
   # that is where the WebView opens a DevTools port to drive it through.
   e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
 
     steps:
@@ -135,11 +179,12 @@ jobs:
   # manual run, or on any commit whose message says so with [build]. Release
   # tags go through release.yml, which is untouched by this.
   build:
-    needs: test
+    needs: [changes, test]
     if: >-
+      needs.changes.outputs.code == 'true' && (
       github.ref == 'refs/heads/main' ||
       (github.event_name == 'workflow_dispatch' && inputs.build_installers) ||
-      contains(github.event.head_commit.message, '[build]')
+      contains(github.event.head_commit.message, '[build]'))
     strategy:
       fail-fast: false
       matrix:
@@ -210,3 +255,25 @@ jobs:
           name: ${{ matrix.artifact-name }}
           path: ${{ matrix.artifact-path }}
           retention-days: 7
+
+  # The one check branch protection requires. A job skipped at job level
+  # reports under its bare name, not per matrix leg, so requiring the legs
+  # would leave a docs-only PR pending forever; this gate passes when every
+  # job succeeded or was skipped, and fails on any failure or cancellation.
+  ci:
+    needs: [changes, test, e2e, build]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check the results of the other jobs
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success|skipped) ;;
+              *) echo "A needed job ended with: $r"; exit 1 ;;
+            esac
+          done

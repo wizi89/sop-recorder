@@ -1,6 +1,6 @@
 [package]
 name = "cogniclone-recorder"
-version = "0.20.1"
+version = "0.20.2-rc.1"
 description = "CogniClone Recorder"
 authors = ["CogniClone"]
 license = "BSL-1.1"
@@ -31,7 +31,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-log = "2"
 tauri-plugin-store = "2"
-tauri-plugin-updater = "2"
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
 url = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
