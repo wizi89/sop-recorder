@@ -9,7 +9,8 @@ Prüfmarkierungen.
 
 - **Ein Screenshot pro Schritt:** bei jedem Klick und bei der Eingabetaste.
   - **Windows, „Aktives Fenster“ (Standard):** nur das Fenster, in dem geklickt wird, zusammen
-    mit seinen Dialogen und Menüs. Taskleiste und andere Fenster sind nicht zu sehen.
+    mit seinen Dialogen und Menüs. Taskleiste und andere Fenster sind nicht zu sehen, außer
+    bei einem Klick auf die Taskleiste: dann nur diese.
   - **Klick auf den Desktop:** der ganze Bildschirm, wenn sich kein aktives Fenster bestimmen
     lässt. Solche Schritte werden zur Prüfung markiert (siehe unten).
   - **„Ganzer Bildschirm“:** der Bildschirm, auf dem geklickt wird, mit Taskleiste,
@@ -60,7 +61,7 @@ Bedienelementen, andere Maustasten und das Scrollen.
 - **Sichtbar geschaltete Passwörter:** Ein Passwort, das mit „Passwort anzeigen“ sichtbar
   gemacht wurde, ist kein Passwortfeld mehr und wird nicht geschwärzt.
 - **„Ganzer Bildschirm“:** Fenster anderer Programme werden nicht geschwärzt, nur Passwortfelder.
-- **macOS:** Dort wird nichts geschwärzt.
+- **macOS:** Dort wird nichts automatisch geschwärzt.
 
 ## Schwärzen und Löschen auf dem Prüfbildschirm
 
@@ -87,7 +88,7 @@ Beim Erstellen (und nur dann) werden an den CogniClone-Server gesendet:
 - **Der Ton** der ganzen Aufnahme.
 - **Die Angaben pro Schritt** (siehe oben) und die Zahl der Schritte je Aufnahmebereich und je
   Ergebnis der Passwortprüfung.
-- **Titel und Pipeline-Auswahl.**
+- **Titel, Pipeline-Auswahl und Modell.**
 
 Während der Aufnahme wird nichts gesendet. Was sonst gesendet wird, etwa ein Fehlerbericht nur
 nach Ihrer Zustimmung, steht in [ARCHITECTURE.md](./ARCHITECTURE.md#what-leaves-the-machine).

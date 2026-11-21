@@ -46,7 +46,7 @@ Browser sign-in with PKCE: a loopback listener on `127.0.0.1:<random port>`, the
 
 | When | What | Where |
 |------|------|-------|
-| Generate | The WAV, every screenshot PNG not deleted on the review screen (cropped and masked as captured, with the review screen's boxes burned in), title, pipeline choice, per-step timestamp, click position and trigger type, per-recording counts of capture scopes (`capture_scopes`) and password check outcomes (`password_checks`) | `POST /generate` |
+| Generate | The WAV, every screenshot PNG not deleted on the review screen (cropped and masked as captured, with the review screen's boxes burned in), title, pipeline choice and generation model, per-step timestamp, click position, trigger type, marker box, capture scope (`capture_scope`) and password check outcome (`password_check`), per-recording counts of capture scopes (`capture_scopes`) and password check outcomes (`password_checks`) | `POST /generate` |
 | Sign-in, refresh | Auth code / refresh token | `/auth/*` |
 | App start, review screen | Nothing but the session token | `/quota`, `/pipelines` |
 | Error report, only with consent | Scrubbed log tail (emails, secrets, paths removed), a subset of settings | `/client-reports` |

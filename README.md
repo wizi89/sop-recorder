@@ -51,8 +51,8 @@ The full text, in German, is [docs/PRIVACY.md](docs/PRIVACY.md). In short:
 
 - **Windows:** a screenshot shows only the window clicked in, with its dialogs and menus (setting "Aktives Fenster", the default). With "Ganzer Bildschirm" it shows the whole monitor.
 - **Blacked out before saving (Windows):** password fields, when "Passwortfelder schwärzen" is on (the default). In "Aktives Fenster", other apps' windows over the captured one are blacked out too, such as notifications and always-on-top windows.
-- **macOS:** the whole monitor, nothing blacked out.
-- **Marked "Prüfen":** a step the password check could not confirm, or one that fell back to the whole monitor. Generating needs a tick that the marked steps were checked.
+- **macOS:** the whole monitor, nothing blacked out automatically.
+- **Marked "Prüfen":** a step the password check could not confirm, or one that fell back to the whole monitor; every step of a recording made with an earlier version. Generating needs a tick that the marked steps were checked.
 - **Review screen:** you can black out areas with a frame, or delete a step. Frames are burned into the uploaded copy only, and the files on disk stay unchanged. Deleting a step does not cut the audio: its narration is still sent.
 - **Sent at Generate:**
   - the screenshots as described above,
