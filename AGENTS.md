@@ -21,7 +21,8 @@ guess, it labels the issue `needs-owner`.
 
 Exception (owner decision 2026-11-18): `dependabot-lane.yml` enables auto-merge on Dependabot PRs
 whose bumps are all patches. Agents still never merge or enable auto-merge. A `github_actions`
-bump never takes that lane or goes to the Deps Station: it gets `owner-merge` (owner decision 2026-11-21).
+bump never takes that lane or goes to the Deps Station: it gets `owner-merge` (owner decision
+2026-11-21).
 
 Issues the factory works live in this repo and are written for a public audience: the problem
 and the wanted behaviour, nothing from the private repo (no customer, pilot or pricing details).

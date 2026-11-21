@@ -2,7 +2,8 @@ name: Dependabot red
 
 # When CI fails on a Dependabot PR: turn its auto-merge off and hand it to
 # the Deps Station with `agent:deps`. This workflow never enables auto-merge.
-# A PR labelled `owner-merge` (a github_actions bump) stays with the owner.
+# A PR labelled `owner-merge` stays with the owner, whatever its ecosystem:
+# a github_actions bump, or a bump the Deps Station already handed over.
 
 on:
   workflow_run:
