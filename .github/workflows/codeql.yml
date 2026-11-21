@@ -1,0 +1,49 @@
+name: CodeQL
+
+# Advanced setup instead of GitHub's default setup, for one reason: default
+# setup cannot skip paths, so a PR that changed only Markdown (vendored
+# skills, docs) ran the full scan, Rust alone for ~9 minutes. paths-ignore
+# skips the run only when EVERY changed file matches; the weekly schedule
+# scans main in full regardless. Not a required check, so a skipped run
+# blocks nothing.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**/*.md", "docs/**", ".claude/**"]
+  pull_request:
+    branches: [main]
+    paths-ignore: ["**/*.md", "docs/**", ".claude/**"]
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, rust]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
