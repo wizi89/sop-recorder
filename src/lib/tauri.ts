@@ -94,10 +94,6 @@ export async function deleteLastScreenshot(): Promise<number> {
   return invoke("delete_last_screenshot");
 }
 
-/**
- * List all captured screenshot files in a recording session output dir,
- * ordered by capture sequence. Returns absolute file paths.
- */
 /** A recording that was stopped but never generated. */
 export interface UnfinishedRecording {
   output_dir: string;
@@ -114,11 +110,23 @@ export async function discardRecording(outputDir: string): Promise<void> {
   return invoke("discard_recording", { outputDir });
 }
 
-export async function listSessionScreenshots(outputDir: string): Promise<string[]> {
+/** One screenshot: the step number from its file name, and its path. */
+export interface SessionScreenshot {
+  step: number;
+  path: string;
+}
+
+/**
+ * Every screenshot in a recording folder, in step order. The step number comes
+ * from the file name, so gaps (failed captures, deleted steps) keep the other
+ * steps' numbers.
+ */
+export async function listSessionScreenshots(outputDir: string): Promise<SessionScreenshot[]> {
   return invoke("list_session_screenshots", { outputDir });
 }
 
 export interface StepCaptureRecord {
+  step: number;
   path: string;
   capture_scope: "window" | "monitor" | "monitor_fallback" | "unknown";
   password_check: "ok" | "flagged" | "off" | "unknown";
@@ -128,6 +136,45 @@ export interface StepCaptureRecord {
 export async function listCaptureRecords(outputDir: string): Promise<StepCaptureRecord[]> {
   return invoke("list_capture_records", { outputDir });
 }
+
+/** `[x, y, width, height]` in saved-image pixels. */
+export type RedactionBox = [number, number, number, number];
+
+/** The review screen's boxes for a recording (review-redaction D5). */
+export interface LoadedRedactions {
+  /** Boxes per step number; keys are the numbers as strings. */
+  steps: Record<string, RedactionBox[]>;
+  /** Steps a delete left part way; the upload refuses until they are deleted again. */
+  leftover_steps: number[];
+  /** Set when the stored boxes cannot be read; only a reset clears it. */
+  unreadable: string | null;
+}
+
+export async function loadRedactions(outputDir: string): Promise<LoadedRedactions> {
+  return invoke("load_redactions", { outputDir });
+}
+
+/** Replace one step's boxes; resolves to what is now stored for it. */
+export async function saveRedactions(
+  outputDir: string,
+  step: number,
+  boxes: RedactionBox[],
+): Promise<RedactionBox[]> {
+  return invoke("save_redactions", { outputDir, step, boxes });
+}
+
+/** Delete the recording's stored boxes, readable or not. */
+export async function resetRedactions(outputDir: string): Promise<void> {
+  return invoke("reset_redactions", { outputDir });
+}
+
+/** Remove a step's screenshot, metadata and boxes. Idempotent. */
+export async function deleteStep(outputDir: string, step: number): Promise<void> {
+  return invoke("delete_step", { outputDir, step });
+}
+
+/** Prefix of an upload refused because of the boxes (see `generate.rs`). */
+export const REDACTION_REFUSAL = "[redaction] ";
 
 /**
  * Read a screenshot file as raw bytes. The frontend wraps the result in a

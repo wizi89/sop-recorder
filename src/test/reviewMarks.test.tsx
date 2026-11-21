@@ -9,7 +9,8 @@ let records: unknown[] | "fail";
 
 beforeEach(() => {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-    if (cmd === "list_session_screenshots") return PATHS;
+    if (cmd === "list_session_screenshots") return PATHS.map((path, i) => ({ step: i + 1, path }));
+    if (cmd === "load_redactions") return { steps: {}, leftover_steps: [], unreadable: null };
     if (cmd === "list_capture_records") {
       if (records === "fail") throw new Error("sidecars unreadable");
       return records;
@@ -20,14 +21,15 @@ beforeEach(() => {
   });
 });
 
-const ok = (path: string) => ({ path, capture_scope: "window", password_check: "ok" });
+const step = (path: string) => PATHS.indexOf(path) + 1;
+const ok = (path: string) => ({ step: step(path), path, capture_scope: "window", password_check: "ok" });
 
 async function renderReview() {
   const onConfirm = vi.fn();
   render(
     <ReviewScreen outputDir="/tmp" captureCount={3} elapsedSec={10} onConfirm={onConfirm} onCancel={() => {}} />,
   );
-  await waitFor(() => expect(screen.getAllByAltText(/step/)).toHaveLength(3));
+  await waitFor(() => expect(screen.getAllByAltText(/^Schritt \d+$/)).toHaveLength(3));
   return onConfirm;
 }
 
@@ -36,9 +38,9 @@ const generate = () => screen.getByRole("button", { name: "Generieren" });
 describe("review marks", () => {
   it("marks flagged and fallback steps and needs the confirmation", async () => {
     records = [
-      { path: PATHS[0], capture_scope: "window", password_check: "flagged" },
+      { step: 1, path: PATHS[0], capture_scope: "window", password_check: "flagged" },
       ok(PATHS[1]),
-      { path: PATHS[2], capture_scope: "monitor_fallback", password_check: "ok" },
+      { step: 3, path: PATHS[2], capture_scope: "monitor_fallback", password_check: "ok" },
     ];
     const onConfirm = await renderReview();
     expect(screen.getAllByText("Prüfen")).toHaveLength(2);
@@ -66,7 +68,7 @@ describe("review marks", () => {
   });
 
   it("marks every step of a legacy recording", async () => {
-    records = PATHS.map((path) => ({ path, capture_scope: "unknown", password_check: "unknown" }));
+    records = PATHS.map((path) => ({ step: step(path), path, capture_scope: "unknown", password_check: "unknown" }));
     await renderReview();
     expect(screen.getAllByText("Prüfen")).toHaveLength(3);
     expect(generate()).toBeDisabled();

@@ -563,8 +563,29 @@ pub fn capture_step(
     })
 }
 
-/// What fills the gap around a dialog and every masked password field.
+/// What fills the gap around a dialog, every masked password field and every
+/// box the user drew on the review screen.
 const MASK: Rgba<u8> = Rgba([0, 0, 0, 255]);
+
+/// A rectangle in an image's own pixels: `[x, y, width, height]`. Signed, so a
+/// box stored partly outside the image still reads and is clipped here.
+pub type PixelBox = [i64; 4];
+
+/// Fill every box with the opaque mask colour, clipped to the image
+/// (review-redaction D3). The one fill both the capture-time password masks
+/// and the review screen's boxes go through, so the two cannot drift apart.
+pub fn apply_boxes(img: &mut RgbaImage, boxes: &[PixelBox]) {
+    let (w, h) = (img.width() as i64, img.height() as i64);
+    for &[x, y, bw, bh] in boxes {
+        let (x0, y0) = (x.max(0), y.max(0));
+        let (x1, y1) = (x.saturating_add(bw).min(w), y.saturating_add(bh).min(h));
+        for py in y0..y1 {
+            for px in x0..x1 {
+                img.put_pixel(px as u32, py as u32, MASK);
+            }
+        }
+    }
+}
 
 /// Phase B's image work, without the disk: gap fill, masks, marker, downsize.
 ///
@@ -594,15 +615,12 @@ fn finish_image(
             }
         }
     }
-    for mask in masks {
-        if let Some((x0, y0, x1, y1)) = canvas_rect(&screen, &img, mask) {
-            for y in y0..y1 {
-                for x in x0..x1 {
-                    img.put_pixel(x, y, MASK);
-                }
-            }
-        }
-    }
+    let mask_boxes: Vec<PixelBox> = masks
+        .iter()
+        .filter_map(|mask| canvas_rect(&screen, &img, mask))
+        .map(|(x0, y0, x1, y1)| [x0 as i64, y0 as i64, (x1 - x0) as i64, (y1 - y0) as i64])
+        .collect();
+    apply_boxes(&mut img, &mask_boxes);
 
     let marker = click_position.map(|(x, y)| render_click_overlay(&mut img, x, y, &screen));
 
@@ -816,6 +834,41 @@ mod tests {
     /// "unchanged" and "drawn on" can be told apart.
     fn blank(w: u32, h: u32) -> RgbaImage {
         RgbaImage::from_pixel(w, h, Rgba([10, 20, 30, 255]))
+    }
+
+    fn masked(img: &RgbaImage) -> Vec<(u32, u32)> {
+        img.enumerate_pixels()
+            .filter(|(_, _, p)| **p == MASK)
+            .map(|(x, y, _)| (x, y))
+            .collect()
+    }
+
+    #[test]
+    fn a_box_inside_the_image_fills_exactly_its_pixels() {
+        let mut img = blank(10, 10);
+        apply_boxes(&mut img, &[[2, 3, 4, 2]]);
+        let filled = masked(&img);
+        assert_eq!(filled.len(), 8);
+        assert!(filled
+            .iter()
+            .all(|&(x, y)| (2..6).contains(&x) && (3..5).contains(&y)));
+    }
+
+    #[test]
+    fn a_box_partly_outside_is_clipped_to_the_image() {
+        let mut img = blank(10, 10);
+        apply_boxes(&mut img, &[[-3, 8, 5, 10]]);
+        let filled = masked(&img);
+        // x 0..2, y 8..10
+        assert_eq!(filled.len(), 4);
+        assert!(filled.iter().all(|&(x, y)| x < 2 && y >= 8));
+    }
+
+    #[test]
+    fn a_box_fully_outside_changes_nothing() {
+        let mut img = blank(10, 10);
+        apply_boxes(&mut img, &[[20, 20, 5, 5], [-10, 0, 5, 5], [0, 0, 0, 5]]);
+        assert!(masked(&img).is_empty());
     }
 
     const GROUND: Rgba<u8> = Rgba([10, 20, 30, 255]);

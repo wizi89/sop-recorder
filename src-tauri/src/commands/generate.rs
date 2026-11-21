@@ -57,8 +57,8 @@ fn collect_step_screenshots(screenshots_dir: &Path) -> Result<Vec<(u32, PathBuf)
             // The count is what tells a reader whether the recording lost work,
             // so it is stated even though the steps are recoverable.
             log::warn!(
-                "generate: {} screenshot(s) present, {} missing from the sequence ({:?}); \
-                 uploading what is on disk",
+                "generate: {} screenshot(s) present, {} missing from the sequence ({:?}) \
+                 (failed capture or deleted in review); uploading what is on disk",
                 found.len(),
                 missing.len(),
                 missing,
@@ -67,6 +67,79 @@ fn collect_step_screenshots(screenshots_dir: &Path) -> Result<Vec<(u32, PathBuf)
     }
 
     Ok(found)
+}
+
+/// Marks an upload refused because of the review screen's boxes, so the
+/// frontend returns to the review screen instead of the error screen, whose
+/// Retry would repeat the same refusal (review-redaction D5).
+pub const REDACTION_REFUSAL: &str = "[redaction] ";
+
+fn refuse(msg: String) -> String {
+    format!("{REDACTION_REFUSAL}{msg}")
+}
+
+/// The screenshots exactly as they will be uploaded, built once before the
+/// upload loop (review-redaction D2): steps with boxes are decoded, filled and
+/// re-encoded in memory; every other step is its file's bytes unchanged. Every
+/// attempt, including the 401 retry, sends this list, so no retry can reach
+/// the originals on disk.
+///
+/// Refuses, naming the step, when the boxes cannot be read, a screenshot with
+/// boxes cannot be decoded, or a box entry or sidecar has no screenshot (a
+/// delete that failed part way: the box may belong to a step that would
+/// otherwise go out unredacted).
+fn build_upload_screenshots(
+    screenshots_dir: &Path,
+    screenshots: &[(u32, PathBuf)],
+) -> Result<Vec<upload::UploadScreenshot>, String> {
+    let boxes = crate::output::redactions::read(screenshots_dir).map_err(|e| {
+        refuse(format!(
+            "Die Schwärzungen dieser Aufnahme sind nicht lesbar, es wurde nichts hochgeladen. ({e})"
+        ))
+    })?;
+    let present: std::collections::BTreeSet<u32> = screenshots.iter().map(|(n, _)| *n).collect();
+    if let Some(step) =
+        super::review::leftover_steps(screenshots_dir, &present, Some(&boxes)).first()
+    {
+        return Err(refuse(format!(
+            "Schritt {step} wurde nicht vollständig gelöscht, es wurde nichts hochgeladen. \
+             Bitte den Schritt erneut löschen."
+        )));
+    }
+
+    screenshots
+        .iter()
+        .map(|(order, path)| {
+            let bytes = std::fs::read(path)
+                .map_err(|e| format!("Failed to read screenshot {}: {}", order, e))?;
+            let bytes = match boxes.get(order) {
+                Some(list) if !list.is_empty() => burn(&bytes, list).map_err(|e| {
+                    refuse(format!(
+                        "Schritt {order} konnte nicht geschwärzt werden, es wurde nichts \
+                         hochgeladen. ({e})"
+                    ))
+                })?,
+                _ => bytes,
+            };
+            Ok(upload::UploadScreenshot {
+                order: *order,
+                path: path.clone(),
+                bytes,
+            })
+        })
+        .collect()
+}
+
+/// Decode a PNG, fill the boxes, encode it again.
+fn burn(png: &[u8], boxes: &[crate::capture::screenshot::PixelBox]) -> Result<Vec<u8>, String> {
+    let mut img = image::load_from_memory(png)
+        .map_err(|e| e.to_string())?
+        .to_rgba8();
+    crate::capture::screenshot::apply_boxes(&mut img, boxes);
+    let mut out = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut out, image::ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    Ok(out.into_inner())
 }
 
 /// The per-step metadata to send with an upload, or `None` to send none.
@@ -233,11 +306,8 @@ async fn run_generation_inner(
     let step_metas = step_meta::read_all(&screenshots_dir);
     let steps_arg = steps_for_upload(&step_metas, screenshot_paths.len());
 
-    // Build path refs for upload
-    let path_refs: Vec<(u32, &Path)> = screenshot_paths
-        .iter()
-        .map(|(n, p)| (*n, p.as_path()))
-        .collect();
+    // The bytes to upload, boxes burned in, built once for every attempt.
+    let upload_screenshots = build_upload_screenshots(&screenshots_dir, &screenshot_paths)?;
 
     // Read skip_pii_check setting
     let skip_pii_check = app
@@ -291,7 +361,7 @@ async fn run_generation_inner(
     let response = match upload::upload_with_retry(
         &access_token,
         &audio_path,
-        &path_refs,
+        &upload_screenshots,
         &guide_title,
         api_url.as_deref(),
         3,
@@ -332,7 +402,7 @@ async fn run_generation_inner(
             upload::upload_with_retry(
                 &fresh_token,
                 &audio_path,
-                &path_refs,
+                &upload_screenshots,
                 &guide_title,
                 api_url.as_deref(),
                 1, // single retry -- if this also fails, give up
@@ -543,6 +613,133 @@ mod tests {
         assert_eq!(step_number_from_filename("step_01.json"), None);
         assert_eq!(step_number_from_filename("step_.png"), None);
         assert_eq!(step_number_from_filename("recording.wav"), None);
+    }
+
+    fn png(dir: &Path, step: u32, w: u32, h: u32) -> PathBuf {
+        let path = dir.join(format!("step_{:02}.png", step));
+        image::RgbaImage::from_pixel(w, h, image::Rgba([200, 210, 220, 255]))
+            .save(&path)
+            .unwrap();
+        path
+    }
+
+    fn upload_list(dir: &Path) -> Result<Vec<upload::UploadScreenshot>, String> {
+        build_upload_screenshots(dir, &collect_step_screenshots(dir).unwrap())
+    }
+
+    fn decoded(bytes: &[u8]) -> image::RgbaImage {
+        image::load_from_memory(bytes).unwrap().to_rgba8()
+    }
+
+    const BLACK: image::Rgba<u8> = image::Rgba([0, 0, 0, 255]);
+
+    #[test]
+    fn no_boxes_uploads_the_files_byte_identical() {
+        let dir = tempdir().unwrap();
+        let paths = [png(dir.path(), 1, 8, 8), png(dir.path(), 2, 8, 8)];
+        let list = upload_list(dir.path()).unwrap();
+        for (shot, path) in list.iter().zip(&paths) {
+            assert_eq!(shot.bytes, std::fs::read(path).unwrap());
+        }
+    }
+
+    #[test]
+    fn boxes_are_opaque_inside_and_the_rest_is_unchanged() {
+        let dir = tempdir().unwrap();
+        let path = png(dir.path(), 1, 10, 10);
+        let before = std::fs::read(&path).unwrap();
+        crate::output::redactions::save_step(dir.path(), 1, vec![[2, 2, 3, 3], [8, 8, 5, 5]])
+            .unwrap();
+        let list = upload_list(dir.path()).unwrap();
+        let img = decoded(&list[0].bytes);
+        for (x, y, p) in img.enumerate_pixels() {
+            let inside = ((2..5).contains(&x) && (2..5).contains(&y)) || (x >= 8 && y >= 8);
+            assert_eq!(*p == BLACK, inside, "pixel {x},{y}");
+        }
+        // The original on disk is untouched.
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    /// The list is built once; every attempt sends it. Even with the files
+    /// gone from disk afterwards, it still holds the burned bytes.
+    #[test]
+    fn the_upload_list_holds_the_burned_bytes_independent_of_the_file() {
+        let dir = tempdir().unwrap();
+        let path = png(dir.path(), 1, 4, 4);
+        crate::output::redactions::save_step(dir.path(), 1, vec![[0, 0, 4, 4]]).unwrap();
+        let list = upload_list(dir.path()).unwrap();
+        let first = list[0].bytes.clone();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(list[0].bytes, first);
+        assert!(decoded(&first).pixels().all(|p| *p == BLACK));
+    }
+
+    #[test]
+    fn corrupt_boxes_upload_nothing() {
+        let dir = tempdir().unwrap();
+        png(dir.path(), 1, 4, 4);
+        std::fs::write(dir.path().join("redactions.json"), "{").unwrap();
+        let err = upload_list(dir.path()).unwrap_err();
+        assert!(err.starts_with(REDACTION_REFUSAL), "{err}");
+    }
+
+    #[test]
+    fn a_box_entry_without_a_screenshot_uploads_nothing_and_names_the_step() {
+        let dir = tempdir().unwrap();
+        png(dir.path(), 1, 4, 4);
+        crate::output::redactions::save_step(dir.path(), 7, vec![[0, 0, 1, 1]]).unwrap();
+        let err = upload_list(dir.path()).unwrap_err();
+        assert!(
+            err.starts_with(REDACTION_REFUSAL) && err.contains("Schritt 7"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_sidecar_without_a_screenshot_uploads_nothing() {
+        let dir = tempdir().unwrap();
+        png(dir.path(), 1, 4, 4);
+        std::fs::write(dir.path().join("step_02.json"), "{}").unwrap();
+        let err = upload_list(dir.path()).unwrap_err();
+        assert!(err.contains("Schritt 2"), "{err}");
+    }
+
+    #[test]
+    fn an_undecodable_screenshot_with_boxes_uploads_nothing_and_names_the_step() {
+        let dir = tempdir().unwrap();
+        png(dir.path(), 1, 4, 4);
+        touch(dir.path(), "step_02.png");
+        crate::output::redactions::save_step(dir.path(), 2, vec![[0, 0, 1, 1]]).unwrap();
+        let err = upload_list(dir.path()).unwrap_err();
+        assert!(
+            err.starts_with(REDACTION_REFUSAL) && err.contains("Schritt 2"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn a_box_partly_outside_is_clipped_and_the_upload_proceeds() {
+        let dir = tempdir().unwrap();
+        png(dir.path(), 1, 4, 4);
+        crate::output::redactions::save_step(dir.path(), 1, vec![[2, 2, 50, 50]]).unwrap();
+        let img = decoded(&upload_list(dir.path()).unwrap()[0].bytes);
+        assert_eq!(img.pixels().filter(|p| **p == BLACK).count(), 4);
+    }
+
+    #[test]
+    fn boxes_on_a_recording_with_a_gap_land_on_the_right_step() {
+        let dir = tempdir().unwrap();
+        for n in [1, 3, 4] {
+            png(dir.path(), n, 4, 4);
+        }
+        crate::output::redactions::save_step(dir.path(), 3, vec![[0, 0, 4, 4]]).unwrap();
+        let list = upload_list(dir.path()).unwrap();
+        assert_eq!(
+            list.iter().map(|s| s.order).collect::<Vec<_>>(),
+            vec![1, 3, 4]
+        );
+        let black = |i: usize| decoded(&list[i].bytes).pixels().all(|p| *p == BLACK);
+        assert!(!black(0) && black(1) && !black(2));
     }
 
     fn meta(order: u32) -> step_meta::StepMeta {

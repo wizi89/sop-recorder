@@ -24,11 +24,13 @@ function mockCommands(opts: {
   mockInvoke.mockImplementation((cmd: string) => {
     switch (cmd) {
       case "list_session_screenshots":
-        return Promise.resolve(["/tmp/step_01.png"]);
+        return Promise.resolve([{ step: 1, path: "/tmp/step_01.png" }]);
       case "list_capture_records":
         return Promise.resolve(
-            ["/tmp/step_01.png"].map((path) => ({ path, capture_scope: "window", password_check: "ok" })),
+            [{ step: 1, path: "/tmp/step_01.png", capture_scope: "window", password_check: "ok" }],
           );
+      case "load_redactions":
+        return Promise.resolve({ steps: {}, leftover_steps: [], unreadable: null });
       case "read_screenshot_bytes":
         return Promise.resolve([1, 2, 3]);
       case "get_pipelines":

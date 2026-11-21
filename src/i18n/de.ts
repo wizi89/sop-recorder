@@ -61,12 +61,38 @@ const de = {
     "{count} von {total} Schritten konnten nicht aufgenommen werden. Die Anleitung ist unvollständig.",
   "review.loading": "Screenshots werden geladen...",
   "review.step_label": "Schritt {n}",
+  "review.step_enlarged": "Schritt {n}, vergrößert",
   "review.confirm": "Generieren",
   "review.cancel": "Verwerfen",
   "review.pipeline_label": "Art der Anleitung",
   "review.pipeline_default": "Standard",
   "review.pipeline_default_description":
     "Die allgemeine Generierung. Passt zu jeder Aufnahme.",
+  "review.deleted_steps": "{count} gelöscht",
+  "review.open_hint": "Auf einen Schritt klicken, um Bereiche zu schwärzen oder ihn zu löschen.",
+  "review.redact_hint":
+    "Mit der Maus einen Rahmen ziehen, um einen Bereich zu schwärzen. Nur die hochgeladene Kopie wird geschwärzt, die Datei auf diesem PC bleibt unverändert.",
+  "review.redact_saving": "Wird gespeichert...",
+  "review.redact_save_failed": "Schwärzung für Schritt {n} konnte nicht gespeichert werden: {error}",
+  "review.redact_retry": "Erneut speichern",
+  "review.redact_remove": "Schwärzung entfernen",
+  "review.redact_boxes": "{count} geschwärzt",
+  "review.close": "Fertig",
+  "review.delete_step": "Schritt löschen",
+  "review.delete_confirm":
+    "Schritt {n} löschen? Screenshot und Schritt-Daten werden entfernt. Die Sprachaufnahme bleibt erhalten und kann im Text eines benachbarten Schritts erscheinen.",
+  "review.delete_confirm_yes": "Löschen",
+  "review.delete_confirm_no": "Abbrechen",
+  "review.delete_failed": "Schritt {n} konnte nicht gelöscht werden: {error}",
+  "review.leftover":
+    "Schritt {n} wurde nicht vollständig gelöscht. Generieren ist erst möglich, wenn er erneut gelöscht wurde.",
+  "review.leftover_retry": "Erneut löschen",
+  "review.unreadable":
+    "Die gespeicherten Schwärzungen dieser Aufnahme sind nicht lesbar. Schwärzen und Generieren sind erst nach dem Zurücksetzen möglich. ({error})",
+  "review.reset": "Schwärzungen zurücksetzen",
+  "review.reset_confirm": "Alle Schwärzungen dieser Aufnahme werden gelöscht. Fortfahren?",
+  "review.reset_failed": "Schwärzungen konnten nicht zurückgesetzt werden: {error}",
+  "review.upload_refused": "Nicht hochgeladen: {error}",
 
   // Microphone permission
   "mic.permission_denied":
