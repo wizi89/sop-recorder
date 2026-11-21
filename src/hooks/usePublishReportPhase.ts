@@ -23,7 +23,8 @@ export function usePublishReportPhase(phase: Phase) {
       safeUnlisten(stop);
       stop = null;
     };
-    // WINDOW_FOCUS rather than onFocusChanged, for the reason given in App.tsx.
+    // WINDOW_FOCUS rather than onFocusChanged: its combined unlisten drops the
+    // promises of the two listeners it wraps (see the same choice in App.tsx).
     void getCurrentWindow()
       .listen(TauriEvent.WINDOW_FOCUS, () => {
         void setErrorReportPhase(phase, true);

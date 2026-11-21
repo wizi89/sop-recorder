@@ -16,12 +16,12 @@ fn macos_records_the_monitor_without_masking() {
 }
 
 /// The settings are read once at start (privacy-capture D8). A source
-/// guard, as in `settings.rs`: the property is that the capture callback
+/// guard, as in `settings/tests.rs`: the property is that the capture callback
 /// never reads the store, so a change made mid-recording cannot reach it.
 #[test]
 fn the_capture_callback_never_rereads_the_settings() {
     // Normalised first: a CRLF checkout must not hide the callback's end
-    // (FINDINGS).
+    // (docs/findings/).
     let source = include_str!("../recording.rs").replace("\r\n", "\n");
     let start = source
         .find("start_listener_with_callback(")

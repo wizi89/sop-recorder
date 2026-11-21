@@ -12,7 +12,7 @@ import {
   type StepCaptureRecord,
 } from "../lib/tauri";
 import { containRect } from "../lib/redactionGeometry";
-import { BoxOverlay, StepEditor, has, key, type Thumb } from "./StepEditor";
+import { BoxOverlay, StepEditor, boxKey, hasBox, type Thumb } from "./StepEditor";
 import { formatElapsed } from "../hooks/useElapsedTime";
 import { PipelineSelector } from "./PipelineSelector";
 
@@ -485,13 +485,13 @@ export function ReviewScreen({
           confirmDelete={confirmDelete}
           onAdd={(b) => {
             // A second identical box would share its React key and its removal.
-            if (has(desired[open.step], b)) return;
+            if (hasBox(desired[open.step], b)) return;
             setStepBoxes(open.step, [...(desired[open.step] ?? []), b]);
           }}
           onRemove={(b) =>
             setStepBoxes(
               open.step,
-              (desired[open.step] ?? []).filter((x) => key(x) !== key(b)),
+              (desired[open.step] ?? []).filter((x) => boxKey(x) !== boxKey(b)),
             )
           }
           onRetrySave={() => saveStep(open.step, desired[open.step] ?? [])}

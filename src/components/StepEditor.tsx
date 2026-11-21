@@ -18,9 +18,9 @@ export interface Thumb {
   marked: boolean;
 }
 
-export const key = (b: RedactionBox) => b.join(",");
-export const has = (list: RedactionBox[] | undefined, b: RedactionBox) =>
-  (list ?? []).some((x) => key(x) === key(b));
+export const boxKey = (b: RedactionBox) => b.join(",");
+export const hasBox = (list: RedactionBox[] | undefined, b: RedactionBox) =>
+  (list ?? []).some((x) => boxKey(x) === boxKey(b));
 
 /**
  * Boxes drawn over an image shown with `object-fit: contain`, mapped through
@@ -44,15 +44,15 @@ export function BoxOverlay({
   if (natural.w <= 0 || natural.h <= 0) return null;
   // Stored but no longer desired: its removal is still being saved, so it is
   // still what would be uploaded and still shown opaque.
-  const shown = [...desired, ...stored.filter((b) => !has(desired, b))];
+  const shown = [...desired, ...stored.filter((b) => !hasBox(desired, b))];
   return (
     <>
       {shown.map((b) => {
         const r = toDisplayRect(b, content, natural.w, natural.h);
-        const applied = has(stored, b);
+        const applied = hasBox(stored, b);
         return (
           <div
-            key={key(b)}
+            key={boxKey(b)}
             data-testid={applied ? "redaction-applied" : "redaction-pending"}
             style={{
               position: "absolute",
@@ -66,7 +66,7 @@ export function BoxOverlay({
               pointerEvents: "none",
             }}
           >
-            {onRemove && has(desired, b) && (
+            {onRemove && hasBox(desired, b) && (
               <button
                 type="button"
                 aria-label={t("review.redact_remove")}

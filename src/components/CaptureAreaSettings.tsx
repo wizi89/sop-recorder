@@ -25,7 +25,7 @@ export function CaptureAreaSettings({
     <>
       <div className="flex items-center justify-between">
         <label className="label-sm" htmlFor="capture-mode">
-          {t("settings.capture_privacy")}
+          {t("settings.capture_area")}
         </label>
         <select
           id="capture-mode"

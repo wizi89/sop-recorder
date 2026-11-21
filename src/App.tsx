@@ -61,7 +61,6 @@ function MainApp() {
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
-  const { enterCompactMode, exitCompactMode } = useCompactMode(recorder.status);
   useOfferUnfinished(auth.loggedIn && recorder.status === "idle", recorder.generateFromDir);
   const updater = useUpdater();
   // Error reports (design D1, D5, D7). The hook owns the queue; this window
@@ -165,6 +164,7 @@ function MainApp() {
     }
   }, [recorder.status, auth.loggedIn]);
 
+  const { enterCompactMode, exitCompactMode } = useCompactMode(recorder.status);
 
   // What the user is doing, for any report raised from here on (D3). Derived
   // by `phaseForScreen`, which is a pure function with a table test -- the
@@ -179,7 +179,6 @@ function MainApp() {
   });
 
   usePublishReportPhase(phase);
-
 
   const handleStart = useCallback(async () => {
     // Pre-emptive quota check: if we already know the user is at or over
