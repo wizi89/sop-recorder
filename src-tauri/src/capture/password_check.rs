@@ -839,17 +839,27 @@ mod tests {
 
     #[test]
     fn a_window_already_being_warmed_up_is_not_queried_again() {
+        // The first query blocks until the test releases it, so a slow runner
+        // cannot finish the warm-up before the second call (CI flake on macOS).
         let calls = Arc::new(AtomicUsize::new(0));
-        let counted = calls.clone();
+        let released = Arc::new(Mutex::new(false));
+        let (counted, gate) = (calls.clone(), released.clone());
         let c = checker(move |_| {
             counted.fetch_add(1, Ordering::SeqCst);
-            std::thread::sleep(Duration::from_millis(50));
+            while !*gate.lock().unwrap() {
+                std::thread::sleep(Duration::from_millis(1));
+            }
             QueryResult::Fields(vec![])
         });
         c.warm_up(W);
-        std::thread::sleep(Duration::from_millis(10));
+        let start = Instant::now();
+        while calls.load(Ordering::SeqCst) == 0 && start.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(1));
+        }
         c.warm_up(W);
         std::thread::sleep(Duration::from_millis(30));
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let seen = calls.load(Ordering::SeqCst);
+        *released.lock().unwrap() = true;
+        assert_eq!(seen, 1);
     }
 }
