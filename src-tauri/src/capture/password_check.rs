@@ -405,7 +405,7 @@ pub struct Watch;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
 
     const W: isize = 0x10;
     const FIELD: Rect = Rect::new(300, 300, 500, 330);
@@ -842,11 +842,11 @@ mod tests {
         // The first query blocks until the test releases it, so a slow runner
         // cannot finish the warm-up before the second call (CI flake on macOS).
         let calls = Arc::new(AtomicUsize::new(0));
-        let released = Arc::new(Mutex::new(false));
+        let released = Arc::new(AtomicBool::new(false));
         let (counted, gate) = (calls.clone(), released.clone());
         let c = checker(move |_| {
             counted.fetch_add(1, Ordering::SeqCst);
-            while !*gate.lock().unwrap() {
+            while !gate.load(Ordering::SeqCst) {
                 std::thread::sleep(Duration::from_millis(1));
             }
             QueryResult::Fields(vec![])
@@ -859,7 +859,7 @@ mod tests {
         c.warm_up(W);
         std::thread::sleep(Duration::from_millis(30));
         let seen = calls.load(Ordering::SeqCst);
-        *released.lock().unwrap() = true;
+        released.store(true, Ordering::SeqCst);
         assert_eq!(seen, 1);
     }
 }
