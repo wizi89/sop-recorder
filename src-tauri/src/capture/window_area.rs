@@ -111,7 +111,8 @@ pub struct Snapshot {
     pub under_click: Option<isize>,
     pub windows: Vec<WindowInfo>,
     /// The list came from `EnumWindows`, which leaves out shell windows such
-    /// as toasts: they are neither masked nor checked, so the step is flagged.
+    /// as toasts: they are neither masked nor checked, so the step is marked
+    /// for review, with password masking on or off.
     pub partial: bool,
 }
 

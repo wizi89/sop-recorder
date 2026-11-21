@@ -29,6 +29,7 @@ pub struct SavedStep {
     pub marker_box: Option<screenshot::MarkerBox>,
     pub capture_scope: step_meta::CaptureScope,
     pub password_check: step_meta::PasswordCheck,
+    pub window_list_partial: bool,
 }
 
 pub(super) fn note_capture_outcome(
@@ -49,6 +50,7 @@ pub(super) fn note_capture_outcome(
             marker_box: saved.marker_box,
             capture_scope: saved.capture_scope,
             password_check: saved.password_check,
+            window_list_partial: saved.window_list_partial,
         })),
         Err(e) => {
             let total = failed.fetch_add(1, Ordering::SeqCst) + 1;
@@ -65,7 +67,30 @@ pub(super) fn note_capture_outcome(
 
 /// Phase B's password check (privacy-capture D4-D6): what to mask, and what
 /// the step's sidecar records. `None` checker means masking is off.
+///
+/// Also returns whether the window list behind the step was partial (design
+/// D3). That is decided before the masking-off return: foreign-window masking
+/// runs either way, so a partial list marks the step with masking on or off.
 pub(super) fn check_step(
+    checker: Option<&Arc<Checker>>,
+    held: &screenshot::HeldStep,
+    step_num: u32,
+) -> (Vec<Rect>, step_meta::PasswordCheck, bool) {
+    let partial = window_list_partial(held.geometry.as_ref());
+    if partial {
+        log::warn!("Step {step_num}: the window list left out shell windows such as notifications");
+    }
+    let (masks, check) = password_check_step(checker, held, step_num);
+    (masks, check, partial)
+}
+
+/// Whether any window list taken for the step was partial. A step without
+/// geometry has no list to be partial; the password check flags it instead.
+pub(super) fn window_list_partial(geometry: Option<&window_area::Geometry>) -> bool {
+    geometry.is_some_and(|g| g.snapshots.iter().any(|s| s.partial))
+}
+
+fn password_check_step(
     checker: Option<&Arc<Checker>>,
     held: &screenshot::HeldStep,
     step_num: u32,
@@ -84,12 +109,7 @@ pub(super) fn check_step(
     let foreground_changed = geometry.foreground_changed
         && held.scope == step_meta::CaptureScope::Window
         && !window_area::shell_only(&geometry.snapshots[0], &held.shown());
-    let mut outcome = checker.check(&windows, held.pixels_at, foreground_changed);
-    if geometry.snapshots.iter().any(|s| s.partial) {
-        outcome
-            .flags
-            .push("the window list left out shell windows such as notifications".to_string());
-    }
+    let outcome = checker.check(&windows, held.pixels_at, foreground_changed);
     if outcome.flags.is_empty() {
         log::info!(
             "Step {step_num}: password check ok, {} window(s), {} field area(s) masked, {} ms",
