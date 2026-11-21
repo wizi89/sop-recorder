@@ -21,18 +21,20 @@ A Tauri v2 app: Rust does capture, audio, input hooks, sign-in and networking; a
 | `capture/permits.rs` | Buffer slots (2 to 6 by monitor size, about 100 MB in total) and capture permits that serialise pixel reads |
 | `commands/*` | Tauri commands: recording, generate, auth, settings, pipelines, quota, permissions, window, updater, error_reports |
 | `network/*` | HTTP: `auth` (sign-in, refresh, keyring), `loopback` (browser sign-in callback), `upload`, `sse`, `jobs` (result polling), `quota`, `pipelines`, `reports` |
-| `output/*` | `guide.md`, `pending.json`, per-step metadata |
+| `output/*` | `guide.md`, `pending.json`, per-step metadata, `redactions.json` (the review screen's boxes, `output/redactions.rs`) |
+| `commands/review.rs` | What the review screen changes before upload: saves the boxes per step, deletes a step |
 | `error_reports.rs` | Consent-first error reports with a log scrubber |
 | `config.rs`, `runtime_config.rs` | Backend URLs; override via `--local/--staging/--production`, env vars, or `%APPDATA%\CogniClone\config.toml` |
 | `src/App.tsx` | Picks the screen: login, permissions, recorder, review |
 | `src/hooks/useRecorder.ts` | Frontend state machine: idle, recording, review, processing, done, error, pii_blocked, rate_limited |
 | `src/components/RecordingBar.tsx` | The always-on-top recording bar (its own window) |
+| `src/lib/redactionGeometry.ts` | Maps review-screen boxes between display pixels and saved-image pixels |
 
 ## Life of a recording
 
 1. **Start** (`commands/recording.rs`): creates a new folder in the output directory (set in Settings), hides the app's own windows from capture, starts audio and input hooks.
 2. **Each click or Return**: a capture thread takes a window snapshot, reads the monitor's pixels, takes a second snapshot and crops to the capture area (the active window by default, the whole monitor in "Ganzer Bildschirm" mode). It then runs the password check, fills password fields black in memory, and writes `step_NN.png`, then `step_NN.json` (timestamp, click position, trigger, marker box, `capture_scope`, `password_check`). No unmasked file is written. The UI is told whether it succeeded. **Undo** deletes the last step. Capture area and masking are Windows only; macOS captures the monitor without masking.
-3. **Stop**: hooks and audio stop, in-flight captures get up to 15 s, `pending.json` is written, the review screen opens. Steps whose password check was not confirmed (`flagged`, `unknown`) or that fell back to the monitor carry a "Prüfen" mark, and Generate needs one confirmation tick.
+3. **Stop**: hooks and audio stop, in-flight captures get up to 15 s, `pending.json` is written, the review screen opens. Steps whose password check was not confirmed (`flagged`, `unknown`) or that fell back to the monitor carry a "Prüfen" mark, and Generate needs one confirmation tick. On the review screen the user can draw boxes to black out (saved to `redactions.json`, burned into the uploaded copy only; the PNGs on disk stay the originals) and delete steps (the other steps keep their numbers).
 4. **Generate** (`commands/generate.rs`): refreshes the session, uploads everything to `POST /generate` (3 retries, one re-auth on 401), reads SSE progress. If the stream drops, polls `GET /generate/{id}/result`. Saves `guide.md` and downloads the PDF the server rendered; a missing PDF does not fail the guide.
 5. **Result**: open the folder. "Generate from folder" re-runs step 4 for any earlier recording.
 
@@ -44,7 +46,7 @@ Browser sign-in with PKCE: a loopback listener on `127.0.0.1:<random port>`, the
 
 | When | What | Where |
 |------|------|-------|
-| Generate | The WAV, every screenshot PNG (cropped and masked as captured), title, pipeline choice, per-step timestamp, click position and trigger type, per-recording counts of capture scopes (`capture_scopes`) and password check outcomes (`password_checks`) | `POST /generate` |
+| Generate | The WAV, every screenshot PNG not deleted on the review screen (cropped and masked as captured, with the review screen's boxes burned in), title, pipeline choice, per-step timestamp, click position and trigger type, per-recording counts of capture scopes (`capture_scopes`) and password check outcomes (`password_checks`) | `POST /generate` |
 | Sign-in, refresh | Auth code / refresh token | `/auth/*` |
 | App start, review screen | Nothing but the session token | `/quota`, `/pipelines` |
 | Error report, only with consent | Scrubbed log tail (emails, secrets, paths removed), a subset of settings | `/client-reports` |

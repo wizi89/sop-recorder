@@ -67,7 +67,8 @@ Parts:
 
 - `audio`: file `recording.wav`, `audio/wav`.
 - `step_NN` (two digits, one per screenshot, `NN` is the step order): `image/png`, file name from the
-  local screenshot.
+  local screenshot. `NN` may skip numbers (a failed capture, or a step deleted on the review screen);
+  the parts are paired with `metadata.steps` in ascending `NN`.
 - `metadata`: JSON text with
   - `guide_title`: string
   - `step_count`: number of screenshots
