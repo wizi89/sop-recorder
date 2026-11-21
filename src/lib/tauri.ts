@@ -130,6 +130,8 @@ export interface StepCaptureRecord {
   path: string;
   capture_scope: "window" | "monitor" | "monitor_fallback" | "unknown";
   password_check: "ok" | "flagged" | "off" | "unknown";
+  /** The window list behind the step was partial; marks it with masking on or off. */
+  window_list_partial: boolean;
 }
 
 /** How each screenshot was captured; a missing sidecar reads as `unknown`. */

@@ -32,6 +32,17 @@ pub struct StepMeta {
     pub capture_scope: CaptureScope,
     #[serde(default)]
     pub password_check: PasswordCheck,
+    /// The window list behind this step was partial (the `EnumWindows`
+    /// fallback left out shell windows such as notifications), so masking
+    /// foreign windows may have missed one. Recorded apart from
+    /// `password_check` because it applies with masking on or off. Absent in
+    /// sidecars written before this field existed, and when false.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub window_list_partial: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -80,13 +91,11 @@ impl PasswordCheck {
     }
 }
 
-/// How each screenshot in `screenshots_dir` was captured, by step number. A
-/// step whose sidecar is missing or unreadable reads as `unknown` on both
-/// (design D7, D9): absence of a record is never taken as safe.
-pub fn capture_records(
-    screenshots_dir: &Path,
-    orders: &[u32],
-) -> Vec<(CaptureScope, PasswordCheck)> {
+/// The sidecar of each screenshot in `screenshots_dir`, by step number. A
+/// step whose sidecar is missing or unreadable reads as the default: `unknown`
+/// scope and check (design D7, D9), since absence of a record is never taken
+/// as safe.
+pub fn capture_records(screenshots_dir: &Path, orders: &[u32]) -> Vec<StepMeta> {
     let metas = read_all(screenshots_dir);
     orders
         .iter()
@@ -94,7 +103,7 @@ pub fn capture_records(
             metas
                 .iter()
                 .find(|m| m.order == *order)
-                .map(|m| (m.capture_scope, m.password_check))
+                .cloned()
                 .unwrap_or_default()
         })
         .collect()
@@ -426,13 +435,36 @@ mod tests {
             },
         )
         .unwrap();
+        let records: Vec<_> = capture_records(dir.path(), &[1, 2])
+            .iter()
+            .map(|m| (m.capture_scope, m.password_check))
+            .collect();
         assert_eq!(
-            capture_records(dir.path(), &[1, 2]),
+            records,
             vec![
                 (CaptureScope::Window, PasswordCheck::Ok),
                 (CaptureScope::Unknown, PasswordCheck::Unknown),
             ],
         );
+    }
+
+    /// Sidecars written before `window_list_partial` existed read as false,
+    /// and a false value is not written, so they stay byte-identical.
+    #[test]
+    fn window_list_partial_round_trips_and_defaults_to_false() {
+        let dir = tempdir().unwrap();
+        let mut meta = StepMeta {
+            order: 1,
+            ..Default::default()
+        };
+        write_sidecar(dir.path(), &meta).unwrap();
+        let raw = fs::read_to_string(dir.path().join("step_01.json")).unwrap();
+        assert!(!raw.contains("window_list_partial"), "{raw}");
+        assert!(!read_all(dir.path())[0].window_list_partial);
+
+        meta.window_list_partial = true;
+        write_sidecar(dir.path(), &meta).unwrap();
+        assert!(read_all(dir.path())[0].window_list_partial);
     }
 
     #[test]

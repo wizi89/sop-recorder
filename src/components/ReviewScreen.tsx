@@ -43,7 +43,8 @@ type BoxesByStep = Record<number, RedactionBox[]>;
 /**
  * A step the user has to look at before generating (privacy-capture D7): the
  * password check may have missed a field, the active window could not be
- * determined, or the step carries no record of how it was captured.
+ * determined, the window list was partial (masking on or off), or the step
+ * carries no record of how it was captured.
  */
 function needsReview(record: StepCaptureRecord | undefined): boolean {
   if (!record) return true;
@@ -51,7 +52,8 @@ function needsReview(record: StepCaptureRecord | undefined): boolean {
     record.password_check === "flagged" ||
     record.password_check === "unknown" ||
     record.capture_scope === "monitor_fallback" ||
-    record.capture_scope === "unknown"
+    record.capture_scope === "unknown" ||
+    record.window_list_partial
   );
 }
 

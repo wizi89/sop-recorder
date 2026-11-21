@@ -18,7 +18,7 @@ pub struct UploadScreenshot {
 }
 
 /// How the uploaded screenshots were protected, counted per value
-/// (privacy-capture D9). Taken from the sidecars next to the PNGs, never from
+/// (privacy-capture D9), and how many came from a partial window list. Taken from the sidecars next to the PNGs, never from
 /// settings, so a regenerated or legacy folder reports what its files say; a
 /// screenshot without a sidecar counts as `unknown`.
 ///
@@ -28,7 +28,7 @@ pub struct UploadScreenshot {
 fn capture_counts(
     screenshots: &[UploadScreenshot],
     steps: Option<&[StepMeta]>,
-) -> (serde_json::Value, serde_json::Value) {
+) -> (serde_json::Value, serde_json::Value, usize) {
     let mut scopes = serde_json::Map::new();
     for scope in [
         CaptureScope::Window,
@@ -47,11 +47,8 @@ fn capture_counts(
     ] {
         checks.insert(check.as_str().into(), 0.into());
     }
-    let records: Vec<(CaptureScope, PasswordCheck)> = match steps {
-        Some(steps) if steps.len() == screenshots.len() => steps
-            .iter()
-            .map(|m| (m.capture_scope, m.password_check))
-            .collect(),
+    let records: Vec<StepMeta> = match steps {
+        Some(steps) if steps.len() == screenshots.len() => steps.to_vec(),
         _ => {
             // Every screenshot of an upload lives in one `screenshots` folder.
             let dir = screenshots
@@ -62,13 +59,17 @@ fn capture_counts(
             step_meta::capture_records(dir, &orders)
         }
     };
-    for (scope, check) in records {
-        for (map, key) in [(&mut scopes, scope.as_str()), (&mut checks, check.as_str())] {
+    for meta in &records {
+        for (map, key) in [
+            (&mut scopes, meta.capture_scope.as_str()),
+            (&mut checks, meta.password_check.as_str()),
+        ] {
             let count = map[key].as_u64().unwrap_or(0) + 1;
             map.insert(key.into(), count.into());
         }
     }
-    (scopes.into(), checks.into())
+    let partial = records.iter().filter(|m| m.window_list_partial).count();
+    (scopes.into(), checks.into(), partial)
 }
 
 /// Upload audio + screenshots to the generation endpoint.
@@ -145,9 +146,11 @@ pub async fn upload_multipart(
     if let Some(id) = pipeline_id.filter(|s| !s.is_empty()) {
         metadata["pipeline_id"] = serde_json::json!(id);
     }
-    let (capture_scopes, password_checks) = capture_counts(screenshots, steps);
+    let (capture_scopes, password_checks, partial_window_lists) =
+        capture_counts(screenshots, steps);
     metadata["capture_scopes"] = capture_scopes;
     metadata["password_checks"] = password_checks;
+    metadata["partial_window_lists"] = partial_window_lists.into();
     form = form.text("metadata", metadata.to_string());
 
     if skip_pii_check {
@@ -311,7 +314,7 @@ mod tests {
             .collect()
     }
 
-    fn counts(paths: &[(u32, PathBuf)]) -> (serde_json::Value, serde_json::Value) {
+    fn counts(paths: &[(u32, PathBuf)]) -> (serde_json::Value, serde_json::Value, usize) {
         capture_counts(&shots(paths), None)
     }
 
@@ -323,11 +326,38 @@ mod tests {
             .map(|n| (n, Some((CaptureScope::Window, PasswordCheck::Ok))))
             .collect();
         steps.push((5, Some((CaptureScope::Window, PasswordCheck::Flagged))));
-        let (scopes, checks) = counts(&recording(dir.path(), &steps));
+        let (scopes, checks, _) = counts(&recording(dir.path(), &steps));
         assert_eq!(scopes["window"], 5);
         assert_eq!(scopes["unknown"], 0);
         assert_eq!(checks["ok"], 4);
         assert_eq!(checks["flagged"], 1);
+    }
+
+    /// Counted apart from the password checks, with masking off too (#57).
+    #[test]
+    fn steps_from_a_partial_window_list_are_counted() {
+        let dir = tempdir().unwrap();
+        for (order, partial) in [(1, true), (2, false), (3, true)] {
+            write_sidecar(
+                dir.path(),
+                &StepMeta {
+                    order,
+                    capture_scope: CaptureScope::Monitor,
+                    password_check: PasswordCheck::Off,
+                    window_list_partial: partial,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            std::fs::write(dir.path().join(format!("step_{order:02}.png")), b"png").unwrap();
+        }
+        let paths: Vec<_> = (1..=3)
+            .map(|n| (n, dir.path().join(format!("step_{n:02}.png"))))
+            .collect();
+        let (_, checks, partial) = counts(&paths);
+        assert_eq!(partial, 2);
+        assert_eq!(checks["off"], 3);
+        assert_eq!(checks["flagged"], 0);
     }
 
     #[test]
@@ -372,7 +402,7 @@ mod tests {
         )
         .unwrap();
         let paths = recording(dir.path(), &[(1, None), (2, None)]);
-        let (scopes, checks) = counts(&paths);
+        let (scopes, checks, _) = counts(&paths);
         assert_eq!(scopes["unknown"], 2);
         assert_eq!(checks["unknown"], 2);
     }
@@ -387,7 +417,7 @@ mod tests {
                 (2, None),
             ],
         );
-        let (scopes, checks) = counts(&paths);
+        let (scopes, checks, _) = counts(&paths);
         assert_eq!(
             (scopes["window"].clone(), scopes["unknown"].clone()),
             (1.into(), 1.into())

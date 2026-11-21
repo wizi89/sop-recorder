@@ -114,6 +114,7 @@ pub struct StepCaptureRecord {
     pub path: String,
     pub capture_scope: step_meta::CaptureScope,
     pub password_check: step_meta::PasswordCheck,
+    pub window_list_partial: bool,
 }
 
 /// The capture record of every screenshot in the folder, in the order of
@@ -128,14 +129,13 @@ pub async fn list_capture_records(output_dir: String) -> Result<Vec<StepCaptureR
     Ok(screenshots
         .into_iter()
         .zip(records)
-        .map(
-            |((step, path), (capture_scope, password_check))| StepCaptureRecord {
-                step,
-                path: path.to_string_lossy().to_string(),
-                capture_scope,
-                password_check,
-            },
-        )
+        .map(|((step, path), meta)| StepCaptureRecord {
+            step,
+            path: path.to_string_lossy().to_string(),
+            capture_scope: meta.capture_scope,
+            password_check: meta.password_check,
+            window_list_partial: meta.window_list_partial,
+        })
         .collect())
 }
 

@@ -52,6 +52,17 @@ describe("review marks", () => {
     expect(onConfirm).toHaveBeenCalled();
   });
 
+  it("marks a step from a partial window list with password masking off", async () => {
+    records = [
+      { ...ok(PATHS[0]), password_check: "off", window_list_partial: true },
+      { ...ok(PATHS[1]), password_check: "off" },
+      ok(PATHS[2]),
+    ];
+    await renderReview();
+    expect(screen.getAllByText("Prüfen")).toHaveLength(1);
+    expect(generate()).toBeDisabled();
+  });
+
   it("shows no confirmation when nothing is marked", async () => {
     records = PATHS.map(ok);
     await renderReview();
