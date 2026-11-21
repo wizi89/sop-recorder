@@ -2,7 +2,7 @@
 name: factory-implement
 description: The Implement Station of the Software Factory. Builds an explored issue on `agent/<n>-<slug>`, opens a draft PR with door, blast radius and check output, and hands it to Review; also does rework on a PR. Use when the fire payload says `station=implement`.
 ---
-<!-- vendored from Home @45e15d0, do not edit here -->
+<!-- vendored from Home @517d888, do not edit here -->
 
 # Factory: Implement
 
@@ -18,7 +18,7 @@ Input is the fire payload text: `station=implement repo=<owner/name> number=<n> 
 
 3. **Branch.** New work: `agent/<i>-<slug>` from `origin/<base>`. Retry or rework: check out the existing branch, then merge current `origin/<base>` into it (a merge commit, never a rebase) and resolve any conflicts, so the branch has the repo's current hooks, skills and steering before you change anything. Done when you are on the branch, up to date with its remote and containing `origin/<base>`.
 
-4. **Build exactly what the spec asks.** Follow `AGENTS.md`. A migration is expand-only (works with the previous code version: additive only; a drop, rename or tightened constraint waits for a later PR) and takes its number only after merging current `origin/<base>` into the branch (never rebase a pushed branch: a cloud run cannot force-push). Splitting a file the pre-commit hook's token cap names, when your change touches it, is in scope: do the split in its own commit before the change, behaviour unchanged. **No manual owner step:** a value that existing rows need (a per-org setting, a backfill) ships as an idempotent migration that is a no-op where its target is missing; a PR never asks the owner to run SQL, click an admin page or a dashboard before or after the merge. What truly cannot be automated (a secret, a third-party account) stops the run with `needs-owner` and the reason. Done when every listed change is in a commit.
+4. **Build exactly what the spec asks.** Follow `AGENTS.md`. A migration is expand-only (works with the previous code version: additive only; a drop, rename or tightened constraint waits for a later PR) and takes its number only after merging current `origin/<base>` into the branch (never rebase a pushed branch: a cloud run cannot force-push). Splitting a file the pre-commit hook's token cap names, when your change touches it, is in scope: do the split in its own commit before the change, behaviour unchanged. **No manual owner step:** a value that existing rows need (a per-org setting, a backfill) ships as an idempotent migration that is a no-op where its target is missing; a PR never asks the owner to run SQL, click an admin page or a dashboard before or after the merge. What truly cannot be automated (a secret, a third-party account) stops the run with `needs-owner` and the reason. A check this run cannot reach (a staging deploy, a probe that needs a local env file) goes under the body's "Not verified here" addressed to the **local session**, with the command `AGENTS.md` names for it (sop-sorcery: `scripts/verify_staging.py`); the local session runs it and ticks the One-way Door checklist. Done when every listed change is in a commit.
 
 5. **Run the checks** `AGENTS.md` names, plus those the issue's acceptance criteria name, plus `git diff --check origin/<base>` before every push: a `leftover conflict marker` line in its output is red (it also reports whitespace; only marker lines count). Fix and rerun up to three rounds. Done when all are green, or still red after three rounds.
 
