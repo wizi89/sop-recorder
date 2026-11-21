@@ -1,0 +1,47 @@
+#!/bin/sh
+# Fast feedback on what this commit stages, in a few seconds:
+#   1. Token cap: a staged text file over 5000 tokens (bytes / 4) should be
+#      split. Agents edit big files badly; splitting one is in scope.
+#   2. rustfmt --check on the staged Rust files.
+# REPORT-ONLY for now: it prints findings and never blocks. It becomes blocking
+# after the one-time reformat. Never skip it with --no-verify and never edit it
+# to get a commit through; agents report what it says under Friction.
+# Type checks (tsc), clippy and tests take longer and stay in CI.
+# Enabled by .claude/hooks/enable-githooks.sh. `sh .githooks/selftest.sh` proves it.
+
+CAP=5000
+# Exempt from the cap: lockfiles and generated Tauri files. Read by awk through
+# ENVIRON, so no escape mangling.
+SKIP='([.]lock$|-lock[.]json$|^src-tauri/icons/|^src-tauri/gen/)'
+
+# Staged text files, one per line: renames count under the new name, binary
+# files (numstat "-") are skipped, and paths may contain spaces.
+list=$(mktemp)
+trap 'rm -f "$list" "$list.size"' EXIT
+git -c core.quotePath=false diff --cached --numstat --no-renames --diff-filter=ACMR |
+  awk -F'\t' '$1 != "-" { print $3 }' > "$list"
+[ -s "$list" ] || exit 0
+
+# One git call for every size (each process start costs on Windows).
+sed 's/^/:/' "$list" | git cat-file --batch-check='%(objectsize)' > "$list.size"
+SKIP="$SKIP" CAP="$CAP" awk '
+  NR == FNR { size[FNR] = $1; next }
+  $0 ~ ENVIRON["SKIP"] { next }
+  { n++; t = int(size[FNR] / 4) }
+  t > ENVIRON["CAP"] + 0 { o++; printf "pre-commit (report-only): %s is ~%d tokens, over the %d cap; split it\n", $0, t, ENVIRON["CAP"] }
+  END { printf "pre-commit: token cap checked %d staged file(s), %d over the cap\n", n, o }
+' "$list.size" "$list" >&2
+
+n=$(grep -c '[.]rs$' "$list")
+if [ "$n" -gt 0 ]; then
+  if command -v rustfmt >/dev/null 2>&1; then
+    echo "pre-commit: rustfmt --check on $n staged Rust file(s)" >&2
+    grep '[.]rs$' "$list" | tr '\n' '\0' |
+      xargs -0 rustfmt --check --edition 2021 >&2 ||
+      echo "pre-commit (report-only): rustfmt findings above" >&2
+  else
+    echo "pre-commit: rustfmt not found, format check skipped" >&2
+  fi
+fi
+
+exit 0

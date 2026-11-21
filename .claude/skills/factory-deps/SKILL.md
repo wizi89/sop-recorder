@@ -2,7 +2,7 @@
 name: factory-deps
 description: The Deps Station of the Software Factory. One run on a Dependabot PR labelled `agent:deps` (a minor or major bump, or a bump whose CI failed) that reads the release notes, fixes what the bump breaks on the PR branch, waits for CI and marks the PR `owner-merge` or `needs-owner`. Use when the fire payload says `station=deps`.
 ---
-<!-- vendored from Home @cc0aa83, do not edit here -->
+<!-- vendored from Home @b7af46e, do not edit here -->
 
 # Factory: Deps
 
@@ -44,6 +44,7 @@ Patch bumps with green CI never reach this station: GitHub auto-merge takes them
 
 ## Shared rules
 
+- **Hooks are brakes, not obstacles.** Never `--no-verify`, never edit `.githooks/` or change `core.hooksPath`. A hook that blocks or warns goes under **Friction** with its output; fix the code, not the hook.
 - **Station limits.** Deps pushes only to its own PR branch, labels only that PR and never merges or enables auto-merge; the owner merges.
 - **Nothing private into public repos.** sop-recorder is public: its PRs and comments carry only that repo's own content.
 - **Session link.** In a cloud session it is the output of `echo "https://claude.ai/code/${CLAUDE_CODE_REMOTE_SESSION_ID/#cse_/session_}"`. If it is unset, write "session link unavailable".

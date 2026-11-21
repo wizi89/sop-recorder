@@ -35,6 +35,15 @@ One-way door paths (Implement adds `one-way-door` and the checklist when a diff 
 
 ## Pre-commit checks
 
+The git hooks in `.githooks/` turn on by themselves when `core.hooksPath` is unset: a SessionStart hook runs
+`git config core.hooksPath .githooks`. The pre-commit hook reports two things on the staged
+files: a file over the 5000-token cap, and `rustfmt` findings. It is report-only for now and
+never blocks. Never skip a hook (`--no-verify`) or edit one to get a commit through.
+`sh .githooks/selftest.sh` proves the pre-commit hook still catches what it should.
+
+**Editing a large file means splitting it.** When a file you change is over the token cap,
+split it first, in its own commit with behaviour unchanged. That split is in scope for your task.
+
 The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
 
 - Always: `npm ci`, `npm test`, `npx tsc --noEmit`.

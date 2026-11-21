@@ -28,6 +28,11 @@ this file states the rules.
 - **G7.** Signing keys and secrets are never committed; `src-tauri/keys*` stays gitignored and
   CI reads keys only from `secrets.*`. Source: `.gitignore:38-40`; `.github/workflows/ci.yml`
   build job.
+- **G8.** A file over the 5000-token cap that a change touches is split first, in its own commit
+  with behaviour unchanged. The split is in scope: a reviewer never flags it as scope creep, and
+  checks only that behaviour stayed the same. Hooks are never skipped (`--no-verify`) or edited to
+  get a commit through. Source: `AGENTS.md` Pre-commit checks.
+  Tool: `.githooks/pre-commit` (token cap, report-only for now).
 
 ## Server contract
 
