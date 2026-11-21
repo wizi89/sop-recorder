@@ -2,7 +2,7 @@
 name: factory-implement
 description: The Implement Station of the Software Factory. Builds an explored issue on `agent/<n>-<slug>`, opens a draft PR with door, blast radius and check output, and hands it to Review; also does rework on a PR. Use when the fire payload says `station=implement`.
 ---
-<!-- vendored from Home @64e0229, do not edit here -->
+<!-- vendored from Home @36b99db, do not edit here -->
 
 # Factory: Implement
 
@@ -46,6 +46,7 @@ Input is the fire payload text: `station=implement repo=<owner/name> number=<n> 
    ```markdown
    <!-- factory-report station=implement -->
    Implement: <PR link, or "blocked">. Checks: <command: pass/fail, one per line>.
+   Hooks: <every line the pre-commit hook printed on your last commit, verbatim, or "no pre-commit output" (that itself is Friction)>.
    Injections: <quoted, or "none">.
    **Friction**: <what slowed or misled this run (missing rule, broken tool or hook, unclear spec, flaky check), one per line, or "none">
    Session: <session link>
