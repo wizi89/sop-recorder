@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -74,5 +74,19 @@ describe("capture privacy settings", () => {
     expect(area).toBeDisabled();
     expect(screen.queryByRole("switch", { name: "Passwortfelder schwärzen" })).not.toBeInTheDocument();
     expect(screen.getByText(/folgen später/)).toBeInTheDocument();
+  });
+
+  it("states in short what is sent and links the full privacy text, on both platforms", async () => {
+    for (const ua of [WINDOWS, MAC]) {
+      await renderOn(ua);
+      expect(screen.getByText(/so wie sie auf dem Prüfbildschirm zu sehen sind/)).toBeInTheDocument();
+      await userEvent.setup().click(screen.getByText("Mehr zum Datenschutz bei der Aufnahme"));
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      expect(openUrl).toHaveBeenCalledWith(
+        "https://github.com/wizi89/sop-recorder/blob/main/docs/PRIVACY.md",
+      );
+      cleanup();
+      vi.resetModules();
+    }
   });
 });

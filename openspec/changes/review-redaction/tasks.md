@@ -23,9 +23,9 @@
 
 ## 4. Privacy text (after `privacy-capture` is fully implemented)
 
-- [ ] 4.1 `docs/PRIVACY.md` in German per design D7, checked against the implemented behaviour of both changes
-- [ ] 4.2 Short in-app version and link in the settings section "Datenschutz bei der Aufnahme"
-- [ ] 4.3 English summary in `README.md`
+- [x] 4.1 `docs/PRIVACY.md` in German per design D7, checked against the implemented behaviour of both changes
+- [x] 4.2 Short in-app version and link in the settings section "Datenschutz bei der Aufnahme"
+- [x] 4.3 English summary in `README.md`
 
 ## 5. Verification
 

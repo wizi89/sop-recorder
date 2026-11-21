@@ -56,6 +56,8 @@ Not captured: typed text (only the Return key is detected), UI element names, ot
 
 On Windows, screenshots show the active window by default, and password fields that UI Automation reports (`IsPassword`) are blacked out before the PNG is written. Windows of other apps drawn over the area (notifications, the notification center, quick settings, always-on-top windows) are blacked out where they overlap it; click-through overlays and the window the click lands on stay visible. A field a "show password" toggle has switched to plain text is not a password field to UI Automation and is not masked. Not done on the client today: blurring, and any masking on macOS (there, screenshots show the whole clicked monitor). The server checks for personal data and can refuse to generate; that check can be switched off in Settings.
 
+The same for users, in German: [PRIVACY.md](./PRIVACY.md).
+
 ## Known gaps
 
 Tracked here until fixed:

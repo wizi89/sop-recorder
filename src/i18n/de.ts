@@ -149,6 +149,9 @@ const de = {
     "Taskleiste, Benachrichtigungen und alle sichtbaren Fenster werden mit aufgenommen.",
   "settings.mask_passwords": "Passwortfelder schwärzen",
   "settings.mask_passwords_off": "Passwortfelder werden mit aufgenommen.",
+  "settings.privacy_summary":
+    "Beim Erstellen gehen die Screenshots, so wie sie auf dem Prüfbildschirm zu sehen sind, und der ganze Ton an den Server. Was sonst sichtbar ist, schwärzen Sie dort selbst; die Dateien auf Ihrem PC bleiben unverändert.",
+  "settings.privacy_link": "Mehr zum Datenschutz bei der Aufnahme",
   "settings.capture_mac_note":
     "Auf macOS wird immer der ganze Bildschirm aufgenommen. Fensteraufnahme und das Schwärzen von Passwortfeldern folgen später.",
   "settings.reveal": "Anzeigen",
