@@ -18,8 +18,8 @@ pub struct UploadScreenshot {
 }
 
 /// How the uploaded screenshots were protected, counted per value
-/// (privacy-capture D9), and how many came from a partial window list. Taken from the sidecars next to the PNGs, never from
-/// settings, so a regenerated or legacy folder reports what its files say; a
+/// (privacy-capture D9), and how many came from a partial window list. Taken
+/// from the sidecars next to the PNGs, never from settings, so a regenerated or legacy folder reports what its files say; a
 /// screenshot without a sidecar counts as `unknown`.
 ///
 /// `steps` are those sidecars, already read by the caller, when they pair one
