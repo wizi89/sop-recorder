@@ -18,7 +18,8 @@ Prüfmarkierungen.
   - **macOS:** immer der ganze Bildschirm, ohne Schwärzen von Passwortfeldern.
 - **Ton:** das Mikrofon, während die Aufnahme läuft.
 - **Pro Schritt:** Zeitpunkt, Klickposition, Auslöser (Klick oder Eingabetaste), der
-  Aufnahmebereich und das Ergebnis der Passwortprüfung.
+  Aufnahmebereich, das Ergebnis der Passwortprüfung und ob die Liste der offenen Fenster
+  unvollständig war.
 
 Nicht aufgenommen werden getippter Text (nur die Eingabetaste wird erkannt), Namen von
 Bedienelementen, andere Maustasten und das Scrollen.
@@ -45,8 +46,10 @@ Bedienelementen, andere Maustasten und das Scrollen.
     zum Beispiel ein Programm, das als Administrator läuft, oder eine Prüfung, die zu lange
     dauert.
   - Ebenso markiert werden Schritte, bei denen statt des aktiven Fensters der ganze Bildschirm
-    aufgenommen wurde, und Schritte ohne Aufzeichnung, wie sie aufgenommen wurden (Aufnahmen
-    älterer Versionen).
+    aufgenommen wurde, Schritte, bei denen die Liste der offenen Fenster unvollständig war
+    (dann ist eine Benachrichtigung über dem Fenster vielleicht nicht geschwärzt; mit und ohne
+    Schwärzen von Passwortfeldern), und Schritte ohne Aufzeichnung, wie sie aufgenommen wurden
+    (Aufnahmen älterer Versionen).
   - „Erstellen“ geht erst, wenn „Ich habe die markierten Schritte geprüft“ angehakt ist.
 - **Personenbezogene Daten auf dem Server:** Transkript und Bildschirmtext werden dort geprüft.
   Der Server kann die Erstellung dann ablehnen. Diese Prüfung lässt sich in den Einstellungen
@@ -87,7 +90,7 @@ Beim Erstellen (und nur dann) werden an den CogniClone-Server gesendet:
   eingebrannten Rahmen vom Prüfbildschirm.
 - **Der Ton** der ganzen Aufnahme.
 - **Die Angaben pro Schritt** (siehe oben) und die Zahl der Schritte je Aufnahmebereich und je
-  Ergebnis der Passwortprüfung.
+  Ergebnis der Passwortprüfung, dazu die Zahl der Schritte mit unvollständiger Fensterliste.
 - **Titel, Pipeline-Auswahl und Modell.**
 
 Während der Aufnahme wird nichts gesendet. Was sonst gesendet wird, etwa ein Fehlerbericht nur
