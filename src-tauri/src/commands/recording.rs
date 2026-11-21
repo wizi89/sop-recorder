@@ -292,12 +292,14 @@ pub async fn start_recording(
                     let capture_scope = held.scope;
                     // Masks are filled before the PNG is encoded: the only
                     // screenshot file ever written is the masked one.
-                    let (masks, password_check) = check_step(checker.as_ref(), &held, step_num);
+                    let (masks, password_check, window_list_partial) =
+                        check_step(checker.as_ref(), &held, step_num);
                     screenshot::finish_and_save(held, &dir, step_num, click_pos, &masks).map(
                         |marker_box| SavedStep {
                             marker_box,
                             capture_scope,
                             password_check,
+                            window_list_partial,
                         },
                     )
                 },
