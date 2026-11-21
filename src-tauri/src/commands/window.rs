@@ -318,6 +318,56 @@ fn overlay_behavior(
     current.union(B::CanJoinAllSpaces | B::FullScreenAuxiliary | B::Stationary)
 }
 
+/// Move the recording bar to the corner of the monitor the user clicked on, so
+/// it stays in sight while they work on another monitor. Same corner and
+/// margin as `enterCompactMode` in App.tsx.
+///
+/// Windows only: there the hook reports clicks in physical pixels, the space
+/// monitors are given in, and the bar is excluded from capture by its window
+/// handle, so no region needs reporting again.
+/// ponytail: macOS gets this when someone records there on two monitors; it
+/// needs the click converted from points and the region reported again.
+#[cfg(windows)]
+pub fn follow_click(app: &tauri::AppHandle, click: (i32, i32)) {
+    use tauri::Manager;
+    let Some(bar) = app.get_webview_window(BAR_LABEL) else {
+        return;
+    };
+    let Ok(monitors) = bar.available_monitors() else {
+        return;
+    };
+    let Some(target) = monitors.into_iter().find(|m| {
+        let (p, s) = (m.position(), m.size());
+        click.0 >= p.x
+            && click.1 >= p.y
+            && click.0 < p.x + s.width as i32
+            && click.1 < p.y + s.height as i32
+    }) else {
+        return;
+    };
+    let current = bar.current_monitor().ok().flatten();
+    if current.as_ref().map(|m| *m.position()) == Some(*target.position()) {
+        return;
+    }
+    let (Ok(size), Ok(scale)) = (bar.outer_size(), bar.scale_factor()) else {
+        return;
+    };
+    // The bar takes the target monitor's scale once it is there.
+    let ratio = target.scale_factor() / scale;
+    let (width, height) = (
+        (size.width as f64 * ratio).round() as i32,
+        (size.height as f64 * ratio).round() as i32,
+    );
+    let margin = (12.0 * target.scale_factor()).round() as i32;
+    let area = target.work_area();
+    let x = area.position.x + area.size.width as i32 - width - margin;
+    let y = area.position.y + area.size.height as i32 - height - margin;
+    match bar.set_position(tauri::PhysicalPosition::new(x, y)) {
+        Ok(()) => log::info!("Recording bar moved to the clicked monitor at ({x}, {y})"),
+        Err(e) => log::warn!("Recording bar could not follow the click: {e}"),
+    }
+}
+
 /// Build the recording bar's window during a momentary dip to accessory policy.
 ///
 /// Runs from `setup`, which Tauri calls on the main thread -- the only thread

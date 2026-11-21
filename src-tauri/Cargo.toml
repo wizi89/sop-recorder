@@ -71,7 +71,17 @@ windows = { version = "0.58", features = [
   "Win32_UI_HiDpi",
   "Win32_UI_WindowsAndMessaging",
   "Win32_Foundation",
+  # privacy-capture: window geometry (D2, D3), UIA password check (D4-D6),
+  # elevated-process detection (amendment A1), focus-event handler (D5).
+  "Win32_Graphics_Dwm",
+  "Win32_UI_Accessibility",
+  "Win32_System_Com",
+  "Win32_System_Variant",
+  "Win32_Security",
+  "Win32_System_Threading",
+  "implement",
 ] }
+windows-core = "0.58"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-graphics = "0.24"

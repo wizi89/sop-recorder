@@ -76,7 +76,8 @@ export async function launchApp(urls: Urls): Promise<App> {
 }
 
 async function connect(port: number, child: ChildProcess, output: () => string): Promise<Browser> {
-  for (let i = 0; i < 150; i++) {
+  // 60 s: a fresh CI runner has taken 35 s for its first WebView2 start (FINDINGS 2026-11-02).
+  for (let i = 0; i < 300; i++) {
     if (child.exitCode !== null) {
       throw new Error(`the app exited with ${child.exitCode} before its window opened:\n${output()}`);
     }

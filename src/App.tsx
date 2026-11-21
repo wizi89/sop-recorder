@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { listen, TauriEvent } from "@tauri-apps/api/event";
-import { getCurrentWindow, PhysicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getVersion } from "@tauri-apps/api/app";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LoginScreen } from "./components/LoginScreen";
 import { PermissionsScreen } from "./components/PermissionsScreen";
 import { RecorderScreen } from "./components/RecorderScreen";
 import { SettingsPage } from "./components/SettingsPage";
 import { ErrorReportModal } from "./components/ErrorReportModal";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { useAuth } from "./hooks/useAuth";
 import { useRecorder } from "./hooks/useRecorder";
 import { useOfferUnfinished } from "./hooks/useOfferUnfinished";
@@ -16,31 +16,23 @@ import { useSSE } from "./hooks/useSSE";
 import { useUpdater } from "./hooks/useUpdater";
 import { useTranslation } from "./hooks/useTranslation";
 import { useQuota } from "./hooks/useQuota";
+import { useCompactMode } from "./hooks/useCompactMode";
+import { usePermissions } from "./hooks/usePermissions";
+import { usePublishReportPhase } from "./hooks/usePublishReportPhase";
 import { phaseForScreen } from "./lib/errorPhase";
 import {
-  setErrorReportPhase,
-  getWorkArea,
-  setRecorderRegion,
   getSettings,
   deleteLastScreenshot,
   listSessionScreenshots,
-  getMicrophonePermissionState,
-  getScreenRecordingPermissionState,
-  getAccessibilityPermissionState,
   restartApp,
   saveSettings,
   type ErrorReportMode,
-  type MicPermissionState,
-  type ScreenRecordingPermissionState,
-  type AccessibilityPermissionState,
 } from "./lib/tauri";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { safeUnlisten } from "./lib/safeUnlisten";
+import { openSettingsWindow } from "./lib/settingsWindow";
 const IS_DEV = import.meta.env.DEV;
-
-// Must match the label `create_recording_bar` builds the window under.
-const BAR_LABEL = "bar";
 
 function App() {
   // If this window is the settings window, render settings page
@@ -57,14 +49,15 @@ function MainApp() {
   const [skipPiiCheck, setSkipPiiCheck] = useState(false);
   const [errorReportMode, setErrorReportMode] = useState<ErrorReportMode>("ask");
   const [errorReportNotice, setErrorReportNotice] = useState<string | null>(null);
-  const [micPermission, setMicPermission] = useState<MicPermissionState>("unknown");
-  const [screenRecordingPermission, setScreenRecordingPermission] =
-    useState<ScreenRecordingPermissionState>("unknown");
-  const [accessibilityPermission, setAccessibilityPermission] =
-    useState<AccessibilityPermissionState>("unknown");
-  // The first-run screen is dismissed for this launch, not forever: the
-  // recorder's banner keeps carrying whatever is still missing.
-  const [permissionSetupSkipped, setPermissionSetupSkipped] = useState(false);
+  const {
+    micPermission,
+    screenRecordingPermission,
+    accessibilityPermission,
+    refreshPermissions,
+    permissionSetupVisible,
+    skipPermissionSetup,
+    handleOpenPermissionSetup,
+  } = usePermissions();
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
@@ -114,20 +107,6 @@ function MainApp() {
       .catch(() => {});
   }, []);
 
-  const refreshPermissions = useCallback(async () => {
-    const [mic, screen, accessibility] = await Promise.all([
-      getMicrophonePermissionState(),
-      getScreenRecordingPermissionState(),
-      getAccessibilityPermissionState(),
-    ]);
-    setMicPermission(mic);
-    setScreenRecordingPermission(screen);
-    setAccessibilityPermission(accessibility);
-    // Returned as well as stored: a caller that needs the answer now cannot
-    // read state it set in the same tick.
-    return { mic, screen, accessibility };
-  }, []);
-
   useEffect(() => {
     getVersion().then(setVersion);
     loadSettings();
@@ -138,35 +117,6 @@ function MainApp() {
     // which is what the global input hook needs).
     void refreshPermissions();
   }, [loadSettings, refreshPermissions]);
-
-  // Screen Recording and Accessibility are granted in System Settings, not in
-  // the dialog, so the app is not told when it happens. Poll while the setup
-  // screen is up, and only while it is up, so returning from System Settings
-  // updates the rows instead of leaving them stale. Stops as soon as
-  // everything is granted, or the screen is dismissed.
-  const permissionsAllGranted =
-    micPermission === "granted" &&
-    screenRecordingPermission === "granted" &&
-    accessibilityPermission === "granted";
-  const permissionSetupVisible = !permissionsAllGranted && !permissionSetupSkipped;
-
-  useEffect(() => {
-    if (!permissionSetupVisible) return;
-    const id = setInterval(() => void refreshPermissions(), 1500);
-    return () => clearInterval(id);
-  }, [permissionSetupVisible, refreshPermissions]);
-
-  // Reopen the permission setup rather than firing prompts from here.
-  //
-  // The banner used to call a batch request, which could not help in the one
-  // state it was ever shown in: macOS raises a permission dialog only while a
-  // permission is undetermined, and a banner about a *denied* permission is by
-  // definition past that. Worse, firing three prompts at once meant only one
-  // dialog could be presented and the rest were auto-denied. The setup screen
-  // carries the per-permission action that does work.
-  const handleOpenPermissionSetup = useCallback(() => {
-    setPermissionSetupSkipped(false);
-  }, []);
 
   useEffect(() => {
     if (!errorReportNotice) return;
@@ -214,70 +164,7 @@ function MainApp() {
     }
   }, [recorder.status, auth.loggedIn]);
 
-  /// Show the recording bar, anchor it to the corner of the work area, hide
-  /// the main window, and tell the capture side where the bar landed.
-  ///
-  /// Awaited before the recording starts rather than reacted to afterwards.
-  /// The input hook goes live inside `start_recording`, so anchoring after it
-  /// left a window in which a click on the bar was still captured as a step --
-  /// the exact defect the region exists to prevent.
-  const enterCompactMode = useCallback(async () => {
-    const appWindow = getCurrentWindow();
-    const bar = await WebviewWindow.getByLabel(BAR_LABEL);
-    if (!bar) {
-      // Without the bar there is no way to stop a recording, so this is fatal
-      // rather than a degraded mode worth limping along in.
-      throw new Error("The recording bar window is missing");
-    }
-
-    const MARGIN = 12;
-    try {
-      const [area, scale, outerSize] = await Promise.all([
-        getWorkArea(),
-        bar.scaleFactor(),
-        bar.outerSize(),
-      ]);
-      const margin = Math.round(MARGIN * scale);
-      const x = area.x + area.width - outerSize.width - margin;
-      const y = area.y + area.height - outerSize.height - margin;
-      await bar.setPosition(new PhysicalPosition(x, y));
-      // In the logical points the input hook reports cursor positions in.
-      await setRecorderRegion([
-        Math.round(x / scale),
-        Math.round(y / scale),
-        Math.round(outerSize.width / scale),
-        Math.round(outerSize.height / scale),
-      ]);
-    } catch (e) {
-      // Position unknown: leave the bar where it is and report no region, so a
-      // stale one cannot swallow real clicks.
-      console.warn("Could not anchor the recording bar:", e);
-      await setRecorderRegion(null);
-    }
-
-    await bar.show();
-    // Hidden, not closed: this window keeps running the recording and owns
-    // every decision the bar's buttons ask for.
-    await appWindow.hide();
-  }, []);
-
-  const exitCompactMode = useCallback(async () => {
-    const appWindow = getCurrentWindow();
-    await setRecorderRegion(null);
-    const bar = await WebviewWindow.getByLabel(BAR_LABEL);
-    await bar?.hide();
-    await appWindow.show();
-    await appWindow.setFocus();
-  }, []);
-
-  // Restores the full window when a recording ends. Entering compact mode is
-  // done by the caller before starting, not here, so the bar is already in
-  // place and its region already reported when the input hook goes live.
-  useEffect(() => {
-    if (recorder.status !== "recording") {
-      void exitCompactMode();
-    }
-  }, [recorder.status, exitCompactMode]);
+  const { enterCompactMode, exitCompactMode } = useCompactMode(recorder.status);
 
   // What the user is doing, for any report raised from here on (D3). Derived
   // by `phaseForScreen`, which is a pure function with a table test -- the
@@ -291,57 +178,7 @@ function MainApp() {
     status: recorder.status,
   });
 
-  useEffect(() => {
-    void setErrorReportPhase(phase);
-  }, [phase]);
-
-  // The settings window shares one phase with this one but has its own module
-  // state, so when it closes nothing here knows the phase needs restoring.
-  // Regaining focus is that signal.
-  useEffect(() => {
-    let cancelled = false;
-    let stop: (() => void) | null = null;
-    const off = () => {
-      // Tauri's unlisten rejects asynchronously, so a try/catch here cannot
-      // see the throw; it reaches the global handler as a report.
-      safeUnlisten(stop);
-      stop = null;
-    };
-    // WINDOW_FOCUS rather than onFocusChanged, for the reason given above.
-    void getCurrentWindow()
-      .listen(TauriEvent.WINDOW_FOCUS, () => {
-        void setErrorReportPhase(phase, true);
-      })
-      .then((fn) => {
-        stop = fn;
-        if (cancelled) off();
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      off();
-    };
-  }, [phase]);
-
-  const handleOpenSettings = useCallback(async () => {
-    // Check if settings window already exists
-    const existing = await WebviewWindow.getByLabel("settings");
-    if (existing) {
-      await existing.setFocus();
-      return;
-    }
-
-    new WebviewWindow("settings", {
-      url: "index.html?page=settings",
-      title: "Einstellungen",
-      width: 420,
-      height: 480,
-      resizable: false,
-      center: true,
-      decorations: true,
-      theme: "dark",
-    });
-  }, []);
+  usePublishReportPhase(phase);
 
   const handleStart = useCallback(async () => {
     // Pre-emptive quota check: if we already know the user is at or over
@@ -544,51 +381,9 @@ function MainApp() {
     );
   }
 
-  const showBanner =
-    !updater.dismissed &&
-    recorder.status !== "recording" &&
-    (updater.status === "available" || updater.status === "downloading");
-
-  const updateBanner = showBanner ? (
-      <div
-        className="w-full flex items-center"
-        style={{
-          background: "linear-gradient(135deg, #1E8A93, #2CB5C0)",
-          flexShrink: 0,
-        }}
-      >
-        <button
-          onClick={updater.install}
-          disabled={updater.status === "downloading"}
-          className="flex-1 py-2 text-xs font-medium text-center"
-          style={{
-            background: "transparent",
-            color: "#fff",
-            border: "none",
-            cursor: updater.status === "downloading" ? "wait" : "pointer",
-          }}
-        >
-          {updater.status === "downloading"
-            ? t("update.downloading")
-            : `${t("update.available", { version: updater.version ?? "" })} — ${t("update.install")}`}
-        </button>
-        {updater.status !== "downloading" && (
-          <button
-            onClick={updater.dismiss}
-            className="px-2 py-2 text-xs"
-            style={{
-              background: "transparent",
-              color: "rgba(255,255,255,0.7)",
-              border: "none",
-              cursor: "pointer",
-              lineHeight: 1,
-            }}
-          >
-            ✕
-          </button>
-        )}
-      </div>
-    ) : null;
+  const updateBanner = (
+    <UpdateBanner updater={updater} recording={recorder.status === "recording"} />
+  );
 
   // Mounted outside every screen below, so a report found at launch is asked
   // about even on the login screen -- a failed sign-in is the first error most
@@ -640,7 +435,7 @@ function MainApp() {
             screenRecordingPermission={screenRecordingPermission}
             accessibilityPermission={accessibilityPermission}
             onRestart={() => void restartApp()}
-            onSkip={() => setPermissionSetupSkipped(true)}
+            onSkip={skipPermissionSetup}
           />
         </div>
         {errorReportModal}
@@ -664,9 +459,10 @@ function MainApp() {
           outputDir={recorder.outputDir}
           skipPiiCheck={skipPiiCheck}
           failedCaptures={recorder.failedCaptures}
+          reviewError={recorder.reviewError}
           onStart={handleStart}
           onSignOut={auth.logout}
-          onOpenSettings={handleOpenSettings}
+          onOpenSettings={openSettingsWindow}
           onOpenFolder={handleOpenFolder}
           onRetry={handleRetry}
           onDismissPii={() => recorder.setError(t("network.pii_blocked"))}

@@ -4,6 +4,7 @@ import {
   stopRecording,
   runGeneration,
   discardRecording,
+  REDACTION_REFUSAL,
 } from "../lib/tauri";
 import { t } from "../i18n";
 import {
@@ -36,6 +37,10 @@ interface RecorderState {
   errorJobId: string | null;
   piiFindings: unknown | null;
   rateLimit: RateLimitInfo | null;
+  /** Why the last upload was refused because of the review screen's boxes
+   *  (review-redaction D5). Such a refusal returns to the review screen, not
+   *  the error screen, whose Retry would repeat it. */
+  reviewError?: string | null;
 }
 
 export function useRecorder() {
@@ -122,6 +127,7 @@ export function useRecorder() {
         status: "review",
         outputDir,
         failedCaptures,
+        reviewError: null,
         statusMessage: "",
         error: null,
         errorJobId: null,
@@ -161,6 +167,7 @@ export function useRecorder() {
       status: "processing" as const,
       statusMessage: "",
       error: null,
+      reviewError: null,
     }));
     generatingRef.current = true;
     try {
@@ -170,6 +177,15 @@ export function useRecorder() {
       const msg = String(e);
       setState((s) => {
         if (s.status === "pii_blocked") return s;
+        const refused = msg.indexOf(REDACTION_REFUSAL);
+        if (refused >= 0) {
+          return {
+            ...s,
+            status: "review" as const,
+            error: null,
+            reviewError: msg.slice(refused + REDACTION_REFUSAL.length),
+          };
+        }
         const rl = parseRateLimit(msg);
         if (rl) {
           return { ...s, status: "rate_limited" as const, error: null, rateLimit: rl };
@@ -203,6 +219,7 @@ export function useRecorder() {
       ...s,
       status: "review" as const,
       outputDir: dir,
+      reviewError: null,
       // A folder from disk carries no capture failures of its own; without
       // this the previous session's count would be shown against it.
       failedCaptures: 0,
