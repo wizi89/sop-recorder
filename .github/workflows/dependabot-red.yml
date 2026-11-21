@@ -2,6 +2,7 @@ name: Dependabot red
 
 # When CI fails on a Dependabot PR: turn its auto-merge off and hand it to
 # the Deps Station with `agent:deps`. This workflow never enables auto-merge.
+# A PR labelled `owner-merge` (a github_actions bump) stays with the owner.
 
 on:
   workflow_run:
@@ -39,7 +40,7 @@ jobs:
           if [ "$author" != "dependabot[bot]" ]; then
             echo "PR #$number is by $author, not Dependabot"; exit 0
           fi
-          for label in agent:deps agent:in-progress needs-owner; do
+          for label in agent:deps agent:in-progress needs-owner owner-merge; do
             if jq -e --arg l "$label" 'any(.labels[]; .name == $l)' <<<"$pr" >/dev/null; then
               echo "PR #$number already has $label"; exit 0
             fi
