@@ -83,7 +83,7 @@ Ships in a normal recorder release. Existing Windows installs start recording in
 | Same dialog, elevated | 0/20, **no error** | 0 fields, 48 ms | 2 / 23 ms |
 | Desktop, 14 windows, sequential | - | - | 782 / 1049 ms per step |
 
-Not measured: Firefox (not installed), an Electron login screen (Teams signed in). Other Electron/Chromium windows (VS Code, Orca, Aqua Voice) answered in 20-60 ms with no fields; Explorer (`CabinetWClass`) is the slowest common window at about 180 ms.
+Not measured: Firefox (not installed), an Electron login screen (Teams signed in). Other Electron/Chromium windows (VS Code, Orca) answered in 20-60 ms with no fields; Explorer (`CabinetWClass`) is the slowest common window at about 180 ms.
 
 Watch mode (1.2, 1.3):
 - A Chromium window's first query after it is created or raised often returns 0 fields and is complete: no error, no timeout. The second query 100-500 ms later finds the field. A newly inserted field can first report an empty rectangle (`0,0 0x0`).
