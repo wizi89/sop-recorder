@@ -54,7 +54,7 @@ this file states the rules.
   (`ä ö ü ß`, never `ae`/`oe`/`ue`/`ss`). Source: `src/i18n/index.ts`, `src/i18n/de.ts`.
 - **F3.** A Tauri unlisten function is never called directly; it goes through `safeUnlisten`.
   Every `listen` cleanup has the `cancelled` guard and survives a second teardown.
-  Source: `docs/FINDINGS.md` 2026-09-04 (unlisten returns a promise; the error reporter
+  Source: `docs/findings/2026-09-and-earlier.md` 2026-09-04 (unlisten returns a promise; the error reporter
   reported itself). Tool: `src/test/safeUnlisten.test.ts` source scan.
 
 ## Rust
@@ -64,9 +64,9 @@ this file states the rules.
   without a comment saying why. Source and tool: CI Clippy (`.github/workflows/ci.yml:62-71`).
 - **R3.** Monitor geometry: never combine `Monitor::scale_factor()` with
   `Monitor::width()/height()/x()/y()`; derive the density from the capture
-  (`capture_image().width() / Monitor::width()`). Source: `docs/FINDINGS.md` 2026-08-29.
+  (`capture_image().width() / Monitor::width()`). Source: `docs/findings/2026-09-and-earlier.md` 2026-08-29.
 - **R4.** A side effect that must accompany a state change lives inside the function that makes
-  the change, not beside each call. Source: `docs/FINDINGS.md` 2026-09-04 (a report was written
+  the change, not beside each call. Source: `docs/findings/2026-09-and-earlier.md` 2026-09-04 (a report was written
   and no dialog opened).
 - **R5.** Platform code sits behind `cfg(windows)` / `cfg(target_os = "macos")`, with its
   dependencies in the matching `[target.'cfg(...)'.dependencies]` table. Both platforms must
@@ -78,7 +78,7 @@ this file states the rules.
 - **T1.** Frontend tests are vitest (`npm test`); Rust tests run with `cargo test --lib`. Both run
   on Windows and macOS. Source and tool: `.github/workflows/ci.yml:24-60`.
 - **T2.** A test that reads source text normalises line endings first
-  (`include_str!(...).replace("\r\n", "\n")`). Source: `docs/FINDINGS.md` 2026-09-04
+  (`include_str!(...).replace("\r\n", "\n")`). Source: `docs/findings/2026-09-and-earlier.md` 2026-09-04
   (source-scanning test failed on Windows).
 - **T3.** A tool that walks the tree (test runner, linter, formatter) excludes
   `.claude/worktrees/**` in its own config. Source: `docs/FINDINGS.md` 2026-11-14;
