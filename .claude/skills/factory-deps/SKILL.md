@@ -2,7 +2,7 @@
 name: factory-deps
 description: The Deps Station of the Software Factory. One run on a Dependabot PR labelled `agent:deps` (a minor or major bump, or a bump whose CI failed) that reads the release notes, fixes what the bump breaks on the PR branch, waits for CI and marks the PR `owner-merge` or `needs-owner`. Use when the fire payload says `station=deps`.
 ---
-<!-- vendored from Home @b7af46e, do not edit here -->
+<!-- vendored from Home @64e0229, do not edit here -->
 
 # Factory: Deps
 
