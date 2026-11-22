@@ -256,12 +256,25 @@ jobs:
           path: ${{ matrix.artifact-path }}
           retention-days: 7
 
+  # Runs on every change, docs included: an avoided term in a doc counts too.
+  glossary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: The check still goes red on its bad fixture
+        run: python3 -m unittest discover -s scripts -p "test_check_glossary_terms.py"
+
+      - name: No new avoided GLOSSARY.md terms
+        run: python3 scripts/check_glossary_terms.py
+
   # The one check branch protection requires. A job skipped at job level
   # reports under its bare name, not per matrix leg, so requiring the legs
   # would leave a docs-only PR pending forever; this gate passes when every
   # job succeeded or was skipped, and fails on any failure or cancellation.
   ci:
-    needs: [changes, test, e2e, build]
+    needs: [changes, glossary, test, e2e, build]
     if: always()
     runs-on: ubuntu-latest
 
