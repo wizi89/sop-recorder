@@ -8,7 +8,8 @@ import type { AppSettings } from "../lib/tauri";
 const IS_MAC = navigator.userAgent.includes("Mac");
 
 /** The full privacy text (review-redaction D7). */
-export const PRIVACY_URL = "https://github.com/wizi89/sop-recorder/blob/main/docs/PRIVACY.md";
+export const PRIVACY_URL =
+  "https://github.com/wizi89/sop-recorder/blob/main/docs/PRIVACY.md";
 
 /** The settings section "Datenschutz bei der Aufnahme": capture area and password masking. */
 export function CaptureAreaSettings({
@@ -31,11 +32,18 @@ export function CaptureAreaSettings({
           id="capture-mode"
           value={IS_MAC ? "monitor" : settings.capture_mode}
           disabled={!loaded || IS_MAC}
-          onChange={(e) => setSettings((s) => ({ ...s, capture_mode: e.target.value as AppSettings["capture_mode"] }))}
+          onChange={(e) =>
+            setSettings((s) => ({
+              ...s,
+              capture_mode: e.target.value as AppSettings["capture_mode"],
+            }))
+          }
           className="bg-surface-container-highest text-on-background rounded-lg px-3 py-2 text-sm outline-none"
         >
           {!IS_MAC && (
-            <option value="active_window">{t("settings.capture_active_window")}</option>
+            <option value="active_window">
+              {t("settings.capture_active_window")}
+            </option>
           )}
           <option value="monitor">{t("settings.capture_monitor")}</option>
         </select>

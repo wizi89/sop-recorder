@@ -70,7 +70,7 @@ export function useRecorder() {
         status: "recording",
         statusMessage: "",
         outputDir: null,
-    failedCaptures: 0,
+        failedCaptures: 0,
         error: null,
         errorJobId: null,
         piiFindings: null,
@@ -82,7 +82,7 @@ export function useRecorder() {
         status: "error",
         statusMessage: "",
         outputDir: null,
-    failedCaptures: 0,
+        failedCaptures: 0,
         error: String(e),
         errorJobId: null,
         piiFindings: null,
@@ -93,7 +93,7 @@ export function useRecorder() {
   }, []);
 
   /**
-   * Stop the recording session and transition to `review` so the user can
+   * Stop the recording and transition to `review` so the user can
    * inspect captured screenshots before committing to a generation.
    * Does NOT invoke `runGeneration` -- that only happens when the user
    * confirms from the review screen via `confirmGeneration`.
@@ -142,7 +142,12 @@ export function useRecorder() {
       setState((s) => {
         if (s.status === "pii_blocked") return s;
         if (msg.includes("No screenshots found")) {
-          return { ...s, status: "idle" as const, error: null, statusMessage: "no_clicks" };
+          return {
+            ...s,
+            status: "idle" as const,
+            error: null,
+            statusMessage: "no_clicks",
+          };
         }
         return { ...s, status: "error" as const, error: msg, errorJobId: null };
       });
@@ -151,7 +156,7 @@ export function useRecorder() {
 
   /**
    * Confirm from the review screen: invoke the generation pipeline against
-   * the recording session directory and handle the post-generation outcomes
+   * the recording directory and handle the post-generation outcomes
    * (done, error, pii_blocked, rate_limited) via the same logic the old
    * `stop()` used to run inline.
    *
@@ -191,7 +196,12 @@ export function useRecorder() {
         }
         const rl = parseRateLimit(msg);
         if (rl) {
-          return { ...s, status: "rate_limited" as const, error: null, rateLimit: rl };
+          return {
+            ...s,
+            status: "rate_limited" as const,
+            error: null,
+            rateLimit: rl,
+          };
         }
         return { ...s, status: "error" as const, error: msg, errorJobId: null };
       });
@@ -240,12 +250,13 @@ export function useRecorder() {
    * memory: future_cancel_cleanup.md), but is no longer offered at startup.
    */
   const cancelFromReview = useCallback(() => {
-    if (outputDirRef.current) void discardRecording(outputDirRef.current).catch(() => {});
+    if (outputDirRef.current)
+      void discardRecording(outputDirRef.current).catch(() => {});
     setState({
       status: "idle",
       statusMessage: "",
       outputDir: null,
-    failedCaptures: 0,
+      failedCaptures: 0,
       error: null,
       errorJobId: null,
       piiFindings: null,
@@ -267,7 +278,7 @@ export function useRecorder() {
       status: "idle",
       statusMessage: "",
       outputDir: null,
-    failedCaptures: 0,
+      failedCaptures: 0,
       error: null,
       errorJobId: null,
       piiFindings: null,
@@ -281,7 +292,7 @@ export function useRecorder() {
       status: "idle",
       statusMessage: "",
       outputDir: null,
-    failedCaptures: 0,
+      failedCaptures: 0,
       error: null,
       errorJobId: null,
       piiFindings: null,
@@ -295,7 +306,12 @@ export function useRecorder() {
   }, []);
 
   const setProcessing = useCallback(() => {
-    setState((s) => ({ ...s, status: "processing" as const, error: null, statusMessage: "" }));
+    setState((s) => ({
+      ...s,
+      status: "processing" as const,
+      error: null,
+      statusMessage: "",
+    }));
   }, []);
 
   const setError = useCallback((msg: string, jobId?: string | null) => {
@@ -303,7 +319,12 @@ export function useRecorder() {
     // via the SSE `error` event path instead of the thrown-error path.
     const rl = parseRateLimit(msg);
     if (rl) {
-      setState((s) => ({ ...s, status: "rate_limited" as const, error: null, rateLimit: rl }));
+      setState((s) => ({
+        ...s,
+        status: "rate_limited" as const,
+        error: null,
+        rateLimit: rl,
+      }));
       return;
     }
     setState((s) => ({
@@ -315,7 +336,11 @@ export function useRecorder() {
   }, []);
 
   const setPiiBlocked = useCallback((findings: unknown) => {
-    setState((s) => ({ ...s, status: "pii_blocked" as const, piiFindings: findings }));
+    setState((s) => ({
+      ...s,
+      status: "pii_blocked" as const,
+      piiFindings: findings,
+    }));
   }, []);
 
   /**
@@ -333,7 +358,7 @@ export function useRecorder() {
   }, []);
 
   /**
-   * Dismiss the rate-limit modal while preserving the recording session
+   * Dismiss the rate-limit modal while preserving the recording
    * directory so the user can still retry-from-disk after topping up quota.
    * Transitions to idle + clears rateLimit but keeps outputDir intact.
    */

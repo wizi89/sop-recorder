@@ -146,7 +146,7 @@ pub async fn list_capture_records(output_dir: String) -> Result<Vec<StepCaptureR
 /// capture counter hook can decrement the UI.
 ///
 /// Errors if:
-/// - there is no active recording session
+/// - there is no active recording
 /// - the step counter is at 0 (nothing to delete)
 /// - a screenshot capture is currently in-flight (racy, reject)
 #[tauri::command]

@@ -70,7 +70,9 @@ describe("waiting for the browser (task 7.4)", () => {
     await userEvent.click(start);
 
     await waitFor(() =>
-      expect(screen.getByText(/Warte auf die Anmeldung im Browser/)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/Warte auf die Anmeldung im Browser/),
+      ).toBeInTheDocument(),
     );
 
     const cancel = screen.getByRole("button", { name: "Abbrechen" });

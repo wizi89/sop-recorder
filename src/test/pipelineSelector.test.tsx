@@ -8,29 +8,48 @@ import { ReviewScreen } from "../components/ReviewScreen";
 const mockInvoke = vi.mocked(invoke);
 
 const TWO_PIPELINES = [
-  { id: "stoerung", display_name: "Stoerungsbehebung", description: "Fehlerdiagnose" },
-  { id: "onboarding", display_name: "Software-Onboarding", description: "Einarbeitung" },
+  {
+    id: "stoerung",
+    display_name: "Stoerungsbehebung",
+    description: "Fehlerdiagnose",
+  },
+  {
+    id: "onboarding",
+    display_name: "Software-Onboarding",
+    description: "Einarbeitung",
+  },
 ];
 
 /**
  * Route the Tauri commands ReviewScreen touches. `pipelines` and `selected`
  * are what the test is varying; the screenshot commands just need to resolve.
  */
-function mockCommands(opts: {
-  pipelines?: unknown;
-  selected?: string;
-  pipelinesThrows?: boolean;
-} = {}) {
+function mockCommands(
+  opts: {
+    pipelines?: unknown;
+    selected?: string;
+    pipelinesThrows?: boolean;
+  } = {},
+) {
   mockInvoke.mockImplementation((cmd: string) => {
     switch (cmd) {
       case "list_session_screenshots":
         return Promise.resolve([{ step: 1, path: "/tmp/step_01.png" }]);
       case "list_capture_records":
-        return Promise.resolve(
-            [{ step: 1, path: "/tmp/step_01.png", capture_scope: "window", password_check: "ok" }],
-          );
+        return Promise.resolve([
+          {
+            step: 1,
+            path: "/tmp/step_01.png",
+            capture_scope: "window",
+            password_check: "ok",
+          },
+        ]);
       case "load_redactions":
-        return Promise.resolve({ steps: {}, leftover_steps: [], unreadable: null });
+        return Promise.resolve({
+          steps: {},
+          leftover_steps: [],
+          unreadable: null,
+        });
       case "read_screenshot_bytes":
         return Promise.resolve([1, 2, 3]);
       case "get_pipelines":
@@ -67,8 +86,12 @@ describe("ReviewScreen pipeline selector", () => {
 
     const select = await screen.findByLabelText(/art der anleitung/i);
     expect(select).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Stoerungsbehebung" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Software-Onboarding" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Stoerungsbehebung" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Software-Onboarding" }),
+    ).toBeInTheDocument();
   });
 
   it("renders nothing at zero entries", async () => {
@@ -76,7 +99,9 @@ describe("ReviewScreen pipeline selector", () => {
     render(<ReviewScreen {...defaults} />);
 
     await screen.findByText(/generieren/i);
-    expect(screen.queryByLabelText(/art der anleitung/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/art der anleitung/i),
+    ).not.toBeInTheDocument();
   });
 
   it("renders nothing at one entry, because one option is not a choice", async () => {
@@ -84,7 +109,9 @@ describe("ReviewScreen pipeline selector", () => {
     render(<ReviewScreen {...defaults} />);
 
     await screen.findByText(/generieren/i);
-    expect(screen.queryByLabelText(/art der anleitung/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/art der anleitung/i),
+    ).not.toBeInTheDocument();
   });
 
   it("renders nothing and never blocks when the endpoint is unreachable", async () => {
@@ -94,7 +121,9 @@ describe("ReviewScreen pipeline selector", () => {
     // The recording is fine; a catalogue problem is not an error over it.
     const confirm = await screen.findByRole("button", { name: /generieren/i });
     expect(confirm).toBeEnabled();
-    expect(screen.queryByLabelText(/art der anleitung/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/art der anleitung/i),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/unreachable/i)).not.toBeInTheDocument();
   });
 
@@ -116,7 +145,8 @@ describe("ReviewScreen pipeline selector", () => {
     mockCommands({ pipelines: TWO_PIPELINES, selected: "onboarding" });
     render(<ReviewScreen {...defaults} />);
 
-    const select = await screen.findByLabelText<HTMLSelectElement>(/art der anleitung/i);
+    const select =
+      await screen.findByLabelText<HTMLSelectElement>(/art der anleitung/i);
     await waitFor(() => expect(select.value).toBe("onboarding"));
     // Visible, not silently applied: the description of the active choice shows.
     expect(screen.getByText("Einarbeitung")).toBeInTheDocument();
@@ -126,7 +156,8 @@ describe("ReviewScreen pipeline selector", () => {
     mockCommands({ pipelines: TWO_PIPELINES, selected: "deleted-last-week" });
     render(<ReviewScreen {...defaults} />);
 
-    const select = await screen.findByLabelText<HTMLSelectElement>(/art der anleitung/i);
+    const select =
+      await screen.findByLabelText<HTMLSelectElement>(/art der anleitung/i);
     await waitFor(() => expect(select.value).toBe(""));
 
     // The STORE has to be cleared too, not just the dropdown. The upload reads
@@ -146,7 +177,8 @@ describe("ReviewScreen pipeline selector", () => {
     mockCommands({ pipelines: TWO_PIPELINES, selected: "onboarding" });
     render(<ReviewScreen {...defaults} />);
 
-    const select = await screen.findByLabelText<HTMLSelectElement>(/art der anleitung/i);
+    const select =
+      await screen.findByLabelText<HTMLSelectElement>(/art der anleitung/i);
     await waitFor(() => expect(select.value).toBe("onboarding"));
     expect(mockInvoke).not.toHaveBeenCalledWith("set_selected_pipeline", {
       pipelineId: "",
@@ -159,7 +191,9 @@ describe("ReviewScreen pipeline selector", () => {
     mockCommands({ pipelines: TWO_PIPELINES });
     render(<ReviewScreen {...defaults} captureCount={0} elapsedSec={0} />);
 
-    expect(await screen.findByText(/1 Screenshots in diesem Ordner/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/1 Screenshots in diesem Ordner/),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/aufgenommen/)).not.toBeInTheDocument();
     // The selector is available here, which is the point of routing folders
     // through review at all.
@@ -174,7 +208,9 @@ describe("ReviewScreen pipeline selector", () => {
     await userEvent.selectOptions(select, "");
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith("set_selected_pipeline", { pipelineId: "" });
+      expect(mockInvoke).toHaveBeenCalledWith("set_selected_pipeline", {
+        pipelineId: "",
+      });
     });
   });
 
@@ -185,7 +221,11 @@ describe("ReviewScreen pipeline selector", () => {
     mockCommands({
       pipelines: [
         ...TWO_PIPELINES,
-        { id: "brand-new-2027", display_name: "Qualitaetspruefung", description: "Neu" },
+        {
+          id: "brand-new-2027",
+          display_name: "Qualitaetspruefung",
+          description: "Neu",
+        },
       ],
     });
     render(<ReviewScreen {...defaults} />);
@@ -202,7 +242,9 @@ describe("ReviewScreen pipeline selector", () => {
     mockCommands({ pipelines: TWO_PIPELINES });
     render(<ReviewScreen {...defaults} />);
 
-    expect(await screen.findByLabelText(/art der anleitung/i)).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText(/art der anleitung/i),
+    ).toBeInTheDocument();
     expect(mockInvoke).not.toHaveBeenCalledWith("get_quota", expect.anything());
     expect(screen.queryByText(/pipeline.version/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/gpt-/i)).not.toBeInTheDocument();

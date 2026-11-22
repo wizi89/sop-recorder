@@ -18,7 +18,9 @@ describe("useProcessingProgress", () => {
   afterEach(() => vi.useRealTimers());
 
   it("counts elapsed time while processing", () => {
-    const { result } = renderHook(() => useProcessingProgress(true, "Analysiere..."));
+    const { result } = renderHook(() =>
+      useProcessingProgress(true, "Analysiere..."),
+    );
 
     expect(result.current.elapsedSec).toBe(0);
     act(() => {
@@ -28,7 +30,9 @@ describe("useProcessingProgress", () => {
   });
 
   it("says it is still waiting after a long silence", () => {
-    const { result } = renderHook(() => useProcessingProgress(true, "Analysiere..."));
+    const { result } = renderHook(() =>
+      useProcessingProgress(true, "Analysiere..."),
+    );
 
     expect(result.current.stalled).toBe(false);
     act(() => {
@@ -86,9 +90,7 @@ describe("useProcessingProgress", () => {
 
 describe("StatusBar during processing", () => {
   it("shows elapsed time and the waiting notice", () => {
-    render(
-      <StatusBar message="Analysiere..." busy elapsedSec={95} stalled />,
-    );
+    render(<StatusBar message="Analysiere..." busy elapsedSec={95} stalled />);
 
     expect(screen.getByText(/1:35/)).toBeInTheDocument();
     expect(screen.getByText(/Server arbeitet noch/i)).toBeInTheDocument();

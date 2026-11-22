@@ -18,37 +18,37 @@
 
 @theme {
   /* Surface hierarchy -- CogniClone dark */
-  --color-surface: #14181C;
+  --color-surface: #14181c;
   --color-surface-container-low: #192025;
-  --color-surface-container: #1E2328;
-  --color-surface-container-high: #232A30;
-  --color-surface-container-highest: #272D33;
-  --color-surface-bright: #2E353D;
+  --color-surface-container: #1e2328;
+  --color-surface-container-high: #232a30;
+  --color-surface-container-highest: #272d33;
+  --color-surface-bright: #2e353d;
 
   /* Primary accent -- CogniClone Teal */
-  --color-primary: #2CB5C0;
-  --color-primary-container: #1E8A93;
+  --color-primary: #2cb5c0;
+  --color-primary-container: #1e8a93;
   --color-primary-glow: rgba(44, 181, 192, 0.2);
 
   /* Tertiary / recording */
-  --color-tertiary: #F87171;
-  --color-tertiary-hover: #F87171; /* no distinct hover in palette */
+  --color-tertiary: #f87171;
+  --color-tertiary-hover: #f87171; /* no distinct hover in palette */
   --color-tertiary-glow: rgba(248, 113, 113, 0.25);
 
   /* Error */
-  --color-error: #F87171;
+  --color-error: #f87171;
 
   /* Semantic */
-  --color-success: #34D399;
-  --color-warning: #FBBF24;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
 
   /* Text */
-  --color-on-background: #F0F4F7;
-  --color-on-surface: #C5CDD2;
-  --color-on-surface-variant: #6B7780;
+  --color-on-background: #f0f4f7;
+  --color-on-surface: #c5cdd2;
+  --color-on-surface-variant: #6b7780;
 
   /* Border */
-  --color-border: #272D33;
+  --color-border: #272d33;
 }
 
 @layer base {
@@ -110,18 +110,26 @@
   /* ── Buttons ── */
 
   .btn-primary {
-    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-container));
+    background: linear-gradient(
+      135deg,
+      var(--color-primary),
+      var(--color-primary-container)
+    );
     color: #ffffff;
     font-weight: 600;
     border: none;
     border-radius: 9999px;
     cursor: pointer;
-    transition: box-shadow 0.25s ease-out, transform 0.1s ease-out;
+    transition:
+      box-shadow 0.25s ease-out,
+      transform 0.1s ease-out;
     letter-spacing: 0.01em;
   }
 
   .btn-primary:hover {
-    box-shadow: 0 0 28px var(--color-primary-glow), 0 0 8px var(--color-primary-glow);
+    box-shadow:
+      0 0 28px var(--color-primary-glow),
+      0 0 8px var(--color-primary-glow);
   }
 
   .btn-primary:active {
@@ -174,7 +182,9 @@
   }
 
   .input-field:focus {
-    box-shadow: 0 0 0 1px rgba(44, 181, 192, 0.3), 0 0 12px rgba(44, 181, 192, 0.08);
+    box-shadow:
+      0 0 0 1px rgba(44, 181, 192, 0.3),
+      0 0 12px rgba(44, 181, 192, 0.08);
   }
 
   /* ── Labels ── */
@@ -228,7 +238,9 @@
     border: none;
     color: var(--color-on-surface-variant);
     cursor: pointer;
-    transition: color 0.15s ease-out, background-color 0.15s ease-out;
+    transition:
+      color 0.15s ease-out,
+      background-color 0.15s ease-out;
   }
 
   .icon-btn:hover {
@@ -255,7 +267,8 @@
 }
 
 @keyframes cta-breathe {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 16px rgba(44, 181, 192, 0.12);
   }
   50% {
@@ -264,7 +277,8 @@
 }
 
 @keyframes stop-pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 8px rgba(248, 113, 113, 0.15);
   }
   50% {

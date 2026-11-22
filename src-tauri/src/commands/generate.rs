@@ -165,7 +165,7 @@ async fn run_generation_inner(
 
     // Refresh access token before upload to prevent expiration errors.
     // Supabase JWTs expire after ~1 hour; refreshing here ensures every
-    // generation uses a valid token, even after long recording sessions.
+    // generation uses a valid token, even after long recordings.
     let api_base = super::auth::get_api_base(&app);
     let access_token = match net_auth::refresh_session(api_base).await {
         Ok(Some(auth)) => {

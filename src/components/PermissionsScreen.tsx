@@ -79,7 +79,8 @@ function PermissionRow({
   // that pane. Sending the user straight there is the same journey with one
   // fewer dialog in the way -- and, for a microphone already refused, the only
   // journey that exists.
-  const canAsk = grantableInDialog && (state === "undetermined" || state === "unknown");
+  const canAsk =
+    grantableInDialog && (state === "undetermined" || state === "unknown");
 
   return (
     <div className="flex gap-3 items-start">
@@ -91,7 +92,9 @@ function PermissionRow({
           height: 18,
           marginTop: 2,
           flexShrink: 0,
-          background: granted ? "rgba(44, 181, 192, 0.18)" : "rgba(220, 60, 60, 0.14)",
+          background: granted
+            ? "rgba(44, 181, 192, 0.18)"
+            : "rgba(220, 60, 60, 0.14)",
           color: granted ? "#2CB5C0" : "rgba(255, 150, 150, 0.95)",
           fontSize: "0.6rem",
         }}
@@ -265,7 +268,11 @@ export function PermissionsScreen({
             <button
               onClick={onRestart}
               className="rounded-lg border-none cursor-pointer font-semibold py-2"
-              style={{ fontSize: "0.75rem", background: "#2CB5C0", color: "#0B1416" }}
+              style={{
+                fontSize: "0.75rem",
+                background: "#2CB5C0",
+                color: "#0B1416",
+              }}
             >
               {t("permissions.restart")}
             </button>

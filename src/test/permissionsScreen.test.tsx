@@ -31,7 +31,6 @@ describe("PermissionsScreen", () => {
     expect(screen.getAllByText("Fehlt")).toHaveLength(2);
   });
 
-
   it("offers a restart before everything is granted, not only after", async () => {
     // macOS reports a Screen Recording grant to a fresh process only, so with
     // that row still red the user has granted it and has no way to make the
@@ -54,7 +53,9 @@ describe("PermissionsScreen", () => {
     expect(
       screen.getByRole("button", { name: /neu starten/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Alle Berechtigungen/ })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Alle Berechtigungen/ }),
+    ).toBeNull();
   });
 
   it("can always be dismissed", async () => {
@@ -176,6 +177,8 @@ describe("PermissionsScreen", () => {
     expect(screen.getAllByText(/erst nach einem Neustart/i)).toHaveLength(1);
     // Same row, same reason it is a special case: macOS may refuse to list an
     // ad-hoc signed app at all, leaving the + button as the only way in.
-    expect(screen.getAllByText(/mit \+ aus dem Programme-Ordner/i)).toHaveLength(1);
+    expect(
+      screen.getAllByText(/mit \+ aus dem Programme-Ordner/i),
+    ).toHaveLength(1);
   });
 });

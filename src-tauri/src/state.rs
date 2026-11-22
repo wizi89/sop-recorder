@@ -16,7 +16,7 @@ pub enum RecordingStatus {
     Error(String),
 }
 
-pub struct RecordingSession {
+pub struct ActiveRecording {
     pub output_dir: PathBuf,
     pub screenshots_dir: PathBuf,
     pub guide_title: String,
@@ -39,7 +39,7 @@ pub struct RecordingSession {
 
 pub struct AppState {
     pub recording_status: Mutex<RecordingStatus>,
-    pub current_session: Mutex<Option<RecordingSession>>,
+    pub current_session: Mutex<Option<ActiveRecording>>,
     pub in_flight_captures: Mutex<Option<Arc<AtomicU32>>>,
     /// Shared stop flag -- lives outside the session mutex so it can be set
     /// immediately in stop_recording without waiting for the session lock.

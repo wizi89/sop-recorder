@@ -46,22 +46,42 @@ export function describeBrowserFailure(error: unknown): {
   // release's server-contract check answers, and a denial or a cancel is the
   // user's own decision.
   if (raw.includes("browser-login-unsupported")) {
-    return { message: t("login.browser_unsupported"), unsupported: true, reportable: false };
+    return {
+      message: t("login.browser_unsupported"),
+      unsupported: true,
+      reportable: false,
+    };
   }
   if (raw.includes("browser-login-denied")) {
-    return { message: t("login.browser_denied"), unsupported: false, reportable: false };
+    return {
+      message: t("login.browser_denied"),
+      unsupported: false,
+      reportable: false,
+    };
   }
   if (raw.includes("browser-login-verification")) {
-    return { message: t("login.browser_verification"), unsupported: false, reportable: true };
+    return {
+      message: t("login.browser_verification"),
+      unsupported: false,
+      reportable: true,
+    };
   }
   if (raw.includes("abgebrochen")) {
-    return { message: t("login.browser_cancelled"), unsupported: false, reportable: false };
+    return {
+      message: t("login.browser_cancelled"),
+      unsupported: false,
+      reportable: false,
+    };
   }
   // Reported although a user who walked away produces it too: a browser that
   // cannot reach 127.0.0.1 -- the endpoint-security and local-network-access
   // risks in the browser-login design -- looks exactly like this.
   if (raw.includes("nicht abgeschlossen")) {
-    return { message: t("login.browser_timeout"), unsupported: false, reportable: true };
+    return {
+      message: t("login.browser_timeout"),
+      unsupported: false,
+      reportable: true,
+    };
   }
   // The port could not be bound, the browser would not open, the exchange
   // failed: reported unless it is an outcome the product treats as normal.
@@ -111,7 +131,13 @@ export function useAuth() {
           // and try again rather than asking for a new sign-in.
           if (String(e).startsWith("Refresh failed")) {
             setState((s) =>
-              s.loggedIn ? s : { ...s, loading: false, error: t("login.restore_unavailable") },
+              s.loggedIn
+                ? s
+                : {
+                    ...s,
+                    loading: false,
+                    error: t("login.restore_unavailable"),
+                  },
             );
             retry = setTimeout(restore, RESTORE_RETRY_MS);
           } else {

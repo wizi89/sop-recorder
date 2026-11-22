@@ -20,7 +20,11 @@ const mockQuotaBasic = {
   limit: 100,
   remaining: 100,
   features: { advanced_settings: false },
-  generation_settings: { pipeline_versions: [1, 2], models: ["azure/gpt-4.1"], default_model: "azure/gpt-4.1" },
+  generation_settings: {
+    pipeline_versions: [1, 2],
+    models: ["azure/gpt-4.1"],
+    default_model: "azure/gpt-4.1",
+  },
 };
 
 const mockQuotaAdvanced = {
@@ -37,7 +41,8 @@ beforeEach(() => {
     if (cmd === "get_settings") return { ...mockSettings };
     if (cmd === "save_settings") return;
     if (cmd === "get_quota") return mockQuota;
-    if (cmd === "are_error_reports_forced_off") return mockErrorReportsForcedOff;
+    if (cmd === "are_error_reports_forced_off")
+      return mockErrorReportsForcedOff;
     return;
   });
 });
@@ -60,14 +65,16 @@ describe("SettingsPage", () => {
     });
 
     // Find and click the PII toggle (second switch-track button)
-    const toggles = screen.getAllByRole("button").filter(
-      (btn) => btn.className.includes("switch-track"),
-    );
+    const toggles = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.className.includes("switch-track"));
     // PII toggle is the second switch
     await user.click(toggles[1]);
 
     // Confirmation modal should appear
-    expect(screen.getByText(/sicherheitsprüfung deaktivieren\?/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/sicherheitsprüfung deaktivieren\?/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/verstanden, deaktivieren/i)).toBeInTheDocument();
     // Two "Abbrechen" buttons: settings cancel + modal cancel
     expect(screen.getAllByText("Abbrechen")).toHaveLength(2);
@@ -82,18 +89,22 @@ describe("SettingsPage", () => {
     });
 
     // Click PII toggle
-    const toggles = screen.getAllByRole("button").filter(
-      (btn) => btn.className.includes("switch-track"),
-    );
+    const toggles = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.className.includes("switch-track"));
     await user.click(toggles[1]);
 
     // Click the modal cancel button (the smaller one inside the modal)
     const cancelButtons = screen.getAllByText("Abbrechen");
-    const modalCancel = cancelButtons.find((btn) => btn.className.includes("py-2 text-xs"))!;
+    const modalCancel = cancelButtons.find((btn) =>
+      btn.className.includes("py-2 text-xs"),
+    )!;
     await user.click(modalCancel);
 
     // Modal should close
-    expect(screen.queryByText(/sicherheitsprüfung deaktivieren\?/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/sicherheitsprüfung deaktivieren\?/i),
+    ).not.toBeInTheDocument();
   });
 
   it("disables PII check when confirmed", async () => {
@@ -105,22 +116,25 @@ describe("SettingsPage", () => {
     });
 
     // Click PII toggle
-    const toggles = screen.getAllByRole("button").filter(
-      (btn) => btn.className.includes("switch-track"),
-    );
+    const toggles = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.className.includes("switch-track"));
     await user.click(toggles[1]);
 
     // Click confirm
     await user.click(screen.getByText(/verstanden, deaktivieren/i));
 
     // Modal should close
-    expect(screen.queryByText(/sicherheitsprüfung deaktivieren\?/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/sicherheitsprüfung deaktivieren\?/i),
+    ).not.toBeInTheDocument();
   });
 
   it("does not show confirmation when re-enabling PII check", async () => {
     // Start with PII check disabled
     vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-      if (cmd === "get_settings") return { ...mockSettings, skip_pii_check: true };
+      if (cmd === "get_settings")
+        return { ...mockSettings, skip_pii_check: true };
       if (cmd === "save_settings") return;
       return;
     });
@@ -133,13 +147,15 @@ describe("SettingsPage", () => {
     });
 
     // Click PII toggle to re-enable
-    const toggles = screen.getAllByRole("button").filter(
-      (btn) => btn.className.includes("switch-track"),
-    );
+    const toggles = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.className.includes("switch-track"));
     await user.click(toggles[1]);
 
     // No confirmation modal should appear
-    expect(screen.queryByText(/sicherheitsprüfung deaktivieren\?/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/sicherheitsprüfung deaktivieren\?/i),
+    ).not.toBeInTheDocument();
   });
 
   it("shows legal links in confirmation modal", async () => {
@@ -150,9 +166,9 @@ describe("SettingsPage", () => {
       expect(screen.getByText(/pii/i)).toBeInTheDocument();
     });
 
-    const toggles = screen.getAllByRole("button").filter(
-      (btn) => btn.className.includes("switch-track"),
-    );
+    const toggles = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.className.includes("switch-track"));
     await user.click(toggles[1]);
 
     expect(screen.getByText("Impressum")).toBeInTheDocument();
@@ -168,14 +184,18 @@ describe("SettingsPage", () => {
       expect(screen.getByText(/pii/i)).toBeInTheDocument();
     });
 
-    const toggles = screen.getAllByRole("button").filter(
-      (btn) => btn.className.includes("switch-track"),
-    );
+    const toggles = screen
+      .getAllByRole("button")
+      .filter((btn) => btn.className.includes("switch-track"));
     await user.click(toggles[1]);
 
     expect(screen.getByText(/namen, e-mail-adressen/i)).toBeInTheDocument();
-    expect(screen.getByText(/passwörtern oder api-schlüsseln/i)).toBeInTheDocument();
-    expect(screen.getByText(/vertraulicher unternehmensinhalte/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/passwörtern oder api-schlüsseln/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/vertraulicher unternehmensinhalte/i),
+    ).toBeInTheDocument();
   });
 
   it("hides upload target for orgs without advanced_settings", async () => {
@@ -199,7 +219,9 @@ describe("SettingsPage", () => {
 
     expect(screen.getByRole("option", { name: "Local" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Staging" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Production" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Production" }),
+    ).toBeInTheDocument();
   });
 
   it("shows only Staging and Production for advanced org in release build", async () => {
@@ -210,9 +232,13 @@ describe("SettingsPage", () => {
       expect(screen.getByText(/hochladen an/i)).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole("option", { name: "Local" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Local" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Staging" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Production" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Production" }),
+    ).toBeInTheDocument();
   });
 });
 

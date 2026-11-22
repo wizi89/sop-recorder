@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "../hooks/useTranslation";
-import { errorReportPath, type ErrorReport, type SubmittedReport } from "../lib/tauri";
+import {
+  errorReportPath,
+  type ErrorReport,
+  type SubmittedReport,
+} from "../lib/tauri";
 
 interface ErrorReportModalProps {
   /** The report being decided on. Null once it has been sent: consent
@@ -11,7 +15,10 @@ interface ErrorReportModalProps {
   loggedIn: boolean;
   /** Set once the submission answered, so the dialog can show the number. */
   sent?: SubmittedReport | null;
-  onGrant: (comment: string | null, alwaysSend: boolean) => void | Promise<void>;
+  onGrant: (
+    comment: string | null,
+    alwaysSend: boolean,
+  ) => void | Promise<void>;
   onDecline: () => void;
   onClose: () => void;
 }
@@ -102,7 +109,10 @@ export function ErrorReportModal({
           <p className="text-on-surface-variant text-xs leading-snug">
             {t("report.sent_hint")}
           </p>
-          <button onClick={onClose} className="btn-primary w-full py-1.5 text-xs mt-1">
+          <button
+            onClick={onClose}
+            className="btn-primary w-full py-1.5 text-xs mt-1"
+          >
             {t("report.close")}
           </button>
         </div>
@@ -137,90 +147,101 @@ export function ErrorReportModal({
         {/* min-h-0 lets this shrink inside the flex column; without it the
             scroll never engages and the card grows past the window again. */}
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-1 flex flex-col gap-2.5">
+          <div className="bg-surface-container rounded p-2 flex flex-col gap-2">
+            <div>
+              <p className="text-on-surface text-xs font-medium">
+                {t("report.contains_title")}
+              </p>
+              <ul className="flex flex-col gap-0.5 mt-1 text-xs text-on-surface-variant leading-snug">
+                {[1, 2, 3, 4].map((n) => (
+                  <li key={n} className="flex gap-2">
+                    <span className="shrink-0">&#x2022;</span>
+                    <span>
+                      {t(`report.contains_${n}` as "report.contains_1")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-on-surface text-xs font-medium">
+                {t("report.excludes_title")}
+              </p>
+              <ul className="flex flex-col gap-0.5 mt-1 text-xs text-on-surface-variant leading-snug">
+                {[1, 2, 3, 4].map((n) => (
+                  <li key={n} className="flex gap-2">
+                    <span className="shrink-0">&#x2022;</span>
+                    <span>
+                      {t(`report.excludes_${n}` as "report.excludes_1")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-        <div className="bg-surface-container rounded p-2 flex flex-col gap-2">
-          <div>
-            <p className="text-on-surface text-xs font-medium">
-              {t("report.contains_title")}
-            </p>
-            <ul className="flex flex-col gap-0.5 mt-1 text-xs text-on-surface-variant leading-snug">
-              {[1, 2, 3, 4].map((n) => (
-                <li key={n} className="flex gap-2">
-                  <span className="shrink-0">&#x2022;</span>
-                  <span>{t(`report.contains_${n}` as "report.contains_1")}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <p className="text-on-surface text-xs font-medium">
-              {t("report.excludes_title")}
-            </p>
-            <ul className="flex flex-col gap-0.5 mt-1 text-xs text-on-surface-variant leading-snug">
-              {[1, 2, 3, 4].map((n) => (
-                <li key={n} className="flex gap-2">
-                  <span className="shrink-0">&#x2022;</span>
-                  <span>{t(`report.excludes_${n}` as "report.excludes_1")}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <button
-            onClick={() => setShowDetails((v) => !v)}
-            className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0 text-left"
-            style={{ fontSize: "0.6875rem" }}
-          >
-            {showDetails ? t("report.hide_details") : t("report.show_details")}
-          </button>
-          {showDetails && (
-            <pre
-              data-testid="error-report-details"
-              className="bg-surface-bright rounded p-2 overflow-auto max-h-40 text-on-surface-variant"
-              style={{ fontSize: "0.5625rem", whiteSpace: "pre-wrap", wordBreak: "break-all" }}
-            >
-              {JSON.stringify({ ...report, consent: undefined }, null, 2)}
-            </pre>
-          )}
-        </div>
-
-        <label className="flex flex-col gap-1">
-          <span className="label-sm">{t("report.comment_label")}</span>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={t("report.comment_placeholder")}
-            rows={2}
-            className="input-field rounded-lg px-2.5 py-2 text-xs resize-none"
-          />
-        </label>
-
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={alwaysSend}
-            onChange={(e) => setAlwaysSend(e.target.checked)}
-          />
-          <span className="text-on-surface-variant" style={{ fontSize: "0.6875rem" }}>
-            {t("report.always_send")}
-          </span>
-        </label>
-
-        {!loggedIn && (
-          <div className="flex flex-col gap-1">
-            <p className="text-on-surface-variant text-xs leading-snug">
-              {t("report.signed_out_hint")}
-            </p>
             <button
-              onClick={handleReveal}
+              onClick={() => setShowDetails((v) => !v)}
               className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0 text-left"
               style={{ fontSize: "0.6875rem" }}
             >
-              {t("report.reveal_file")}
+              {showDetails
+                ? t("report.hide_details")
+                : t("report.show_details")}
             </button>
+            {showDetails && (
+              <pre
+                data-testid="error-report-details"
+                className="bg-surface-bright rounded p-2 overflow-auto max-h-40 text-on-surface-variant"
+                style={{
+                  fontSize: "0.5625rem",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                }}
+              >
+                {JSON.stringify({ ...report, consent: undefined }, null, 2)}
+              </pre>
+            )}
           </div>
-        )}
 
+          <label className="flex flex-col gap-1">
+            <span className="label-sm">{t("report.comment_label")}</span>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder={t("report.comment_placeholder")}
+              rows={2}
+              className="input-field rounded-lg px-2.5 py-2 text-xs resize-none"
+            />
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={alwaysSend}
+              onChange={(e) => setAlwaysSend(e.target.checked)}
+            />
+            <span
+              className="text-on-surface-variant"
+              style={{ fontSize: "0.6875rem" }}
+            >
+              {t("report.always_send")}
+            </span>
+          </label>
+
+          {!loggedIn && (
+            <div className="flex flex-col gap-1">
+              <p className="text-on-surface-variant text-xs leading-snug">
+                {t("report.signed_out_hint")}
+              </p>
+              <button
+                onClick={handleReveal}
+                className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0 text-left"
+                style={{ fontSize: "0.6875rem" }}
+              >
+                {t("report.reveal_file")}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="shrink-0 flex gap-3 p-4 pt-3 border-t border-white/10">
@@ -235,7 +256,10 @@ export function ErrorReportModal({
             onClick={async () => {
               setBusy(true);
               try {
-                await onGrant(comment.trim() === "" ? null : comment.trim(), alwaysSend);
+                await onGrant(
+                  comment.trim() === "" ? null : comment.trim(),
+                  alwaysSend,
+                );
               } catch (e) {
                 // Swallowed on purpose. An escaping rejection reaches the
                 // global handler in main.tsx, which would file a report about

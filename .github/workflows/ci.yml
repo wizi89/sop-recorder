@@ -115,6 +115,9 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+      - name: Frontend format
+        run: npx biome ci .
+
   # The real app, driven through its window: the journeys unit tests passed
   # over and only a windowed run found (a wait screen that never rendered, an
   # old server sending users into a five-minute wait). Windows only, because

@@ -32,7 +32,8 @@ const de = {
   "status.start": "Aufnahme starten",
   "status.stop": "Aufnahme stoppen",
   "status.done_uploaded": "Fertig! Gespeichert und hochgeladen",
-  "status.no_clicks": "Keine Screenshots aufgezeichnet. Bitte erneut versuchen.",
+  "status.no_clicks":
+    "Keine Screenshots aufgezeichnet. Bitte erneut versuchen.",
   "status.cancel": "Abbrechen",
   "status.cancel_title": "Aufnahme abbrechen?",
   "status.cancel_message": "Die aktuelle Aufnahme wird verworfen.",
@@ -69,11 +70,13 @@ const de = {
   "review.pipeline_default_description":
     "Die allgemeine Generierung. Passt zu jeder Aufnahme.",
   "review.deleted_steps": "{count} gelöscht",
-  "review.open_hint": "Auf einen Schritt klicken, um Bereiche zu schwärzen oder ihn zu löschen.",
+  "review.open_hint":
+    "Auf einen Schritt klicken, um Bereiche zu schwärzen oder ihn zu löschen.",
   "review.redact_hint":
     "Mit der Maus einen Rahmen ziehen, um einen Bereich zu schwärzen. Nur die hochgeladene Kopie wird geschwärzt, die Datei auf diesem PC bleibt unverändert.",
   "review.redact_saving": "Wird gespeichert...",
-  "review.redact_save_failed": "Schwärzung für Schritt {n} konnte nicht gespeichert werden: {error}",
+  "review.redact_save_failed":
+    "Schwärzung für Schritt {n} konnte nicht gespeichert werden: {error}",
   "review.redact_retry": "Erneut speichern",
   "review.redact_remove": "Schwärzung entfernen",
   "review.redact_boxes": "{count} geschwärzt",
@@ -90,8 +93,10 @@ const de = {
   "review.unreadable":
     "Die gespeicherten Schwärzungen dieser Aufnahme sind nicht lesbar. Schwärzen und Generieren sind erst nach dem Zurücksetzen möglich. ({error})",
   "review.reset": "Schwärzungen zurücksetzen",
-  "review.reset_confirm": "Alle Schwärzungen dieser Aufnahme werden gelöscht. Fortfahren?",
-  "review.reset_failed": "Schwärzungen konnten nicht zurückgesetzt werden: {error}",
+  "review.reset_confirm":
+    "Alle Schwärzungen dieser Aufnahme werden gelöscht. Fortfahren?",
+  "review.reset_failed":
+    "Schwärzungen konnten nicht zurückgesetzt werden: {error}",
   "review.upload_refused": "Nicht hochgeladen: {error}",
 
   // Microphone permission
@@ -103,8 +108,7 @@ const de = {
     "Bildschirmaufnahme verweigert -- ohne diese Berechtigung sieht CogniClone nur den Desktop",
   "permissions.accessibility_denied":
     "Bedienungshilfen verweigert -- ohne diese Berechtigung erkennt CogniClone keine Klicks und zeichnet keine Schritte auf",
-  "permissions.grant":
-    "Erlauben",
+  "permissions.grant": "Erlauben",
 
   // First-run permission screen
   "permissions.setup_title": "Berechtigungen erteilen",
@@ -172,7 +176,8 @@ const de = {
   "settings.error_reports_never": "Keine Fehlerberichte",
   "settings.error_reports_hint":
     "Wenn CogniClone abstürzt oder ein Fehler auftritt, kann ein Bericht an uns gesendet werden. Er enthält nie Aufnahmen, Screenshots oder deine E-Mail-Adresse.",
-  "settings.error_reports_disabled_by_org": "Von Ihrer Organisation deaktiviert",
+  "settings.error_reports_disabled_by_org":
+    "Von Ihrer Organisation deaktiviert",
 
   // PII blocked modal
   "pii.title": "Personenbezogene Daten erkannt",
@@ -264,7 +269,8 @@ const de = {
     "Beim letzten Start hat sich CogniClone unerwartet beendet. Ein Bericht darüber hilft uns, den Absturz zu beheben.",
   "report.consent": "Der Bericht wird nur gesendet, wenn du zustimmst.",
   "report.contains_title": "Der Bericht enthält:",
-  "report.contains_1": "die Fehlermeldung und die Stelle im Programm, an der sie entstand",
+  "report.contains_1":
+    "die Fehlermeldung und die Stelle im Programm, an der sie entstand",
   "report.contains_2": "App-Version, Betriebssystem und Sprache",
   "report.contains_3":
     "die letzten Protokollzeilen, ohne Dateinamen, Pfade und Adressen",
@@ -277,7 +283,8 @@ const de = {
   "report.show_details": "Details anzeigen",
   "report.hide_details": "Details ausblenden",
   "report.comment_label": "Was hast du gerade gemacht? (optional)",
-  "report.comment_placeholder": "Zum Beispiel: Ich habe auf Generieren geklickt.",
+  "report.comment_placeholder":
+    "Zum Beispiel: Ich habe auf Generieren geklickt.",
   "report.always_send": "Fehlerberichte künftig automatisch senden",
   "report.send": "Bericht senden",
   "report.signed_out_hint":

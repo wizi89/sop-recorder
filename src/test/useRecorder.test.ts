@@ -90,7 +90,10 @@ describe("useRecorder", () => {
     expect(result.current.status).toBe("idle");
     expect(result.current.outputDir).toBeNull();
     // run_generation was NOT called
-    expect(mockInvoke).not.toHaveBeenCalledWith("run_generation", expect.anything());
+    expect(mockInvoke).not.toHaveBeenCalledWith(
+      "run_generation",
+      expect.anything(),
+    );
     // and the recording is not offered again at the next start
     expect(mockInvoke).toHaveBeenCalledWith("discard_recording", { outputDir });
   });
@@ -153,7 +156,9 @@ describe("useRecorder", () => {
     mockInvoke
       .mockResolvedValueOnce(undefined) // start
       .mockResolvedValueOnce({ output_dir: "C:\\out", failed_captures: 0 }) // stop
-      .mockRejectedValueOnce("[redaction] Schritt 7 wurde nicht vollständig gelöscht"); // generate
+      .mockRejectedValueOnce(
+        "[redaction] Schritt 7 wurde nicht vollständig gelöscht",
+      ); // generate
 
     const { result } = renderHook(() => useRecorder());
     await act(async () => {
@@ -169,7 +174,9 @@ describe("useRecorder", () => {
     expect(result.current.status).toBe("review");
     expect(result.current.outputDir).toBe("C:\\out");
     expect(result.current.error).toBeNull();
-    expect(result.current.reviewError).toBe("Schritt 7 wurde nicht vollständig gelöscht");
+    expect(result.current.reviewError).toBe(
+      "Schritt 7 wurde nicht vollständig gelöscht",
+    );
   });
 
   it("updates status message via setStatusMessage", async () => {
@@ -316,7 +323,9 @@ describe("useRecorder reportableError (design D6)", () => {
 
   it("offers nothing for an expected outcome", async () => {
     const { result } = renderHook(() => useRecorder());
-    act(() => result.current.setError("Sitzung abgelaufen. Bitte erneut anmelden."));
+    act(() =>
+      result.current.setError("Sitzung abgelaufen. Bitte erneut anmelden."),
+    );
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(result.current.reportableError).toBeNull();
   });
@@ -372,7 +381,10 @@ describe("useRecorder reportableError (design D6)", () => {
   it("drops the failed-capture count when a folder is opened from disk", async () => {
     mockInvoke
       .mockResolvedValueOnce(undefined) // start
-      .mockResolvedValueOnce({ output_dir: "/tmp/recorded", failed_captures: 2 }); // stop
+      .mockResolvedValueOnce({
+        output_dir: "/tmp/recorded",
+        failed_captures: 2,
+      }); // stop
 
     const { result } = renderHook(() => useRecorder());
 

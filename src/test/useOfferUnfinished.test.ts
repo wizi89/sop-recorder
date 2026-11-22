@@ -8,7 +8,10 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ ask: vi.fn() }));
 
 const mockInvoke = vi.mocked(invoke);
 const mockAsk = vi.mocked(ask);
-const unfinished = { output_dir: "C:/SOP 2026-10-25 10-00-00", guide_title: "SOP 2026-10-25 10-00-00" };
+const unfinished = {
+  output_dir: "C:/SOP 2026-10-25 10-00-00",
+  guide_title: "SOP 2026-10-25 10-00-00",
+};
 
 const settle = () => act(async () => new Promise((r) => setTimeout(r, 0)));
 
@@ -48,9 +51,12 @@ describe("useOfferUnfinished", () => {
   it("waits until the app is ready, then offers once per start", async () => {
     mockInvoke.mockResolvedValue(unfinished);
     mockAsk.mockResolvedValue(false);
-    const { rerender } = renderHook(({ ready }) => useOfferUnfinished(ready, vi.fn()), {
-      initialProps: { ready: false },
-    });
+    const { rerender } = renderHook(
+      ({ ready }) => useOfferUnfinished(ready, vi.fn()),
+      {
+        initialProps: { ready: false },
+      },
+    );
     await settle();
     expect(mockInvoke).not.toHaveBeenCalled();
 

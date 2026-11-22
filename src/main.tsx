@@ -34,11 +34,14 @@ if (!isBar) {
       if (now - at >= DEDUP_WINDOW_MS) lastReported.delete(seen);
     }
     lastReported.set(message, now);
-    void createErrorReport("ui_error", errorReportPhase(), message).catch(() => {});
+    void createErrorReport("ui_error", errorReportPhase(), message).catch(
+      () => {},
+    );
   };
 
   window.addEventListener("error", (event) => {
-    const message = event.error instanceof Error ? event.error.message : event.message;
+    const message =
+      event.error instanceof Error ? event.error.message : event.message;
     reportUiError(message);
   });
   window.addEventListener("unhandledrejection", (event) => {

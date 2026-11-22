@@ -72,7 +72,8 @@ split it first, in its own commit with behaviour unchanged. That split is in sco
 
 The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
 
-- Always: `npm ci`, `npm test`, `npx tsc --noEmit`.
+- Always: `npm ci`, `npm test`, `npx tsc --noEmit`, `npx biome ci .` (formatting; `npx biome format --write .`
+  fixes it).
 - Always, in its own CI job `semgrep`: `python scripts/check_semgrep.py`, the custom Semgrep rules
   in `.semgrep/` (needs `semgrep` or `uvx`). It also proves each rule still flags its bad fixture.
 - When `src-tauri/` changed, also run in `src-tauri/`: `cargo fmt --check`,
@@ -82,8 +83,8 @@ The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
 In a cloud session (`CLAUDE_CODE_REMOTE=true`) the image has no Tauri system libraries, and a
 Linux build would check neither the Windows nor the macOS code paths. There:
 
-- Run `npm ci`, `npm test`, `npx tsc --noEmit` and `python scripts/check_semgrep.py` in the
-  session, and `cargo fmt --check` in
+- Run `npm ci`, `npm test`, `npx tsc --noEmit`, `npx biome ci .` and `python scripts/check_semgrep.py`
+  in the session, and `cargo fmt --check` in
   `src-tauri/` when `cargo` is installed (it compiles nothing).
 - `cargo clippy` and `cargo test --lib` are **CI-only**: open the draft PR, then wait for CI's
   `ci` check on the head commit (`gh api repos/wizi89/sop-recorder/commits/<sha>/check-runs`).

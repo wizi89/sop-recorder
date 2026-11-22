@@ -182,21 +182,48 @@ export function RecorderScreen({
             {showQuotaChip && quota && (
               <span
                 className="inline-flex items-center rounded-full px-2 py-0.5 border mr-1"
-                title={t("quota.used", { count: quota.count, limit: quota.limit })}
+                title={t("quota.used", {
+                  count: quota.count,
+                  limit: quota.limit,
+                })}
                 style={quotaChipStyle}
               >
                 {t("quota.used", { count: quota.count, limit: quota.limit })}
               </span>
             )}
-            <button onClick={onSignOut} className="icon-btn" title={t("login.sign_out")}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <button
+              onClick={onSignOut}
+              className="icon-btn"
+              title={t("login.sign_out")}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
               </svg>
             </button>
           </>
         )}
-        <button onClick={onOpenSettings} className="icon-btn" title={t("settings.title")}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <button
+          onClick={onOpenSettings}
+          className="icon-btn"
+          title={t("settings.title")}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
             <circle cx="12" cy="12" r="3" />
           </svg>
@@ -218,7 +245,17 @@ export function RecorderScreen({
               color: "rgba(255, 180, 180, 0.95)",
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ flexShrink: 0 }}
+            >
               <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
             <div className="flex-1 leading-tight">
@@ -256,7 +293,16 @@ export function RecorderScreen({
               color: "rgba(255, 190, 80, 0.85)",
             }}
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
             {t("pii.disabled_chip")}
@@ -269,7 +315,11 @@ export function RecorderScreen({
         {isReady ? (
           <p
             className="text-on-surface-variant"
-            style={{ fontSize: "2rem", fontWeight: 700, letterSpacing: "-0.02em" }}
+            style={{
+              fontSize: "2rem",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+            }}
           >
             {t("status.ready")}
           </p>
@@ -285,7 +335,10 @@ export function RecorderScreen({
 
         <div className="flex flex-col items-center gap-3">
           {status === "done" && (
-            <button onClick={onOpenFolder} className="btn-secondary w-56 py-3 text-sm">
+            <button
+              onClick={onOpenFolder}
+              className="btn-secondary w-56 py-3 text-sm"
+            >
               {t("status.open_folder")}
             </button>
           )}
@@ -301,18 +354,30 @@ export function RecorderScreen({
               in an idle-ish state, so the user never loses a captured recording
               after a transient failure (network, rate limit, server 5xx). */}
           {outputDir && (status === "error" || status === "idle") && (
-            <button onClick={onRetry} className="btn-secondary w-56 py-2.5 text-sm">
+            <button
+              onClick={onRetry}
+              className="btn-secondary w-56 py-2.5 text-sm"
+            >
               {t("status.retry_from_disk")}
             </button>
           )}
-          {(status === "idle" || status === "done" || status === "error" || status === "pii_blocked" || status === "rate_limited") && (
+          {(status === "idle" ||
+            status === "done" ||
+            status === "error" ||
+            status === "pii_blocked" ||
+            status === "rate_limited") && (
             <button
               onClick={onStart}
               disabled={permissionsBlocked}
-              title={permissionsBlocked ? t("permissions.grant_to_start") : undefined}
+              title={
+                permissionsBlocked ? t("permissions.grant_to_start") : undefined
+              }
               className="btn-primary w-56 py-3 text-sm"
               style={{
-                animation: isReady && !permissionsBlocked ? "cta-breathe 3s ease-in-out infinite" : "none",
+                animation:
+                  isReady && !permissionsBlocked
+                    ? "cta-breathe 3s ease-in-out infinite"
+                    : "none",
                 opacity: permissionsBlocked ? 0.5 : 1,
                 cursor: permissionsBlocked ? "not-allowed" : "pointer",
               }}
@@ -344,7 +409,10 @@ export function RecorderScreen({
 
       {/* PII blocked modal */}
       {status === "pii_blocked" && (
-        <PiiBlockedModal findings={_piiFindings as never} onDismiss={onDismissPii} />
+        <PiiBlockedModal
+          findings={_piiFindings as never}
+          onDismiss={onDismissPii}
+        />
       )}
 
       {/* Rate limit modal */}

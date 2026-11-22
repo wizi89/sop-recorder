@@ -32,10 +32,19 @@ describe("ReviewScreen failed-capture notice", () => {
           );
         case "list_capture_records":
           return Promise.resolve(
-            [1, 3, 4].map((step) => ({ step, path: `/tmp/step_0${step}.png`, capture_scope: "window", password_check: "ok" })),
+            [1, 3, 4].map((step) => ({
+              step,
+              path: `/tmp/step_0${step}.png`,
+              capture_scope: "window",
+              password_check: "ok",
+            })),
           );
         case "load_redactions":
-          return Promise.resolve({ steps: {}, leftover_steps: [], unreadable: null });
+          return Promise.resolve({
+            steps: {},
+            leftover_steps: [],
+            unreadable: null,
+          });
         case "read_screenshot_bytes":
           return Promise.resolve([1, 2, 3]);
         // The pipeline selector runs on this screen too; it needs a list
@@ -55,22 +64,31 @@ describe("ReviewScreen failed-capture notice", () => {
 
     // Three screenshots survived, two failed: the user performed five actions.
     await waitFor(() =>
-      expect(screen.getByText(/2 von 5 Schritten konnten nicht aufgenommen werden/i))
-        .toBeInTheDocument(),
+      expect(
+        screen.getByText(/2 von 5 Schritten konnten nicht aufgenommen werden/i),
+      ).toBeInTheDocument(),
     );
   });
 
   it("says nothing when every capture succeeded", async () => {
     render(<ReviewScreen {...defaults} failedCaptures={0} />);
 
-    await waitFor(() => expect(screen.getByText(/Screenshots/)).toBeInTheDocument());
-    expect(screen.queryByText(/konnten nicht aufgenommen werden/i)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/Screenshots/)).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByText(/konnten nicht aufgenommen werden/i),
+    ).not.toBeInTheDocument();
   });
 
   it("says nothing when the count is absent, as it is for a folder from disk", async () => {
     render(<ReviewScreen {...defaults} />);
 
-    await waitFor(() => expect(screen.getByText(/Screenshots/)).toBeInTheDocument());
-    expect(screen.queryByText(/konnten nicht aufgenommen werden/i)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/Screenshots/)).toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByText(/konnten nicht aufgenommen werden/i),
+    ).not.toBeInTheDocument();
   });
 });

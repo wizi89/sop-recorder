@@ -2,29 +2,8 @@
   "docs/adr/0003-redactions-are-applied-at-upload.md": {
     "blur": 2
   },
-  "src-tauri/Cargo.toml": {
-    "crash report": 1
-  },
-  "src-tauri/src/commands/generate.rs": {
-    "recording session": 1
-  },
-  "src-tauri/src/commands/recording.rs": {
-    "recording session": 2
-  },
-  "src-tauri/src/commands/recording/files.rs": {
-    "recording session": 1
-  },
   "src-tauri/src/network/auth.rs": {
     "desktop login": 2
-  },
-  "src-tauri/src/state.rs": {
-    "recording session": 2
-  },
-  "src/App.tsx": {
-    "recording session": 1
-  },
-  "src/hooks/useRecorder.ts": {
-    "recording session": 3
   },
   "src/test/setup.ts": {
     "blur": 2

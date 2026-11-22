@@ -13,9 +13,13 @@ import { appEnv, BINARY, launchApp } from "./app";
 import { startStubs } from "./stubs";
 
 const invoke = (page: Page, cmd: string, args: Record<string, unknown> = {}) =>
-  page.evaluate(([c, a]) => (window as any).__TAURI_INTERNALS__.invoke(c, a), [cmd, args] as const);
+  page.evaluate(([c, a]) => (window as any).__TAURI_INTERNALS__.invoke(c, a), [
+    cmd,
+    args,
+  ] as const);
 
-const mainVisible = (page: Page) => invoke(page, "plugin:window|is_visible", { label: "main" });
+const mainVisible = (page: Page) =>
+  invoke(page, "plugin:window|is_visible", { label: "main" });
 
 test("a second launch exits and brings the running window back", async () => {
   const stubs = await startStubs();
@@ -30,7 +34,10 @@ test("a second launch exits and brings the running window back", async () => {
     await expect(async () => {
       await invoke(app.page, "plugin:window|hide", { label: "main" });
       await app.page.waitForTimeout(1_000);
-      expect(await mainVisible(app.page), "the window came back by itself").toBe(false);
+      expect(
+        await mainVisible(app.page),
+        "the window came back by itself",
+      ).toBe(false);
     }).toPass({ timeout: 10_000 });
 
     const second = spawn(BINARY, [], { env: appEnv(stubs), stdio: "ignore" });
@@ -42,10 +49,14 @@ test("a second launch exits and brings the running window back", async () => {
       });
     });
     if (exitCode === -1) second.kill();
-    expect(exitCode, "the second launch kept running alongside the first").toBe(0);
+    expect(exitCode, "the second launch kept running alongside the first").toBe(
+      0,
+    );
 
     await expect
-      .poll(() => mainVisible(app.page), { message: "the running window stayed hidden" })
+      .poll(() => mainVisible(app.page), {
+        message: "the running window stayed hidden",
+      })
       .toBe(true);
   } finally {
     await app.quit();
@@ -59,7 +70,9 @@ test("closing the main window quits, and the next launch opens normally", async 
     const first = await launchApp(stubs);
     await expect(first.page.getByRole("button").first()).toBeVisible();
     // The page goes away with the window, so the call never answers.
-    await invoke(first.page, "plugin:window|close", { label: "main" }).catch(() => {});
+    await invoke(first.page, "plugin:window|close", { label: "main" }).catch(
+      () => {},
+    );
     const code = await Promise.race([
       first.exited,
       new Promise<string>((r) => setTimeout(() => r("still running"), 10_000)),

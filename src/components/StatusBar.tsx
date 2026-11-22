@@ -14,7 +14,13 @@ interface StatusBarProps {
   stalled?: boolean;
 }
 
-export function StatusBar({ message, busy, isError, elapsedSec = 0, stalled }: StatusBarProps) {
+export function StatusBar({
+  message,
+  busy,
+  isError,
+  elapsedSec = 0,
+  stalled,
+}: StatusBarProps) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center gap-3">

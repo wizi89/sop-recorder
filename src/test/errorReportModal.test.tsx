@@ -55,7 +55,9 @@ describe("ErrorReportModal", () => {
 
     expect(screen.getByText("Der Bericht enthält:")).toBeInTheDocument();
     expect(screen.getByText("Der Bericht enthält nie:")).toBeInTheDocument();
-    expect(screen.getByText("Screenshots, Ton oder Transkripte")).toBeInTheDocument();
+    expect(
+      screen.getByText("Screenshots, Ton oder Transkripte"),
+    ).toBeInTheDocument();
     // Nothing has been transmitted at this point.
     expect(onGrant).not.toHaveBeenCalled();
 
@@ -69,7 +71,9 @@ describe("ErrorReportModal", () => {
       screen.getByLabelText("Was hast du gerade gemacht? (optional)"),
       "Auf Generieren geklickt",
     );
-    await user.click(screen.getByLabelText("Fehlerberichte künftig automatisch senden"));
+    await user.click(
+      screen.getByLabelText("Fehlerberichte künftig automatisch senden"),
+    );
     await user.click(screen.getByRole("button", { name: "Bericht senden" }));
 
     expect(onGrant).toHaveBeenCalledWith("Auf Generieren geklickt", true);
@@ -92,11 +96,15 @@ describe("ErrorReportModal", () => {
       screen.getByRole("button", { name: "Bericht senden" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Der Bericht wird gespeichert und nach der nächsten Anmeldung gesendet/),
+      screen.getByText(
+        /Der Bericht wird gespeichert und nach der nächsten Anmeldung gesendet/,
+      ),
     ).toBeInTheDocument();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Bericht-Datei anzeigen" }));
+    await user.click(
+      screen.getByRole("button", { name: "Bericht-Datei anzeigen" }),
+    );
     await waitFor(() =>
       expect(revealItemInDir).toHaveBeenCalledWith(
         expect.stringContaining("aabbccdd-1111-2222-3333-444444444444.json"),
@@ -199,7 +207,9 @@ describe("ErrorReportModal", () => {
       />,
     );
 
-    await userEvent.setup().click(screen.getByRole("button", { name: "Nicht senden" }));
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Nicht senden" }));
     expect(onDecline).toHaveBeenCalled();
     expect(onGrant).not.toHaveBeenCalled();
   });
@@ -237,21 +247,41 @@ describe("ErrorReportModal", () => {
     // behind a full-screen backdrop: the app looked frozen with no way out.
     const onGrant = vi.fn();
     const first = report({ report_id: "11111111-1111-4111-8111-111111111111" });
-    const second = report({ report_id: "22222222-2222-4222-8222-222222222222" });
+    const second = report({
+      report_id: "22222222-2222-4222-8222-222222222222",
+    });
 
     const { rerender } = render(
-      <ErrorReportModal report={first} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+      <ErrorReportModal
+        report={first}
+        loggedIn
+        onGrant={onGrant}
+        onDecline={noop}
+        onClose={noop}
+      />,
     );
 
-    await userEvent.setup().click(screen.getByRole("button", { name: "Bericht senden" }));
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Bericht senden" }));
     expect(onGrant).toHaveBeenCalledTimes(1);
 
     rerender(
-      <ErrorReportModal report={second} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+      <ErrorReportModal
+        report={second}
+        loggedIn
+        onGrant={onGrant}
+        onDecline={noop}
+        onClose={noop}
+      />,
     );
 
-    expect(screen.getByRole("button", { name: "Bericht senden" })).not.toBeDisabled();
-    expect(screen.getByRole("button", { name: "Nicht senden" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Bericht senden" }),
+    ).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Nicht senden" }),
+    ).not.toBeDisabled();
   });
 
   it("a comment does not follow the user onto the next report", async () => {
@@ -259,17 +289,31 @@ describe("ErrorReportModal", () => {
     // would attach the wrong context to a different report.
     const onGrant = vi.fn();
     const first = report({ report_id: "11111111-1111-4111-8111-111111111111" });
-    const second = report({ report_id: "22222222-2222-4222-8222-222222222222" });
+    const second = report({
+      report_id: "22222222-2222-4222-8222-222222222222",
+    });
 
     const { rerender } = render(
-      <ErrorReportModal report={first} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+      <ErrorReportModal
+        report={first}
+        loggedIn
+        onGrant={onGrant}
+        onDecline={noop}
+        onClose={noop}
+      />,
     );
 
     const user = userEvent.setup();
     await user.type(screen.getByRole("textbox"), "Beim Generieren geklickt");
 
     rerender(
-      <ErrorReportModal report={second} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+      <ErrorReportModal
+        report={second}
+        loggedIn
+        onGrant={onGrant}
+        onDecline={noop}
+        onClose={noop}
+      />,
     );
 
     expect(screen.getByRole("textbox")).toHaveValue("");
@@ -278,13 +322,21 @@ describe("ErrorReportModal", () => {
   it("a failing send does not leave the dialog stuck", async () => {
     const onGrant = vi.fn().mockRejectedValue(new Error("Netzwerk weg"));
     render(
-      <ErrorReportModal report={report()} loggedIn onGrant={onGrant} onDecline={noop} onClose={noop} />,
+      <ErrorReportModal
+        report={report()}
+        loggedIn
+        onGrant={onGrant}
+        onDecline={noop}
+        onClose={noop}
+      />,
     );
 
     const send = screen.getByRole("button", { name: "Bericht senden" });
     await userEvent.setup().click(send);
 
     await waitFor(() => expect(send).not.toBeDisabled());
-    expect(screen.getByRole("button", { name: "Nicht senden" })).not.toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Nicht senden" }),
+    ).not.toBeDisabled();
   });
 });

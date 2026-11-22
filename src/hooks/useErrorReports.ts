@@ -83,7 +83,7 @@ export function useErrorReports({
   // told nothing about a report that was in fact sent. Running them in turn
   // is the whole fix; nothing here needs real concurrency.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
-  const serialize = useCallback(<T,>(run: () => Promise<T>): Promise<T> => {
+  const serialize = useCallback(<T>(run: () => Promise<T>): Promise<T> => {
     const next = queue.current.then(run, run);
     queue.current = next.then(
       () => {},
@@ -205,5 +205,14 @@ export function useErrorReports({
   // Under `always` the dialog never opens; under `never` nothing is listed.
   const current = mode === "always" ? null : (pending[0] ?? null);
 
-  return { pending, current, sent, create, grant, decline, refresh, dismissSent };
+  return {
+    pending,
+    current,
+    sent,
+    create,
+    grant,
+    decline,
+    refresh,
+    dismissSent,
+  };
 }

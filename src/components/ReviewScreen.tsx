@@ -12,7 +12,13 @@ import {
   type StepCaptureRecord,
 } from "../lib/tauri";
 import { containRect } from "../lib/redactionGeometry";
-import { BoxOverlay, StepEditor, boxKey, hasBox, type Thumb } from "./StepEditor";
+import {
+  BoxOverlay,
+  StepEditor,
+  boxKey,
+  hasBox,
+  type Thumb,
+} from "./StepEditor";
 import { formatElapsed } from "../hooks/useElapsedTime";
 import { PipelineSelector } from "./PipelineSelector";
 
@@ -57,7 +63,9 @@ function needsReview(record: StepCaptureRecord | undefined): boolean {
   );
 }
 
-function toBoxesByStep(steps: Record<string, RedactionBox[]> | undefined): BoxesByStep {
+function toBoxesByStep(
+  steps: Record<string, RedactionBox[]> | undefined,
+): BoxesByStep {
   const out: BoxesByStep = {};
   for (const [k, v] of Object.entries(steps ?? {})) out[Number(k)] = v;
   return out;
@@ -102,8 +110,9 @@ export function ReviewScreen({
   const [openStep, setOpenStep] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [natural, setNatural] = useState<Record<number, { w: number; h: number }>>({});
-
+  const [natural, setNatural] = useState<
+    Record<number, { w: number; h: number }>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +123,11 @@ export function ReviewScreen({
         // The records list every screenshot, so they are also the list of
         // paths. Only if they cannot be read is the folder listed on its own,
         // and then every step is marked: no record is never read as safe.
-        let shots: Array<{ step: number; path: string; record?: StepCaptureRecord }>;
+        let shots: Array<{
+          step: number;
+          path: string;
+          record?: StepCaptureRecord;
+        }>;
         try {
           shots = (await listCaptureRecords(outputDir)).map((record) => ({
             step: record.step,
@@ -189,7 +202,10 @@ export function ReviewScreen({
   );
 
   /** `change` gets the latest list, not this render's, so no change is lost. */
-  const setStepBoxes = (step: number, change: (list: RedactionBox[]) => RedactionBox[]) => {
+  const setStepBoxes = (
+    step: number,
+    change: (list: RedactionBox[]) => RedactionBox[],
+  ) => {
     const before = desiredRef.current[step] ?? [];
     const next = change(before);
     if (next === before) return;
@@ -201,7 +217,9 @@ export function ReviewScreen({
   /** After a delete failed, the disk decides what is left (D5). */
   const resync = useCallback(async () => {
     try {
-      const present = new Set((await listSessionScreenshots(outputDir)).map((s) => s.step));
+      const present = new Set(
+        (await listSessionScreenshots(outputDir)).map((s) => s.step),
+      );
       const gone = thumbsRef.current.filter((x) => !present.has(x.step)).length;
       setThumbs((ts) => ts.filter((x) => present.has(x.step)));
       setDeletedCount((n) => n + gone);
@@ -283,215 +301,264 @@ export function ReviewScreen({
       {/* `contents` keeps the flex layout; `inert` keeps focus and clicks out
           of the screen behind the open step (#58). */}
       <div className="contents" inert={open !== null}>
-      <div className="px-4 pt-4 pb-2">
-        <p className="text-on-surface text-sm font-semibold">
-          {t("review.title")}
-        </p>
-        <p className="text-on-surface-variant mt-1" style={{ fontSize: "0.75rem" }}>
-          {/* Once thumbnails load they are the ground truth for the count; a
-              folder picked from disk has no live capture telemetry at all. */}
-          {elapsedSec > 0
-            ? t("review.summary", { count, elapsed: formatElapsed(elapsedSec) })
-            : t("review.summary_count_only", { count })}
-          {deletedCount > 0 && ` (${t("review.deleted_steps", { count: deletedCount })})`}
-        </p>
-        {failedCaptures > 0 && (
+        <div className="px-4 pt-4 pb-2">
+          <p className="text-on-surface text-sm font-semibold">
+            {t("review.title")}
+          </p>
           <p
-            className="mt-2 rounded px-2 py-1.5 leading-snug"
-            style={{
-              fontSize: "0.6875rem",
-              background: "rgba(255, 180, 50, 0.06)",
-              border: "1px solid rgba(255, 180, 50, 0.15)",
-              color: "rgba(255, 190, 80, 0.9)",
-            }}
+            className="text-on-surface-variant mt-1"
+            style={{ fontSize: "0.75rem" }}
           >
-            {t("review.failed_captures", {
-              count: failedCaptures,
-              total: (loading ? captureCount : openedWith) + failedCaptures,
-            })}
+            {/* Once thumbnails load they are the ground truth for the count; a
+              folder picked from disk has no live capture telemetry at all. */}
+            {elapsedSec > 0
+              ? t("review.summary", {
+                  count,
+                  elapsed: formatElapsed(elapsedSec),
+                })
+              : t("review.summary_count_only", { count })}
+            {deletedCount > 0 &&
+              ` (${t("review.deleted_steps", { count: deletedCount })})`}
           </p>
-        )}
-        {[
-          uploadError && !refusalCleared && t("review.upload_refused", { error: uploadError }),
-          opError,
-          ...failedSteps.map((n) =>
-            t("review.redact_save_failed", { n, error: failedSaves[n] }),
-          ),
-        ]
-          .filter(Boolean)
-          .map((msg) => (
-            <p key={String(msg)} role="alert" className="mt-2 text-xs" style={{ color: "#F87171" }}>
-              {msg}
-            </p>
-          ))}
-        {unreadable !== null && (
-          <div role="alert" className="mt-2 flex flex-col gap-1.5 text-xs" style={{ color: "#F87171" }}>
-            <p>{t("review.unreadable", { error: unreadable })}</p>
-            {confirmReset ? (
-              <div className="flex gap-2 items-center">
-                <span>{t("review.reset_confirm")}</span>
-                <button
-                  className="btn-secondary px-2 py-1 text-xs"
-                  onClick={() => {
-                    setConfirmReset(false);
-                    reset();
-                  }}
-                >
-                  {t("review.delete_confirm_yes")}
-                </button>
-                <button
-                  className="btn-secondary px-2 py-1 text-xs"
-                  onClick={() => setConfirmReset(false)}
-                >
-                  {t("review.delete_confirm_no")}
-                </button>
-              </div>
-            ) : (
-              <button
-                className="btn-secondary self-start px-2 py-1 text-xs"
-                onClick={() => setConfirmReset(true)}
-              >
-                {t("review.reset")}
-              </button>
-            )}
-          </div>
-        )}
-        {leftovers.map((n) => (
-          <div key={n} role="alert" className="mt-2 flex gap-2 items-center text-xs" style={{ color: "#F87171" }}>
-            <span>{t("review.leftover", { n })}</span>
-            <button className="btn-secondary px-2 py-1 text-xs" onClick={() => removeStep(n)}>
-              {t("review.leftover_retry")}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <PipelineSelector />
-
-      {/* Thumbnail strip */}
-      <div className="flex-1 min-h-0 px-4 overflow-y-auto">
-        {loading && (
-          <p className="text-on-surface-variant text-xs">{t("review.loading")}</p>
-        )}
-        {error && (
-          <p className="text-on-surface-variant text-xs" style={{ color: "#F87171" }}>
-            {error}
-          </p>
-        )}
-        {!loading && !error && (
-          <>
-            <p className="text-on-surface-variant mb-1.5" style={{ fontSize: "0.6875rem" }}>
-              {t("review.open_hint")}
-            </p>
-            <div
-              className="flex gap-2 overflow-x-auto pb-2"
-              style={{ scrollbarWidth: "thin" }}
+          {failedCaptures > 0 && (
+            <p
+              className="mt-2 rounded px-2 py-1.5 leading-snug"
+              style={{
+                fontSize: "0.6875rem",
+                background: "rgba(255, 180, 50, 0.06)",
+                border: "1px solid rgba(255, 180, 50, 0.15)",
+                color: "rgba(255, 190, 80, 0.9)",
+              }}
             >
-              {thumbs.map((thumb) => {
-                const nat = natural[thumb.step] ?? { w: 0, h: 0 };
-                const boxCount = (stored[thumb.step] ?? []).length;
-                return (
+              {t("review.failed_captures", {
+                count: failedCaptures,
+                total: (loading ? captureCount : openedWith) + failedCaptures,
+              })}
+            </p>
+          )}
+          {[
+            uploadError &&
+              !refusalCleared &&
+              t("review.upload_refused", { error: uploadError }),
+            opError,
+            ...failedSteps.map((n) =>
+              t("review.redact_save_failed", { n, error: failedSaves[n] }),
+            ),
+          ]
+            .filter(Boolean)
+            .map((msg) => (
+              <p
+                key={String(msg)}
+                role="alert"
+                className="mt-2 text-xs"
+                style={{ color: "#F87171" }}
+              >
+                {msg}
+              </p>
+            ))}
+          {unreadable !== null && (
+            <div
+              role="alert"
+              className="mt-2 flex flex-col gap-1.5 text-xs"
+              style={{ color: "#F87171" }}
+            >
+              <p>{t("review.unreadable", { error: unreadable })}</p>
+              {confirmReset ? (
+                <div className="flex gap-2 items-center">
+                  <span>{t("review.reset_confirm")}</span>
                   <button
-                    type="button"
-                    key={thumb.path}
+                    className="btn-secondary px-2 py-1 text-xs"
                     onClick={() => {
-                      setOpenStep(thumb.step);
-                      setConfirmDelete(false);
-                    }}
-                    className="flex-shrink-0 rounded border text-left"
-                    style={{
-                      width: 96,
-                      borderColor: failedSaves[thumb.step]
-                        ? "#F87171"
-                        : "rgba(255,255,255,0.12)",
-                      background: "rgba(255,255,255,0.04)",
+                      setConfirmReset(false);
+                      reset();
                     }}
                   >
-                    <div style={{ position: "relative", width: 96, height: 54 }}>
-                      <img
-                        src={thumb.url}
-                        alt={t("review.step_label", { n: thumb.step })}
-                        onLoad={(e) => {
-                          const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
-                          setNatural((n) => ({ ...n, [thumb.step]: { w, h } }));
-                        }}
-                        style={{
-                          width: "100%",
-                          height: 54,
-                          objectFit: "contain",
-                          borderRadius: "3px 3px 0 0",
-                        }}
-                      />
-                      <BoxOverlay
-                        content={containRect(96, 54, nat.w, nat.h)}
-                        natural={nat}
-                        stored={stored[thumb.step] ?? []}
-                        desired={desired[thumb.step] ?? []}
-                      />
-                    </div>
-                    <div
-                      className="text-on-surface-variant text-center"
-                      style={{ fontSize: "0.625rem", padding: "2px 0" }}
-                    >
-                      {t("review.step_label", { n: thumb.step })}
-                    </div>
-                    {boxCount > 0 && (
-                      <div className="text-on-surface-variant text-center" style={{ fontSize: "0.625rem" }}>
-                        {t("review.redact_boxes", { count: boxCount })}
-                      </div>
-                    )}
-                    {thumb.marked && (
-                      <div
-                        className="text-center"
-                        style={{ fontSize: "0.625rem", color: "rgba(255, 190, 80, 0.9)" }}
-                      >
-                        {t("review.marked_badge")}
-                      </div>
-                    )}
+                    {t("review.delete_confirm_yes")}
                   </button>
-                );
-              })}
+                  <button
+                    className="btn-secondary px-2 py-1 text-xs"
+                    onClick={() => setConfirmReset(false)}
+                  >
+                    {t("review.delete_confirm_no")}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="btn-secondary self-start px-2 py-1 text-xs"
+                  onClick={() => setConfirmReset(true)}
+                >
+                  {t("review.reset")}
+                </button>
+              )}
             </div>
-          </>
-        )}
-      </div>
-
-      {markedCount > 0 && (
-        <div className="px-4 pt-2 flex flex-col gap-1.5">
-          <p className="text-on-surface-variant leading-snug" style={{ fontSize: "0.6875rem" }}>
-            {t("review.marked_hint", { count: markedCount })}
-          </p>
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={reviewed}
-              onChange={(e) => setReviewed(e.target.checked)}
-            />
-            {t("review.marked_confirm")}
-          </label>
+          )}
+          {leftovers.map((n) => (
+            <div
+              key={n}
+              role="alert"
+              className="mt-2 flex gap-2 items-center text-xs"
+              style={{ color: "#F87171" }}
+            >
+              <span>{t("review.leftover", { n })}</span>
+              <button
+                className="btn-secondary px-2 py-1 text-xs"
+                onClick={() => removeStep(n)}
+              >
+                {t("review.leftover_retry")}
+              </button>
+            </div>
+          ))}
         </div>
-      )}
 
-      {/* Action buttons */}
-      <div className="flex gap-2 px-4 pb-3 pt-2">
-        <button
-          onClick={onCancel}
-          className="btn-secondary flex-1 py-2 text-xs"
-        >
-          {t("review.cancel")}
-        </button>
-        <button
-          onClick={onConfirm}
-          className="btn-primary flex-1 py-2 text-xs"
-          disabled={blocked}
-          style={{
-            opacity: blocked ? 0.4 : 1,
-            cursor: blocked ? "not-allowed" : "pointer",
-          }}
-        >
-          {t("review.confirm")}
-        </button>
-      </div>
+        <PipelineSelector />
+
+        {/* Thumbnail strip */}
+        <div className="flex-1 min-h-0 px-4 overflow-y-auto">
+          {loading && (
+            <p className="text-on-surface-variant text-xs">
+              {t("review.loading")}
+            </p>
+          )}
+          {error && (
+            <p
+              className="text-on-surface-variant text-xs"
+              style={{ color: "#F87171" }}
+            >
+              {error}
+            </p>
+          )}
+          {!loading && !error && (
+            <>
+              <p
+                className="text-on-surface-variant mb-1.5"
+                style={{ fontSize: "0.6875rem" }}
+              >
+                {t("review.open_hint")}
+              </p>
+              <div
+                className="flex gap-2 overflow-x-auto pb-2"
+                style={{ scrollbarWidth: "thin" }}
+              >
+                {thumbs.map((thumb) => {
+                  const nat = natural[thumb.step] ?? { w: 0, h: 0 };
+                  const boxCount = (stored[thumb.step] ?? []).length;
+                  return (
+                    <button
+                      type="button"
+                      key={thumb.path}
+                      onClick={() => {
+                        setOpenStep(thumb.step);
+                        setConfirmDelete(false);
+                      }}
+                      className="flex-shrink-0 rounded border text-left"
+                      style={{
+                        width: 96,
+                        borderColor: failedSaves[thumb.step]
+                          ? "#F87171"
+                          : "rgba(255,255,255,0.12)",
+                        background: "rgba(255,255,255,0.04)",
+                      }}
+                    >
+                      <div
+                        style={{ position: "relative", width: 96, height: 54 }}
+                      >
+                        <img
+                          src={thumb.url}
+                          alt={t("review.step_label", { n: thumb.step })}
+                          onLoad={(e) => {
+                            const { naturalWidth: w, naturalHeight: h } =
+                              e.currentTarget;
+                            setNatural((n) => ({
+                              ...n,
+                              [thumb.step]: { w, h },
+                            }));
+                          }}
+                          style={{
+                            width: "100%",
+                            height: 54,
+                            objectFit: "contain",
+                            borderRadius: "3px 3px 0 0",
+                          }}
+                        />
+                        <BoxOverlay
+                          content={containRect(96, 54, nat.w, nat.h)}
+                          natural={nat}
+                          stored={stored[thumb.step] ?? []}
+                          desired={desired[thumb.step] ?? []}
+                        />
+                      </div>
+                      <div
+                        className="text-on-surface-variant text-center"
+                        style={{ fontSize: "0.625rem", padding: "2px 0" }}
+                      >
+                        {t("review.step_label", { n: thumb.step })}
+                      </div>
+                      {boxCount > 0 && (
+                        <div
+                          className="text-on-surface-variant text-center"
+                          style={{ fontSize: "0.625rem" }}
+                        >
+                          {t("review.redact_boxes", { count: boxCount })}
+                        </div>
+                      )}
+                      {thumb.marked && (
+                        <div
+                          className="text-center"
+                          style={{
+                            fontSize: "0.625rem",
+                            color: "rgba(255, 190, 80, 0.9)",
+                          }}
+                        >
+                          {t("review.marked_badge")}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        {markedCount > 0 && (
+          <div className="px-4 pt-2 flex flex-col gap-1.5">
+            <p
+              className="text-on-surface-variant leading-snug"
+              style={{ fontSize: "0.6875rem" }}
+            >
+              {t("review.marked_hint", { count: markedCount })}
+            </p>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={reviewed}
+                onChange={(e) => setReviewed(e.target.checked)}
+              />
+              {t("review.marked_confirm")}
+            </label>
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div className="flex gap-2 px-4 pb-3 pt-2">
+          <button
+            onClick={onCancel}
+            className="btn-secondary flex-1 py-2 text-xs"
+          >
+            {t("review.cancel")}
+          </button>
+          <button
+            onClick={onConfirm}
+            className="btn-primary flex-1 py-2 text-xs"
+            disabled={blocked}
+            style={{
+              opacity: blocked ? 0.4 : 1,
+              cursor: blocked ? "not-allowed" : "pointer",
+            }}
+          >
+            {t("review.confirm")}
+          </button>
+        </div>
       </div>
 
       {open && (
@@ -505,12 +572,18 @@ export function ReviewScreen({
           confirmDelete={confirmDelete}
           onAdd={(b) =>
             // A second identical box would share its React key and its removal.
-            setStepBoxes(open.step, (list) => (hasBox(list, b) ? list : [...list, b]))
+            setStepBoxes(open.step, (list) =>
+              hasBox(list, b) ? list : [...list, b],
+            )
           }
           onRemove={(b) =>
-            setStepBoxes(open.step, (list) => list.filter((x) => boxKey(x) !== boxKey(b)))
+            setStepBoxes(open.step, (list) =>
+              list.filter((x) => boxKey(x) !== boxKey(b)),
+            )
           }
-          onRetrySave={() => saveStep(open.step, desiredRef.current[open.step] ?? [])}
+          onRetrySave={() =>
+            saveStep(open.step, desiredRef.current[open.step] ?? [])
+          }
           onAskDelete={() => setConfirmDelete(true)}
           onCancelDelete={() => setConfirmDelete(false)}
           onDelete={() => {

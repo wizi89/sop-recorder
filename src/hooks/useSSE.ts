@@ -100,6 +100,6 @@ export function useSSE(handlers: {
       cancelled = true;
       resolvedUnlisteners.forEach(safeUnlisten);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }

@@ -69,4 +69,4 @@ Tracked here until fixed:
 
 ## Working on it
 
-Commands, tests and release flow: [README](../README.md). Behaviour that surprised us: [FINDINGS.md](./FINDINGS.md). Domain terms: [GLOSSARY.md](../GLOSSARY.md). Decisions: [docs/adr/](./adr/). CI runs vitest, `cargo test --lib`, `cargo fmt --check`, `clippy -D warnings` and `tsc` on Windows and macOS; keep all of them green.
+Commands, tests and release flow: [README](../README.md). Behaviour that surprised us: [FINDINGS.md](./FINDINGS.md). Domain terms: [GLOSSARY.md](../GLOSSARY.md). Decisions: [docs/adr/](./adr/). CI runs vitest, `cargo test --lib`, `cargo fmt --check`, `clippy -D warnings`, `tsc` and Biome's format check on Windows and macOS; keep all of them green.

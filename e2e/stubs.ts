@@ -11,7 +11,11 @@
  * port).
  */
 import { createHash } from "node:crypto";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import type { AddressInfo } from "node:net";
 
 export const CODE = "e2e-code";
@@ -36,7 +40,8 @@ export async function startStubs() {
 
   const api = await listen(async (req, res) => {
     if (req.method === "POST" && req.url === "/auth/desktop/exchange") {
-      if (state.apiMode === "old") return send(res, 404, "Not Found", "text/plain");
+      if (state.apiMode === "old")
+        return send(res, 404, "Not Found", "text/plain");
       const body = await json(req);
       // The app's probe posts an empty body; a server with the endpoint
       // refuses it with JSON, which is what tells the app the endpoint exists.
@@ -46,14 +51,17 @@ export async function startStubs() {
         state.challenge !== null &&
         s256(String(body.code_verifier)) === state.challenge;
       state.exchanges.push({ code: String(body.code), accepted });
-      return accepted ? send(res, 200, TOKENS) : send(res, 400, { error: "invalid_code" });
+      return accepted
+        ? send(res, 200, TOKENS)
+        : send(res, 400, { error: "invalid_code" });
     }
     if (req.method === "POST" && req.url === "/auth/refresh") {
       const body = await json(req);
       // Only a session this stub issued. One left in the keyring by an earlier
       // test is refused, and the app clears it -- so every test starts signed
       // out.
-      return state.exchanges.some((e) => e.accepted) && body.refresh_token === TOKENS.refresh_token
+      return state.exchanges.some((e) => e.accepted) &&
+        body.refresh_token === TOKENS.refresh_token
         ? send(res, 200, TOKENS)
         : send(res, 401, { error: "invalid_grant" });
     }
@@ -66,11 +74,19 @@ export async function startStubs() {
       if (!url.searchParams.has("e2e-confirm")) {
         state.authorizeUrl = url.href.replace("http://stub", web.origin);
         state.challenge = url.searchParams.get("code_challenge");
-        return send(res, 200, "<p>The end-to-end test has taken this sign-in over.</p>", "text/html");
+        return send(
+          res,
+          200,
+          "<p>The end-to-end test has taken this sign-in over.</p>",
+          "text/html",
+        );
       }
       const back = new URL(url.searchParams.get("redirect_uri")!);
       back.searchParams.set("code", CODE);
-      back.searchParams.set("state", url.searchParams.get("e2e-state") ?? url.searchParams.get("state")!);
+      back.searchParams.set(
+        "state",
+        url.searchParams.get("e2e-state") ?? url.searchParams.get("state")!,
+      );
       res.writeHead(302, { Location: back.href }).end();
       return;
     }
@@ -86,7 +102,8 @@ export async function startStubs() {
     /** The authorize URL, once the app has opened the browser at it. */
     async authorizeUrl(): Promise<string> {
       for (let i = 0; i < 100 && !state.authorizeUrl; i++) await sleep(100);
-      if (!state.authorizeUrl) throw new Error("the app never opened the browser");
+      if (!state.authorizeUrl)
+        throw new Error("the app never opened the browser");
       return state.authorizeUrl;
     },
     async close() {
@@ -109,12 +126,19 @@ async function json(req: IncomingMessage): Promise<Record<string, unknown>> {
   }
 }
 
-function send(res: ServerResponse, status: number, body: unknown, type = "application/json") {
+function send(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  type = "application/json",
+) {
   res.writeHead(status, { "Content-Type": type });
   res.end(typeof body === "string" ? body : JSON.stringify(body));
 }
 
-async function listen(handler: (req: IncomingMessage, res: ServerResponse) => void) {
+async function listen(
+  handler: (req: IncomingMessage, res: ServerResponse) => void,
+) {
   const server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
