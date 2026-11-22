@@ -16,7 +16,9 @@ describe("safeUnlisten", () => {
 
   it("swallows a synchronous throw", () => {
     const fn = () => {
-      throw new TypeError("undefined is not an object (evaluating 'listeners[eventId].handlerId')");
+      throw new TypeError(
+        "undefined is not an object (evaluating 'listeners[eventId].handlerId')",
+      );
     };
     expect(() => safeUnlisten(fn)).not.toThrow();
   });
@@ -30,7 +32,9 @@ describe("safeUnlisten", () => {
 
     const fn = (() =>
       Promise.reject(
-        new TypeError("undefined is not an object (evaluating 'listeners[eventId].handlerId')"),
+        new TypeError(
+          "undefined is not an object (evaluating 'listeners[eventId].handlerId')",
+        ),
       )) as unknown as () => void;
 
     expect(() => safeUnlisten(fn)).not.toThrow();
@@ -46,7 +50,8 @@ describe("safeUnlisten", () => {
     // a promise that can reject, so a caller trusting the type attaches no
     // catch. If Tauri ever changes the declaration to return a promise, this
     // is the test that should prompt revisiting the wrapper.
-    const fn = (() => Promise.reject(new TypeError("boom"))) as unknown as () => void;
+    const fn = (() =>
+      Promise.reject(new TypeError("boom"))) as unknown as () => void;
     const returned = fn() as unknown;
     expect(returned).toBeInstanceOf(Promise);
     await expect(returned as Promise<void>).rejects.toThrow("boom");

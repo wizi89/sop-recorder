@@ -59,7 +59,14 @@ export function LoginScreen({
   const logo = (
     <div className="flex items-center gap-3 mb-2">
       <img src="/logo.svg" alt="CogniClone" style={{ width: 40, height: 40 }} />
-      <div style={{ fontFamily: "'Orbitron', sans-serif", fontSize: "1.1rem", fontWeight: 600, letterSpacing: "0.06em" }}>
+      <div
+        style={{
+          fontFamily: "'Orbitron', sans-serif",
+          fontSize: "1.1rem",
+          fontWeight: 600,
+          letterSpacing: "0.06em",
+        }}
+      >
         <span style={{ color: "#A8B2B8" }}>COGNICLONE</span>
         <span style={{ color: "#2CB5C0", marginLeft: 6 }}>AI</span>
       </div>
@@ -99,7 +106,9 @@ export function LoginScreen({
       <div className="flex flex-col h-full bg-surface">
         <div className="flex-1 flex flex-col items-center justify-center gap-5 px-4">
           {logo}
-          <p className="w-72 text-center text-sm">{t("login.browser_waiting")}</p>
+          <p className="w-72 text-center text-sm">
+            {t("login.browser_waiting")}
+          </p>
           <p
             className="w-72 text-center text-on-surface-variant"
             style={{ fontSize: "0.6875rem" }}
@@ -162,7 +171,10 @@ export function LoginScreen({
               </p>
             )}
 
-            <form onSubmit={handleSubmit} className="flex flex-col items-center gap-5">
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col items-center gap-5"
+            >
               <div className="w-72">
                 <label htmlFor="login-email" className="label-sm block mb-1.5">
                   {t("login.email")}
@@ -178,7 +190,10 @@ export function LoginScreen({
               </div>
 
               <div className="w-72">
-                <label htmlFor="login-password" className="label-sm block mb-1.5">
+                <label
+                  htmlFor="login-password"
+                  className="label-sm block mb-1.5"
+                >
                   {t("login.password")}
                 </label>
                 <input
@@ -190,7 +205,11 @@ export function LoginScreen({
                 />
               </div>
 
-              <button type="submit" disabled={loading} className="btn-primary w-72 py-3 text-sm">
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-72 py-3 text-sm"
+              >
                 {loading ? t("login.signing_in") : t("login.sign_in")}
               </button>
             </form>

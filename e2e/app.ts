@@ -15,7 +15,9 @@ import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { chromium, type Browser, type Page } from "@playwright/test";
 
-export const BINARY = path.resolve("src-tauri/target/e2e/debug/cogniclone-recorder.exe");
+export const BINARY = path.resolve(
+  "src-tauri/target/e2e/debug/cogniclone-recorder.exe",
+);
 
 /**
  * Fixed rather than free, because CI cannot use the environment variable:
@@ -56,7 +58,9 @@ export async function launchApp(urls: Urls): Promise<App> {
   });
   // Kept for the failure message: an app that dies on start says why here.
   let output = "";
-  const exited = new Promise<number | null>((resolve) => child.on("exit", resolve));
+  const exited = new Promise<number | null>((resolve) =>
+    child.on("exit", resolve),
+  );
   child.stdout?.on("data", (d) => (output += d));
   child.stderr?.on("data", (d) => (output += d));
 
@@ -75,11 +79,17 @@ export async function launchApp(urls: Urls): Promise<App> {
   }
 }
 
-async function connect(port: number, child: ChildProcess, output: () => string): Promise<Browser> {
+async function connect(
+  port: number,
+  child: ChildProcess,
+  output: () => string,
+): Promise<Browser> {
   // 60 s: a fresh CI runner has taken 35 s for its first WebView2 start (FINDINGS 2026-11-02).
   for (let i = 0; i < 300; i++) {
     if (child.exitCode !== null) {
-      throw new Error(`the app exited with ${child.exitCode} before its window opened:\n${output()}`);
+      throw new Error(
+        `the app exited with ${child.exitCode} before its window opened:\n${output()}`,
+      );
     }
     try {
       return await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
@@ -87,7 +97,9 @@ async function connect(port: number, child: ChildProcess, output: () => string):
       await new Promise((r) => setTimeout(r, 200));
     }
   }
-  throw new Error(`the app's WebView never opened its DevTools port (${port}):\n${output()}`);
+  throw new Error(
+    `the app's WebView never opened its DevTools port (${port}):\n${output()}`,
+  );
 }
 
 /** The app has more than one window; the recording bar is another. */
@@ -95,7 +107,10 @@ async function mainWindow(browser: Browser): Promise<Page> {
   for (let i = 0; i < 150; i++) {
     for (const page of browser.contexts().flatMap((c) => c.pages())) {
       const label = await page
-        .evaluate(() => (window as any).__TAURI_INTERNALS__?.metadata?.currentWindow?.label)
+        .evaluate(
+          () =>
+            (window as any).__TAURI_INTERNALS__?.metadata?.currentWindow?.label,
+        )
         .catch(() => undefined);
       if (label === "main") return page;
     }

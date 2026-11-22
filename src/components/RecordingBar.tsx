@@ -86,7 +86,16 @@ export function RecordingBar() {
         }}
       >
         {/* Undo arrow icon */}
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M3 7v6h6" />
           <path d="M21 17a9 9 0 00-15-6.7L3 13" />
         </svg>

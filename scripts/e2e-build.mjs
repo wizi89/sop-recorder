@@ -10,7 +10,10 @@ const { status } = spawnSync(
   {
     shell: true,
     stdio: "inherit",
-    env: { ...process.env, CARGO_TARGET_DIR: path.resolve("src-tauri/target/e2e") },
+    env: {
+      ...process.env,
+      CARGO_TARGET_DIR: path.resolve("src-tauri/target/e2e"),
+    },
   },
 );
 process.exit(status ?? 1);

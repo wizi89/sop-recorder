@@ -4,7 +4,10 @@ const translations: Record<string, Record<string, string>> = { de };
 
 let currentLocale = "de";
 
-export function t(key: TranslationKey, params?: Record<string, string | number>): string {
+export function t(
+  key: TranslationKey,
+  params?: Record<string, string | number>,
+): string {
   let value = translations[currentLocale]?.[key] ?? key;
   if (params) {
     for (const [k, v] of Object.entries(params)) {

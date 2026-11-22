@@ -38,7 +38,9 @@ describe("LoginScreen", () => {
     render(<LoginScreen {...defaults} onLoginViaBrowser={onLoginViaBrowser} />);
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /mit browser anmelden/i }));
+    await user.click(
+      screen.getByRole("button", { name: /mit browser anmelden/i }),
+    );
 
     expect(onLoginViaBrowser).toHaveBeenCalled();
   });
@@ -50,9 +52,13 @@ describe("LoginScreen", () => {
 
   it("renders the waiting state while the browser is open", () => {
     render(<LoginScreen {...defaults} awaitingBrowser={true} />);
-    expect(screen.getByText(/warte auf die anmeldung im browser/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/warte auf die anmeldung im browser/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/der browser wurde geöffnet/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /abbrechen/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /abbrechen/i }),
+    ).toBeInTheDocument();
   });
 
   it("cancel in the waiting state invokes the command", async () => {
@@ -96,14 +102,19 @@ describe("LoginScreen", () => {
         error="Dieser Server unterstützt die Anmeldung über den Browser noch nicht. Melde dich bitte ohne Browser an."
       />,
     );
-    expect(screen.getByText(/unterstützt die anmeldung über den browser noch nicht/i))
-      .toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /unterstützt die anmeldung über den browser noch nicht/i,
+      ),
+    ).toBeInTheDocument();
     // The form is already open: no extra click needed to get in.
     expect(screen.getByLabelText(/e-mail/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/passwort/i)).toBeInTheDocument();
     // And no way back to a path this server does not have: the click could
     // not take effect, so the control is not offered.
-    expect(screen.queryByText(/stattdessen mit browser/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/stattdessen mit browser/i),
+    ).not.toBeInTheDocument();
   });
 
   it("the fallback form still submits email and password", async () => {
@@ -111,7 +122,9 @@ describe("LoginScreen", () => {
     render(<LoginScreen {...defaults} onLogin={onLogin} />);
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /ohne browser anmelden/i }));
+    await user.click(
+      screen.getByRole("button", { name: /ohne browser anmelden/i }),
+    );
 
     await user.type(screen.getByLabelText(/e-mail/i), "test@test.com");
     await user.type(screen.getByLabelText(/passwort/i), "password123");
@@ -124,17 +137,25 @@ describe("LoginScreen", () => {
     render(<LoginScreen {...defaults} />);
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole("button", { name: /ohne browser anmelden/i }));
+    await user.click(
+      screen.getByRole("button", { name: /ohne browser anmelden/i }),
+    );
     expect(screen.getByLabelText(/passwort/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /stattdessen mit browser/i }));
+    await user.click(
+      screen.getByRole("button", { name: /stattdessen mit browser/i }),
+    );
     expect(screen.queryByLabelText(/passwort/i)).not.toBeInTheDocument();
   });
 
   it("keeps the forgot-password and create-account links", () => {
     render(<LoginScreen {...defaults} />);
-    expect(screen.getByRole("button", { name: /passwort vergessen/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /konto erstellen/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /passwort vergessen/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /konto erstellen/i }),
+    ).toBeInTheDocument();
   });
 
   it("shows version number", () => {
@@ -175,13 +196,10 @@ describe("RecorderScreen", () => {
     ).toBeInTheDocument();
   });
 
-
   it("shows done message and open folder button", () => {
     render(<RecorderScreen {...defaults} status="done" />);
     expect(screen.getByText(/fertig/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /ordner/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /ordner/i })).toBeInTheDocument();
   });
 
   it("shows error and retry-from-disk button when outputDir is preserved", () => {
@@ -227,30 +245,46 @@ describe("RecorderScreen", () => {
 
   it("shows PII disabled chip when skipPiiCheck is true", () => {
     render(<RecorderScreen {...defaults} skipPiiCheck={true} />);
-    expect(screen.getByText(/sicherheitsprüfung deaktiviert/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/sicherheitsprüfung deaktiviert/i),
+    ).toBeInTheDocument();
   });
 
   it("hides PII disabled chip when skipPiiCheck is false", () => {
     render(<RecorderScreen {...defaults} skipPiiCheck={false} />);
-    expect(screen.queryByText(/sicherheitsprüfung deaktiviert/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/sicherheitsprüfung deaktiviert/i),
+    ).not.toBeInTheDocument();
   });
 
   it("hides PII disabled chip by default", () => {
     render(<RecorderScreen {...defaults} />);
-    expect(screen.queryByText(/sicherheitsprüfung deaktiviert/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/sicherheitsprüfung deaktiviert/i),
+    ).not.toBeInTheDocument();
   });
 
   it("PII chip opens settings when clicked", async () => {
     const onOpenSettings = vi.fn();
-    render(<RecorderScreen {...defaults} skipPiiCheck={true} onOpenSettings={onOpenSettings} />);
+    render(
+      <RecorderScreen
+        {...defaults}
+        skipPiiCheck={true}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
 
     await userEvent.click(screen.getByText(/sicherheitsprüfung deaktiviert/i));
     expect(onOpenSettings).toHaveBeenCalled();
   });
 
   it("hides PII chip during recording mode", () => {
-    render(<RecorderScreen {...defaults} status="recording" skipPiiCheck={true} />);
-    expect(screen.queryByText(/sicherheitsprüfung deaktiviert/i)).not.toBeInTheDocument();
+    render(
+      <RecorderScreen {...defaults} status="recording" skipPiiCheck={true} />,
+    );
+    expect(
+      screen.queryByText(/sicherheitsprüfung deaktiviert/i),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -261,7 +295,9 @@ describe("StatusBar", () => {
   });
 
   it("shows progress bar when busy", () => {
-    const { container } = render(<StatusBar message="Uploading..." busy={true} />);
+    const { container } = render(
+      <StatusBar message="Uploading..." busy={true} />,
+    );
     const progressBar = container.querySelector(".bg-primary");
     expect(progressBar).toBeInTheDocument();
   });
@@ -287,9 +323,8 @@ describe("RecordingBar", () => {
   // and without this that implementation would leak into every test after
   // them and fire it there too.
   afterEach(() => {
-    vi.mocked(listen).mockImplementation(
-      (async () => () => {}) as unknown as typeof listen,
-    );
+    vi.mocked(listen).mockImplementation((async () =>
+      () => {}) as unknown as typeof listen);
   });
 
   it("emits bar:stop when the stop button is clicked", async () => {
@@ -304,7 +339,10 @@ describe("RecordingBar", () => {
   it("emits bar:undo when the undo button is enabled and clicked", async () => {
     // Undo is disabled at zero captures, which is the state a fresh bar is in;
     // one captured step is what turns it on.
-    vi.mocked(listen).mockImplementation((async (event: string, handler: unknown) => {
+    vi.mocked(listen).mockImplementation((async (
+      event: string,
+      handler: unknown,
+    ) => {
       if (event === "recording:step_captured") {
         (handler as (e: { payload: number }) => void)({ payload: 1 });
       }
@@ -313,7 +351,9 @@ describe("RecordingBar", () => {
 
     render(<RecordingBar />);
 
-    const undo = await screen.findByRole("button", { name: /letzten schritt/i });
+    const undo = await screen.findByRole("button", {
+      name: /letzten schritt/i,
+    });
     await userEvent.click(undo);
     expect(emit).toHaveBeenCalledWith("bar:undo");
   });
@@ -321,7 +361,10 @@ describe("RecordingBar", () => {
     // A denied microphone does not fail the stream on macOS, it yields zeroed
     // samples -- so this warning is the only thing standing between the user
     // and an SOP with no narration.
-    vi.mocked(listen).mockImplementation((async (event: string, handler: unknown) => {
+    vi.mocked(listen).mockImplementation((async (
+      event: string,
+      handler: unknown,
+    ) => {
       if (event === "recording:audio_silent") {
         (handler as (e: { payload: null }) => void)({ payload: null });
       }
@@ -341,7 +384,10 @@ describe("RecordingBar", () => {
     // the latch stayed lit for the rest of the process, reporting a fault that
     // had already been fixed.
     const handlers: Record<string, (e: { payload: unknown }) => void> = {};
-    vi.mocked(listen).mockImplementation((async (event: string, handler: unknown) => {
+    vi.mocked(listen).mockImplementation((async (
+      event: string,
+      handler: unknown,
+    ) => {
       handlers[event] = handler as (e: { payload: unknown }) => void;
       return () => {};
     }) as unknown as typeof listen);

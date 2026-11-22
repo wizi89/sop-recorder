@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { describeBrowserFailure, RESTORE_RETRY_MS, useAuth } from "../hooks/useAuth";
+import {
+  describeBrowserFailure,
+  RESTORE_RETRY_MS,
+  useAuth,
+} from "../hooks/useAuth";
 import { t } from "../i18n";
 
 const mockInvoke = vi.mocked(invoke);
@@ -153,7 +157,10 @@ describe("useAuth", () => {
 
   it("forces logout with error on auth:session_expired event", async () => {
     // Start logged in
-    mockInvoke.mockResolvedValueOnce({ logged_in: true, email: "test@test.com" });
+    mockInvoke.mockResolvedValueOnce({
+      logged_in: true,
+      email: "test@test.com",
+    });
 
     const { result } = renderHook(() => useAuth());
 
@@ -179,7 +186,10 @@ describe("useAuth", () => {
 
   it("shows login screen with session-expired error after event", async () => {
     // User was logged in and actively using the app
-    mockInvoke.mockResolvedValueOnce({ logged_in: true, email: "user@company.com" });
+    mockInvoke.mockResolvedValueOnce({
+      logged_in: true,
+      email: "user@company.com",
+    });
 
     const { result } = renderHook(() => useAuth());
 
@@ -197,10 +207,15 @@ describe("useAuth", () => {
 
     // User can now re-login and the error tells them why
     expect(result.current.loggedIn).toBe(false);
-    expect(result.current.error).toBe("Sitzung abgelaufen. Bitte erneut anmelden.");
+    expect(result.current.error).toBe(
+      "Sitzung abgelaufen. Bitte erneut anmelden.",
+    );
 
     // After re-login the error should clear
-    mockInvoke.mockResolvedValueOnce({ logged_in: true, email: "user@company.com" });
+    mockInvoke.mockResolvedValueOnce({
+      logged_in: true,
+      email: "user@company.com",
+    });
 
     await act(async () => {
       await result.current.login("user@company.com", "password");
@@ -348,15 +363,14 @@ describe("useAuth", () => {
   });
 
   it("marks a browser-path failure for a report, and clears it on the next attempt", async () => {
-    let rejection: string | null = "Die Anmeldung im Browser wurde nicht abgeschlossen.";
+    let rejection: string | null =
+      "Die Anmeldung im Browser wurde nicht abgeschlossen.";
     mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === "refresh_session") {
         return Promise.resolve({ logged_in: false, email: null });
       }
       if (cmd === "login_via_browser") {
-        return rejection
-          ? Promise.reject(rejection)
-          : new Promise(() => {}); // the second attempt is still waiting
+        return rejection ? Promise.reject(rejection) : new Promise(() => {}); // the second attempt is still waiting
       }
       return Promise.resolve(undefined);
     });

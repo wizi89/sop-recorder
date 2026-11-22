@@ -19,7 +19,9 @@ describe("publishing the report phase", () => {
   it("sends the phase to the Rust side and remembers it", async () => {
     await setErrorReportPhase("recording");
 
-    expect(invoked).toHaveBeenCalledWith("set_error_report_phase", { phase: "recording" });
+    expect(invoked).toHaveBeenCalledWith("set_error_report_phase", {
+      phase: "recording",
+    });
     expect(errorReportPhase()).toBe("recording");
   });
 
@@ -36,7 +38,9 @@ describe("publishing the report phase", () => {
     invoked.mockClear();
     await setErrorReportPhase("idle", true);
 
-    expect(invoked).toHaveBeenCalledWith("set_error_report_phase", { phase: "idle" });
+    expect(invoked).toHaveBeenCalledWith("set_error_report_phase", {
+      phase: "idle",
+    });
   });
 
   it("keeps the mirror when the command fails, and does not throw", async () => {

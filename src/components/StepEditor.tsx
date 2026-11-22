@@ -180,12 +180,15 @@ export function StepEditor({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
-  const [layout, setLayout] = useState<{ content: ContentRect; w: number; h: number } | null>(
-    null,
-  );
-  const [drag, setDrag] = useState<{ a: { x: number; y: number }; b: { x: number; y: number } } | null>(
-    null,
-  );
+  const [layout, setLayout] = useState<{
+    content: ContentRect;
+    w: number;
+    h: number;
+  } | null>(null);
+  const [drag, setDrag] = useState<{
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+  } | null>(null);
 
   const measure = useCallback(() => {
     const el = frame.current;
@@ -224,8 +227,19 @@ export function StepEditor({
     const el = frame.current!;
     const im = img.current!;
     const r = el.getBoundingClientRect();
-    const content = containRect(r.width, r.height, im.naturalWidth, im.naturalHeight);
-    const box = toImageBox(drag.a, end, content, im.naturalWidth, im.naturalHeight);
+    const content = containRect(
+      r.width,
+      r.height,
+      im.naturalWidth,
+      im.naturalHeight,
+    );
+    const box = toImageBox(
+      drag.a,
+      end,
+      content,
+      im.naturalWidth,
+      im.naturalHeight,
+    );
     if (box) onAdd(box);
   };
 
@@ -255,7 +269,10 @@ export function StepEditor({
           )}
         </p>
         {saveError !== undefined && (
-          <button className="btn-secondary px-2 py-1 text-xs" onClick={onRetrySave}>
+          <button
+            className="btn-secondary px-2 py-1 text-xs"
+            onClick={onRetrySave}
+          >
             {t("review.redact_retry")}
           </button>
         )}
@@ -268,13 +285,21 @@ export function StepEditor({
         >
           {t("review.delete_step")}
         </button>
-        <button ref={done} className="btn-primary px-2 py-1 text-xs" onClick={onClose}>
+        <button
+          ref={done}
+          className="btn-primary px-2 py-1 text-xs"
+          onClick={onClose}
+        >
           {t("review.close")}
         </button>
       </div>
       {/* The alert list behind the dialog is covered, so the error is said here. */}
       {saveError !== undefined && (
-        <p role="alert" className="px-4 pb-2 text-xs" style={{ color: "#F87171" }}>
+        <p
+          role="alert"
+          className="px-4 pb-2 text-xs"
+          style={{ color: "#F87171" }}
+        >
           {t("review.redact_save_failed", { n: thumb.step, error: saveError })}
         </p>
       )}
@@ -284,16 +309,25 @@ export function StepEditor({
             {t("review.delete_confirm", { n: thumb.step })}
           </p>
           <div className="flex gap-2">
-            <button className="btn-secondary px-2 py-1 text-xs" onClick={onDelete}>
+            <button
+              className="btn-secondary px-2 py-1 text-xs"
+              onClick={onDelete}
+            >
               {t("review.delete_confirm_yes")}
             </button>
-            <button className="btn-secondary px-2 py-1 text-xs" onClick={onCancelDelete}>
+            <button
+              className="btn-secondary px-2 py-1 text-xs"
+              onClick={onCancelDelete}
+            >
               {t("review.delete_confirm_no")}
             </button>
           </div>
         </div>
       )}
-      <p className="text-on-surface-variant px-4 pb-2" style={{ fontSize: "0.6875rem" }}>
+      <p
+        className="text-on-surface-variant px-4 pb-2"
+        style={{ fontSize: "0.6875rem" }}
+      >
         {t("review.redact_hint")}
       </p>
       <div className="flex-1 min-h-0 px-4 pb-3">
@@ -301,7 +335,10 @@ export function StepEditor({
           ref={frame}
           data-testid="redaction-frame"
           className="relative w-full h-full select-none"
-          style={{ cursor: drawingDisabled ? "default" : "crosshair", touchAction: "none" }}
+          style={{
+            cursor: drawingDisabled ? "default" : "crosshair",
+            touchAction: "none",
+          }}
           onPointerDown={(e) => {
             if (drawingDisabled || e.button !== 0) return;
             e.currentTarget.setPointerCapture?.(e.pointerId);

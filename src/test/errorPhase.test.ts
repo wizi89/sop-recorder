@@ -20,9 +20,17 @@ const base: ScreenState = {
 describe("phaseForScreen", () => {
   const cases: Array<[string, Partial<ScreenState>, Phase]> = [
     ["signed out", { loggedIn: false }, "login"],
-    ["signed out with settings open", { loggedIn: false, settingsOpen: true }, "settings"],
+    [
+      "signed out with settings open",
+      { loggedIn: false, settingsOpen: true },
+      "settings",
+    ],
     ["settings window on top", { settingsOpen: true }, "settings"],
-    ["settings beats recording", { settingsOpen: true, status: "recording" }, "settings"],
+    [
+      "settings beats recording",
+      { settingsOpen: true, status: "recording" },
+      "settings",
+    ],
     ["permission setup", { permissionSetup: true }, "idle"],
     ["idle recorder", { status: "idle" }, "idle"],
     ["recording", { status: "recording" }, "recording"],
@@ -65,13 +73,27 @@ describe("phaseForScreen", () => {
     // whatever the user was doing. A phase no screen can produce fails here.
     const produced = new Set<Phase>();
     const statuses: RecorderStatus[] = [
-      "idle", "recording", "review", "processing", "done", "error", "pii_blocked", "rate_limited",
+      "idle",
+      "recording",
+      "review",
+      "processing",
+      "done",
+      "error",
+      "pii_blocked",
+      "rate_limited",
     ];
     for (const loggedIn of [true, false]) {
       for (const settingsOpen of [true, false]) {
         for (const permissionSetup of [true, false]) {
           for (const status of statuses) {
-            produced.add(phaseForScreen({ loggedIn, settingsOpen, permissionSetup, status }));
+            produced.add(
+              phaseForScreen({
+                loggedIn,
+                settingsOpen,
+                permissionSetup,
+                status,
+              }),
+            );
           }
         }
       }
@@ -90,11 +112,15 @@ describe("phase list parity with Rust", () => {
       "utf-8",
     );
     const block = source.match(/pub enum Phase \{([^}]*)\}/);
-    expect(block, "could not find `pub enum Phase` -- has it been renamed?").not.toBeNull();
+    expect(
+      block,
+      "could not find `pub enum Phase` -- has it been renamed?",
+    ).not.toBeNull();
 
-    const variants = [...block![1].matchAll(/^\s*([A-Z][A-Za-z]*)\s*,/gm)].map((m) =>
-      // serde renames these to snake_case on the wire.
-      m[1].replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase(),
+    const variants = [...block![1].matchAll(/^\s*([A-Z][A-Za-z]*)\s*,/gm)].map(
+      (m) =>
+        // serde renames these to snake_case on the wire.
+        m[1].replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase(),
     );
 
     expect(variants.sort()).toEqual([...PHASES].sort());
@@ -118,9 +144,14 @@ describe("no call site hardcodes a phase", () => {
       const text = readFileSync(resolve(__dirname, "../..", relative), "utf-8");
       // Match the phase argument of a create call, across line breaks.
       const calls = [
-        ...text.matchAll(/create(?:ErrorReport|)\(\s*"[a-z_]+"\s*,\s*([^,]+),/g),
+        ...text.matchAll(
+          /create(?:ErrorReport|)\(\s*"[a-z_]+"\s*,\s*([^,]+),/g,
+        ),
       ];
-      expect(calls.length, `no report call found in ${relative}`).toBeGreaterThan(0);
+      expect(
+        calls.length,
+        `no report call found in ${relative}`,
+      ).toBeGreaterThan(0);
 
       for (const call of calls) {
         const phaseArgument = call[1].trim();

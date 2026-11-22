@@ -71,7 +71,11 @@ beforeEach(() => {
       }
       stored = stored.map((r) =>
         r.report_id === id
-          ? { ...r, consent: "granted" as const, comment: (a.comment as string) ?? null }
+          ? {
+              ...r,
+              consent: "granted" as const,
+              comment: (a.comment as string) ?? null,
+            }
           : r,
       );
       return stored.find((r) => r.report_id === id) ?? null;
@@ -101,7 +105,9 @@ describe("useErrorReports", () => {
       { initialProps: { loggedIn: false } },
     );
 
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith("list_error_reports"));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("list_error_reports"),
+    );
     expect(submitted).toEqual([]);
 
     rerender({ loggedIn: true });
@@ -166,7 +172,9 @@ describe("useErrorReports", () => {
   it("a declined report is gone, and stays gone across a restart", async () => {
     stored = [report({ report_id: "aaaaaaaa-0000-0000-0000-000000000000" })];
 
-    const first = renderHook(() => useErrorReports({ loggedIn: true, mode: "ask" }));
+    const first = renderHook(() =>
+      useErrorReports({ loggedIn: true, mode: "ask" }),
+    );
     await waitFor(() => expect(first.result.current.current).not.toBeNull());
     await first.result.current.decline(first.result.current.current!);
     await waitFor(() => expect(first.result.current.current).toBeNull());
@@ -175,8 +183,12 @@ describe("useErrorReports", () => {
     // Only the deletion on disk can keep the dialog shut, which is the whole
     // point: declining must be final, not remembered.
     first.unmount();
-    const afterRestart = renderHook(() => useErrorReports({ loggedIn: true, mode: "ask" }));
-    await waitFor(() => expect(afterRestart.result.current.pending).toEqual([]));
+    const afterRestart = renderHook(() =>
+      useErrorReports({ loggedIn: true, mode: "ask" }),
+    );
+    await waitFor(() =>
+      expect(afterRestart.result.current.pending).toEqual([]),
+    );
     expect(afterRestart.result.current.current).toBeNull();
     expect(submitted).toEqual([]);
   });
@@ -190,7 +202,9 @@ describe("useErrorReports", () => {
       report({ report_id: "cccccccc-0000-0000-0000-000000000000" }),
     ];
 
-    const { result } = renderHook(() => useErrorReports({ loggedIn: true, mode: "ask" }));
+    const { result } = renderHook(() =>
+      useErrorReports({ loggedIn: true, mode: "ask" }),
+    );
     await waitFor(() => expect(result.current.pending).toHaveLength(3));
 
     const seen: string[] = [];
@@ -214,10 +228,16 @@ describe("useErrorReports", () => {
   });
 
   it("creates a report and puts it on screen", async () => {
-    const { result } = renderHook(() => useErrorReports({ loggedIn: true, mode: "ask" }));
+    const { result } = renderHook(() =>
+      useErrorReports({ loggedIn: true, mode: "ask" }),
+    );
     await waitFor(() => expect(result.current.pending).toEqual([]));
 
-    await result.current.create("command_error", "settings", "Upload fehlgeschlagen: 500");
+    await result.current.create(
+      "command_error",
+      "settings",
+      "Upload fehlgeschlagen: 500",
+    );
 
     await waitFor(() => expect(result.current.current).not.toBeNull());
     expect(result.current.current!.message).toBe("Upload fehlgeschlagen: 500");
@@ -230,14 +250,20 @@ describe("useErrorReports", () => {
     stored = [report({ report_id: "aaaaaaaa-0000-0000-0000-000000000000" })];
     backendMode = "never";
 
-    const off = renderHook(() => useErrorReports({ loggedIn: true, mode: "never" }));
+    const off = renderHook(() =>
+      useErrorReports({ loggedIn: true, mode: "never" }),
+    );
     await waitFor(() => expect(off.result.current.pending).toEqual([]));
-    expect(await off.result.current.create("ui_error", "settings", "kaputt")).toBeNull();
+    expect(
+      await off.result.current.create("ui_error", "settings", "kaputt"),
+    ).toBeNull();
     expect(off.result.current.current).toBeNull();
     off.unmount();
 
     backendMode = "ask";
-    const on = renderHook(() => useErrorReports({ loggedIn: true, mode: "ask" }));
+    const on = renderHook(() =>
+      useErrorReports({ loggedIn: true, mode: "ask" }),
+    );
     await waitFor(() => expect(on.result.current.current).not.toBeNull());
   });
 
@@ -247,16 +273,25 @@ describe("useErrorReports", () => {
     stored = [report({ report_id: "aaaaaaaa-0000-0000-0000-000000000000" })];
 
     backendSignedIn = false;
-    const out = renderHook(() => useErrorReports({ loggedIn: false, mode: "ask" }));
+    const out = renderHook(() =>
+      useErrorReports({ loggedIn: false, mode: "ask" }),
+    );
     await waitFor(() => expect(out.result.current.current).not.toBeNull());
-    await out.result.current.grant(out.result.current.current!, "beim Speichern");
+    await out.result.current.grant(
+      out.result.current.current!,
+      "beim Speichern",
+    );
     expect(stored[0].consent).toBe("granted");
     expect(submitted, "nothing leaves without a session").toEqual([]);
     out.unmount();
 
     backendSignedIn = true;
-    const back = renderHook(() => useErrorReports({ loggedIn: true, mode: "ask" }));
-    await waitFor(() => expect(submitted).toEqual(["aaaaaaaa-0000-0000-0000-000000000000"]));
+    const back = renderHook(() =>
+      useErrorReports({ loggedIn: true, mode: "ask" }),
+    );
+    await waitFor(() =>
+      expect(submitted).toEqual(["aaaaaaaa-0000-0000-0000-000000000000"]),
+    );
     expect(back.result.current.current).toBeNull();
   });
 
@@ -279,16 +314,18 @@ describe("useErrorReports", () => {
     });
 
     const realInvoke = vi.mocked(invoke).getMockImplementation()!;
-    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: InvokeArgs) => {
-      const out = await realInvoke(cmd, args);
-      if (cmd === "decide_error_report") {
-        // The consent is on disk now; the send has not happened yet. This is
-        // the window the sweep used to slip through.
-        granted();
-        await held;
-      }
-      return out;
-    });
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args?: InvokeArgs) => {
+        const out = await realInvoke(cmd, args);
+        if (cmd === "decide_error_report") {
+          // The consent is on disk now; the send has not happened yet. This is
+          // the window the sweep used to slip through.
+          granted();
+          await held;
+        }
+        return out;
+      },
+    );
 
     const { result, rerender } = renderHook(
       ({ loggedIn }) => useErrorReports({ loggedIn, mode: "ask" }),

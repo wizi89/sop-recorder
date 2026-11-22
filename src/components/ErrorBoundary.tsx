@@ -22,7 +22,10 @@ interface ErrorBoundaryState {
  * Deliberately not around the recording bar: its capability set is narrow, its
  * code path is tiny, and an error there surfaces in this window's state anyway.
  */
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   state: ErrorBoundaryState = { message: null };
 
   static getDerivedStateFromError(error: unknown): ErrorBoundaryState {

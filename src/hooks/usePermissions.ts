@@ -10,7 +10,8 @@ import {
 
 /** The three permission states, and whether the setup screen is shown. */
 export function usePermissions() {
-  const [micPermission, setMicPermission] = useState<MicPermissionState>("unknown");
+  const [micPermission, setMicPermission] =
+    useState<MicPermissionState>("unknown");
   const [screenRecordingPermission, setScreenRecordingPermission] =
     useState<ScreenRecordingPermissionState>("unknown");
   const [accessibilityPermission, setAccessibilityPermission] =
@@ -42,7 +43,8 @@ export function usePermissions() {
     micPermission === "granted" &&
     screenRecordingPermission === "granted" &&
     accessibilityPermission === "granted";
-  const permissionSetupVisible = !permissionsAllGranted && !permissionSetupSkipped;
+  const permissionSetupVisible =
+    !permissionsAllGranted && !permissionSetupSkipped;
 
   useEffect(() => {
     if (!permissionSetupVisible) return;

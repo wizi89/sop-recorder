@@ -22,8 +22,13 @@ const stored = {
 let saveRejects = false;
 // The shared mock hands back a fresh object per call, so the close() the
 // component used would not be the one an assertion inspects.
-const win = { setSize: vi.fn(), setAlwaysOnTop: vi.fn(), setDecorations: vi.fn(),
-              setResizable: vi.fn(), close: vi.fn() };
+const win = {
+  setSize: vi.fn(),
+  setAlwaysOnTop: vi.fn(),
+  setDecorations: vi.fn(),
+  setResizable: vi.fn(),
+  close: vi.fn(),
+};
 
 beforeEach(() => {
   saveRejects = false;
@@ -36,7 +41,12 @@ beforeEach(() => {
       return;
     }
     if (cmd === "get_quota") {
-      return { count: 0, limit: 100, remaining: 100, features: { advanced_settings: false } };
+      return {
+        count: 0,
+        limit: 100,
+        remaining: 100,
+        features: { advanced_settings: false },
+      };
     }
     if (cmd === "are_error_reports_forced_off") return false;
     return;

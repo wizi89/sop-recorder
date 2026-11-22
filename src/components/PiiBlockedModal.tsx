@@ -32,7 +32,7 @@ export function PiiBlockedModal({ findings, onDismiss }: PiiBlockedModalProps) {
   const parsedFindings: PiiFinding[] | null = (() => {
     if (!findings) return null;
     if (!Array.isArray(findings)) return null;
-    const sorted = [...findings as PiiFinding[]].sort((a, b) => {
+    const sorted = [...(findings as PiiFinding[])].sort((a, b) => {
       const numA = a.source.match(/^step_(\d+)$/)?.[1];
       const numB = b.source.match(/^step_(\d+)$/)?.[1];
       if (numA && numB) return parseInt(numA, 10) - parseInt(numB, 10);
@@ -46,7 +46,10 @@ export function PiiBlockedModal({ findings, onDismiss }: PiiBlockedModalProps) {
   const handleCopy = () => {
     if (!parsedFindings) return;
     const text = parsedFindings
-      .map((f) => `${formatSource(f.source)}: ${f.entities.map(formatEntity).join(", ")}`)
+      .map(
+        (f) =>
+          `${formatSource(f.source)}: ${f.entities.map(formatEntity).join(", ")}`,
+      )
       .join("\n");
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -57,8 +60,12 @@ export function PiiBlockedModal({ findings, onDismiss }: PiiBlockedModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3">
       <div className="bg-surface rounded-lg w-full max-w-xs p-4 flex flex-col gap-2.5">
-        <p className="text-on-surface text-sm font-semibold">{t("pii.title")}</p>
-        <p className="text-on-surface-variant text-xs leading-snug">{t("pii.message")}</p>
+        <p className="text-on-surface text-sm font-semibold">
+          {t("pii.title")}
+        </p>
+        <p className="text-on-surface-variant text-xs leading-snug">
+          {t("pii.message")}
+        </p>
 
         {/* Findings detail */}
         {parsedFindings && parsedFindings.length > 0 && (
@@ -66,7 +73,9 @@ export function PiiBlockedModal({ findings, onDismiss }: PiiBlockedModalProps) {
             <div className="bg-surface-container rounded p-2 flex flex-col gap-1 max-h-24 overflow-y-auto">
               {parsedFindings.map((f, i) => (
                 <div key={i} className="text-xs">
-                  <span className="text-on-surface font-medium">{formatSource(f.source)}:</span>{" "}
+                  <span className="text-on-surface font-medium">
+                    {formatSource(f.source)}:
+                  </span>{" "}
                   <span className="text-on-surface-variant">
                     {f.entities.map(formatEntity).join(", ")}
                   </span>
@@ -84,9 +93,14 @@ export function PiiBlockedModal({ findings, onDismiss }: PiiBlockedModalProps) {
           </div>
         )}
 
-        <p className="text-on-surface-variant text-xs leading-snug">{t("pii.settings_hint")}</p>
+        <p className="text-on-surface-variant text-xs leading-snug">
+          {t("pii.settings_hint")}
+        </p>
 
-        <button onClick={onDismiss} className="btn-primary w-full py-1.5 text-xs mt-1">
+        <button
+          onClick={onDismiss}
+          className="btn-primary w-full py-1.5 text-xs mt-1"
+        >
           {t("pii.dismiss")}
         </button>
       </div>

@@ -47,8 +47,11 @@ function App() {
 function MainApp() {
   const [version, setVersion] = useState("");
   const [skipPiiCheck, setSkipPiiCheck] = useState(false);
-  const [errorReportMode, setErrorReportMode] = useState<ErrorReportMode>("ask");
-  const [errorReportNotice, setErrorReportNotice] = useState<string | null>(null);
+  const [errorReportMode, setErrorReportMode] =
+    useState<ErrorReportMode>("ask");
+  const [errorReportNotice, setErrorReportNotice] = useState<string | null>(
+    null,
+  );
   const {
     micPermission,
     screenRecordingPermission,
@@ -61,7 +64,10 @@ function MainApp() {
   const { t } = useTranslation();
   const auth = useAuth();
   const recorder = useRecorder();
-  useOfferUnfinished(auth.loggedIn && recorder.status === "idle", recorder.generateFromDir);
+  useOfferUnfinished(
+    auth.loggedIn && recorder.status === "idle",
+    recorder.generateFromDir,
+  );
   const updater = useUpdater();
   // Error reports (design D1, D5, D7). The hook owns the queue; this window
   // owns what is on screen. Under mode `always` no dialog opens and the number
@@ -83,7 +89,11 @@ function MainApp() {
   const createReport = errorReports.create;
   useEffect(() => {
     if (!browserFailure) return;
-    void createReport("command_error", "login", `Browser-Anmeldung fehlgeschlagen: ${browserFailure}`);
+    void createReport(
+      "command_error",
+      "login",
+      `Browser-Anmeldung fehlgeschlagen: ${browserFailure}`,
+    );
   }, [browserFailure, createReport]);
   // Quota hook is gated on login: only fetches once the user is authenticated.
   const quotaHook = useQuota(auth.loggedIn);
@@ -137,7 +147,9 @@ function MainApp() {
         void refreshQuotaRef.current();
       }
     });
-    return () => { void unlisten.then(safeUnlisten); };
+    return () => {
+      void unlisten.then(safeUnlisten);
+    };
   }, [loadSettings, auth.loggedIn]);
 
   // SSE event handling
@@ -209,7 +221,8 @@ function MainApp() {
     // capture yields wallpaper screenshots; missing accessibility captures no
     // steps at all, while the timer runs as though it were working.
     const blocking: string[] = [];
-    if (perms.screen !== "granted") blocking.push(t("permissions.screen_title"));
+    if (perms.screen !== "granted")
+      blocking.push(t("permissions.screen_title"));
     if (perms.accessibility !== "granted") {
       blocking.push(t("permissions.accessibility_title"));
     }
@@ -303,7 +316,10 @@ function MainApp() {
           await saveSettings({ ...current, error_reports: "always" });
           setErrorReportMode("always");
         } catch (e) {
-          console.warn("Modus für Fehlerberichte konnte nicht gespeichert werden:", e);
+          console.warn(
+            "Modus für Fehlerberichte konnte nicht gespeichert werden:",
+            e,
+          );
         }
       }
       await errorReports.grant(report, comment);
@@ -375,14 +391,25 @@ function MainApp() {
   // swallow it for the whole five minutes and leave only "...".
   if (auth.loading && !auth.awaitingBrowser) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#14181C" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          background: "#14181C",
+        }}
+      >
         <p style={{ fontSize: 13, color: "#6B7780" }}>...</p>
       </div>
     );
   }
 
   const updateBanner = (
-    <UpdateBanner updater={updater} recording={recorder.status === "recording"} />
+    <UpdateBanner
+      updater={updater}
+      recording={recorder.status === "recording"}
+    />
   );
 
   // Mounted outside every screen below, so a report found at launch is asked
@@ -475,7 +502,9 @@ function MainApp() {
           accessibilityPermission={accessibilityPermission}
           onRequestPermissions={handleOpenPermissionSetup}
           onSendErrorReport={
-            recorder.reportableError ? () => void handleSendErrorReport() : undefined
+            recorder.reportableError
+              ? () => void handleSendErrorReport()
+              : undefined
           }
           version={version}
         />

@@ -40,7 +40,10 @@ const signInWithBrowser = (app: Page) =>
   app.getByRole("button", { name: "Mit Browser anmelden" }).click();
 
 /** What the user does in the browser: confirm, and follow the redirect home. */
-async function confirmInBrowser(stubs: Stubs, override: { state?: string } = {}) {
+async function confirmInBrowser(
+  stubs: Stubs,
+  override: { state?: string } = {},
+) {
   const url = new URL(await stubs.authorizeUrl());
   url.searchParams.set("e2e-confirm", "1");
   if (override.state) url.searchParams.set("e2e-state", override.state);
@@ -61,48 +64,76 @@ async function confirmInBrowser(stubs: Stubs, override: { state?: string } = {})
   }
 }
 
-test("signs in through the browser, and the browser keeps the answer", async ({ app, stubs }) => {
+test("signs in through the browser, and the browser keeps the answer", async ({
+  app,
+  stubs,
+}) => {
   await signInWithBrowser(app);
   const landed = await confirmInBrowser(stubs);
 
-  expect(landed.pathname, "the browser should end on the success page").toBe("/desktop/signed-in");
+  expect(landed.pathname, "the browser should end on the success page").toBe(
+    "/desktop/signed-in",
+  );
   await expectSignedIn(app);
   expect(stubs.state.exchanges).toEqual([{ code: "e2e-code", accepted: true }]);
 });
 
-test("the wait has its own screen, and cancel ends it", async ({ app, stubs }) => {
+test("the wait has its own screen, and cancel ends it", async ({
+  app,
+  stubs,
+}) => {
   await signInWithBrowser(app);
   await stubs.authorizeUrl();
 
   // Regression: the loading gate once swallowed this whole screen, leaving
   // "..." for five minutes with no way out.
-  await expect(app.getByText("Warte auf die Anmeldung im Browser")).toBeVisible();
+  await expect(
+    app.getByText("Warte auf die Anmeldung im Browser"),
+  ).toBeVisible();
   await app.getByRole("button", { name: "Abbrechen" }).click();
 
   await expect(app.getByText("Die Anmeldung wurde abgebrochen.")).toBeVisible();
-  await expect(app.getByRole("button", { name: "Mit Browser anmelden" })).toBeVisible();
+  await expect(
+    app.getByRole("button", { name: "Mit Browser anmelden" }),
+  ).toBeVisible();
 });
 
-test("a forged callback is refused before anything reaches the server", async ({ app, stubs }) => {
+test("a forged callback is refused before anything reaches the server", async ({
+  app,
+  stubs,
+}) => {
   await signInWithBrowser(app);
   const landed = await confirmInBrowser(stubs, { state: "forged" });
 
   expect(landed.pathname).toBe("/desktop/sign-in-failed");
   expect(landed.searchParams.get("reason")).toBe("verification");
   await expect(app.getByText("konnte nicht überprüft werden")).toBeVisible();
-  expect(stubs.state.exchanges, "the forged code must never be offered upstream").toEqual([]);
+  expect(
+    stubs.state.exchanges,
+    "the forged code must never be offered upstream",
+  ).toEqual([]);
 });
 
-test("a server without the exchange says so, and offers the password form", async ({ app, stubs }) => {
+test("a server without the exchange says so, and offers the password form", async ({
+  app,
+  stubs,
+}) => {
   stubs.state.apiMode = "old";
   await signInWithBrowser(app);
 
-  await expect(app.getByText("unterstützt die Anmeldung über den Browser noch nicht")).toBeVisible();
+  await expect(
+    app.getByText("unterstützt die Anmeldung über den Browser noch nicht"),
+  ).toBeVisible();
   await expect(app.getByLabel("Passwort")).toBeVisible();
-  expect(stubs.state.authorizeUrl, "no browser should open for a server that cannot finish").toBeNull();
+  expect(
+    stubs.state.authorizeUrl,
+    "no browser should open for a server that cannot finish",
+  ).toBeNull();
 });
 
-test("a restart goes straight in with the stored session", async ({ stubs }) => {
+test("a restart goes straight in with the stored session", async ({
+  stubs,
+}) => {
   // Not a fixture app: this one needs two lifetimes.
   const first = await launchApp(stubs);
   await signInWithBrowser(first.page);

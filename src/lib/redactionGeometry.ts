@@ -26,10 +26,18 @@ export function containRect(
   naturalWidth: number,
   naturalHeight: number,
 ): ContentRect {
-  if (naturalWidth <= 0 || naturalHeight <= 0 || elementWidth <= 0 || elementHeight <= 0) {
+  if (
+    naturalWidth <= 0 ||
+    naturalHeight <= 0 ||
+    elementWidth <= 0 ||
+    elementHeight <= 0
+  ) {
     return { left: 0, top: 0, width: 0, height: 0 };
   }
-  const scale = Math.min(elementWidth / naturalWidth, elementHeight / naturalHeight);
+  const scale = Math.min(
+    elementWidth / naturalWidth,
+    elementHeight / naturalHeight,
+  );
   const width = naturalWidth * scale;
   const height = naturalHeight * scale;
   return {
@@ -84,6 +92,9 @@ export function toDisplayRect(
 }
 
 /** Too small to have been meant: a click rather than a drag. */
-export function isClick(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
+export function isClick(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): boolean {
   return Math.abs(a.x - b.x) < 3 && Math.abs(a.y - b.y) < 3;
 }

@@ -33,35 +33,58 @@ async function renderOn(userAgent: string) {
   vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent);
   const { SettingsPage } = await import("../components/SettingsPage");
   render(<SettingsPage isDev={false} />);
-  await waitFor(() => expect(screen.getByText("Ganzer Bildschirm")).toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.getByText("Ganzer Bildschirm")).toBeInTheDocument(),
+  );
 }
 
 const WINDOWS = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/130.0";
-const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
+const MAC =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15";
 
 describe("capture privacy settings", () => {
   it("offers both areas on Windows, active window first, with what it captures", async () => {
     await renderOn(WINDOWS);
     const area = screen.getByLabelText("Aufnahmebereich") as HTMLSelectElement;
     expect(area.value).toBe("active_window");
-    expect([...area.options].map((o) => o.text)).toEqual(["Aktives Fenster", "Ganzer Bildschirm"]);
-    expect(screen.getByText(/Gespeichert wird das Fenster, in dem geklickt wird/)).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "Passwortfelder schwärzen" })).toBeChecked();
-    expect(screen.queryByText("Passwortfelder werden mit aufgenommen.")).not.toBeInTheDocument();
+    expect([...area.options].map((o) => o.text)).toEqual([
+      "Aktives Fenster",
+      "Ganzer Bildschirm",
+    ]);
+    expect(
+      screen.getByText(/Gespeichert wird das Fenster, in dem geklickt wird/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("switch", { name: "Passwortfelder schwärzen" }),
+    ).toBeChecked();
+    expect(
+      screen.queryByText("Passwortfelder werden mit aufgenommen."),
+    ).not.toBeInTheDocument();
   });
 
   it("warns about the monitor, says plainly that password fields are captured when masking is off, and saves both", async () => {
     await renderOn(WINDOWS);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("switch", { name: "Passwortfelder schwärzen" }));
-    expect(screen.getByText("Passwortfelder werden mit aufgenommen.")).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Aufnahmebereich"), "monitor");
+    await user.click(
+      screen.getByRole("switch", { name: "Passwortfelder schwärzen" }),
+    );
     expect(
-      screen.getByText(/Taskleiste, Benachrichtigungen und alle sichtbaren Fenster/),
+      screen.getByText("Passwortfelder werden mit aufgenommen."),
+    ).toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByLabelText("Aufnahmebereich"),
+      "monitor",
+    );
+    expect(
+      screen.getByText(
+        /Taskleiste, Benachrichtigungen und alle sichtbaren Fenster/,
+      ),
     ).toBeInTheDocument();
     await user.click(screen.getByText("Speichern"));
 
-    const save = vi.mocked(invoke).mock.calls.find(([cmd]) => cmd === "save_settings");
+    const save = vi
+      .mocked(invoke)
+      .mock.calls.find(([cmd]) => cmd === "save_settings");
     expect(save?.[1]).toMatchObject({
       settings: { capture_mode: "monitor", mask_passwords: false },
     });
@@ -72,15 +95,21 @@ describe("capture privacy settings", () => {
     const area = screen.getByLabelText("Aufnahmebereich") as HTMLSelectElement;
     expect([...area.options].map((o) => o.value)).toEqual(["monitor"]);
     expect(area).toBeDisabled();
-    expect(screen.queryByRole("switch", { name: "Passwortfelder schwärzen" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: "Passwortfelder schwärzen" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/folgen später/)).toBeInTheDocument();
   });
 
   it("states in short what is sent and links the full privacy text, on both platforms", async () => {
     for (const ua of [WINDOWS, MAC]) {
       await renderOn(ua);
-      expect(screen.getByText(/so wie sie auf dem Prüfbildschirm zu sehen sind/)).toBeInTheDocument();
-      await userEvent.setup().click(screen.getByText("Mehr zum Datenschutz bei der Aufnahme"));
+      expect(
+        screen.getByText(/so wie sie auf dem Prüfbildschirm zu sehen sind/),
+      ).toBeInTheDocument();
+      await userEvent
+        .setup()
+        .click(screen.getByText("Mehr zum Datenschutz bei der Aufnahme"));
       const { openUrl } = await import("@tauri-apps/plugin-opener");
       expect(openUrl).toHaveBeenCalledWith(
         "https://github.com/wizi89/sop-recorder/blob/main/docs/PRIVACY.md",

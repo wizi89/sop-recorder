@@ -33,22 +33,29 @@ describe("SettingsPage load race", () => {
 
   beforeEach(() => {
     saved = [];
-    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
-      if (cmd === "get_settings") {
-        return new Promise((resolve) => {
-          resolveSettings = resolve;
-        });
-      }
-      if (cmd === "save_settings") {
-        saved.push((args as { settings: unknown }).settings);
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args?: unknown) => {
+        if (cmd === "get_settings") {
+          return new Promise((resolve) => {
+            resolveSettings = resolve;
+          });
+        }
+        if (cmd === "save_settings") {
+          saved.push((args as { settings: unknown }).settings);
+          return;
+        }
+        if (cmd === "get_quota") {
+          return {
+            count: 0,
+            limit: 100,
+            remaining: 100,
+            features: { advanced_settings: false },
+          };
+        }
+        if (cmd === "are_error_reports_forced_off") return false;
         return;
-      }
-      if (cmd === "get_quota") {
-        return { count: 0, limit: 100, remaining: 100, features: { advanced_settings: false } };
-      }
-      if (cmd === "are_error_reports_forced_off") return false;
-      return;
-    });
+      },
+    );
   });
 
   it("disables the controls until the stored settings have arrived", async () => {
@@ -76,7 +83,9 @@ describe("SettingsPage load race", () => {
     const user = userEvent.setup();
 
     const piiToggle = () =>
-      screen.getAllByRole("button").filter((b) => b.getAttribute("data-checked") !== null)[1];
+      screen
+        .getAllByRole("button")
+        .filter((b) => b.getAttribute("data-checked") !== null)[1];
 
     await user.click(piiToggle());
 
@@ -104,13 +113,19 @@ describe("SettingsPage load race", () => {
     });
     const save = await screen.findByRole("button", { name: /speichern/i });
     const piiToggle = () =>
-      screen.getAllByRole("button").filter((b) => b.getAttribute("data-checked") !== null)[1];
+      screen
+        .getAllByRole("button")
+        .filter((b) => b.getAttribute("data-checked") !== null)[1];
 
     await user.click(piiToggle());
     await user.click(
-      await screen.findByRole("button", { name: /verstanden|fortfahren|akzeptier/i }),
+      await screen.findByRole("button", {
+        name: /verstanden|fortfahren|akzeptier/i,
+      }),
     );
-    await waitFor(() => expect(piiToggle()).toHaveAttribute("data-checked", "true"));
+    await waitFor(() =>
+      expect(piiToggle()).toHaveAttribute("data-checked", "true"),
+    );
 
     await user.click(save);
 

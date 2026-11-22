@@ -50,22 +50,27 @@ export function parseRateLimit(msg: string): RateLimitInfo | null {
  * exclusion is a one-line change with a one-line test, and so that reading the
  * list tells you what the product considers normal.
  */
-const EXPECTED_OUTCOMES: ReadonlyArray<{ id: string; matches: (msg: string) => boolean }> = [
+const EXPECTED_OUTCOMES: ReadonlyArray<{
+  id: string;
+  matches: (msg: string) => boolean;
+}> = [
   // The quota ran out. There is a modal for this, and an upgrade path.
   { id: "rate_limit", matches: (m) => parseRateLimit(m) !== null },
   // Personal data stopped the generation. That is the check working.
   {
     id: "pii_blocked",
     matches: (m) =>
-      m.includes("pii_blocked") ||
-      m.includes("Personenbezogene Daten"),
+      m.includes("pii_blocked") || m.includes("Personenbezogene Daten"),
   },
   // The user recorded nothing. commands/generate.rs:106.
   { id: "no_screenshots", matches: (m) => m.includes("No screenshots found") },
   // The token ran out; the user signs in again. commands/generate.rs:220.
   { id: "session_expired", matches: (m) => m.includes("Sitzung abgelaufen") },
   // Stop pressed with nothing running. commands/recording.rs:257.
-  { id: "no_active_recording", matches: (m) => m.includes("Keine aktive Aufnahme") },
+  {
+    id: "no_active_recording",
+    matches: (m) => m.includes("Keine aktive Aufnahme"),
+  },
   // The user closed a dialog. Their decision, not a failure.
   {
     id: "cancelled",

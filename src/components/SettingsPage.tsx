@@ -71,15 +71,18 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
   // carries a hyphen: 0.19.0-rc.1.
   const [version, setVersion] = useState<string | null>(null);
   useEffect(() => {
-    getVersion().then(setVersion).catch(() => {});
+    getVersion()
+      .then(setVersion)
+      .catch(() => {});
   }, []);
-  const [generationSettings, setGenerationSettings] = useState<GenerationSettings>(
-    FALLBACK_GENERATION_SETTINGS,
-  );
+  const [generationSettings, setGenerationSettings] =
+    useState<GenerationSettings>(FALLBACK_GENERATION_SETTINGS);
   // Track the upload_target loaded from disk so we can detect a backend
   // switch on save. A switch invalidates the current session (tokens are
   // backend-bound), so the user has to log in again.
-  const [initialUploadTarget, setInitialUploadTarget] = useState<string | null>(null);
+  const [initialUploadTarget, setInitialUploadTarget] = useState<string | null>(
+    null,
+  );
 
   // This window is on top of whatever the main window shows, so while it is
   // open it is what the user is doing. The main window reclaims the phase when
@@ -102,7 +105,9 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
       // a window the user cannot close by saving, and the values on screen are
       // then the defaults -- which is worth letting them correct.
       .finally(() => setLoaded(true));
-    areErrorReportsForcedOff().then(setErrorReportsForcedOff).catch(() => {});
+    areErrorReportsForcedOff()
+      .then(setErrorReportsForcedOff)
+      .catch(() => {});
     getQuota()
       .then((q) => {
         setAdvancedSettings(q.features?.advanced_settings ?? false);
@@ -115,7 +120,8 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
             return {
               ...s,
               generation_model:
-                q.generation_settings!.default_model || q.generation_settings!.models[0],
+                q.generation_settings!.default_model ||
+                q.generation_settings!.models[0],
             };
           });
         }
@@ -205,7 +211,11 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
 
         {/* Capture area and password masking (privacy-capture D8, D10). Apply
             from the next recording: the running one keeps what it started with. */}
-        <CaptureAreaSettings settings={settings} setSettings={setSettings} loaded={loaded} />
+        <CaptureAreaSettings
+          settings={settings}
+          setSettings={setSettings}
+          loaded={loaded}
+        />
 
         {/* Skip PII check */}
         <div className="flex items-center justify-between">
@@ -336,7 +346,9 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
               }}
             >
               <option value="ask">{t("settings.error_reports_ask")}</option>
-              <option value="always">{t("settings.error_reports_always")}</option>
+              <option value="always">
+                {t("settings.error_reports_always")}
+              </option>
               <option value="never">{t("settings.error_reports_never")}</option>
             </select>
           </div>
@@ -364,7 +376,9 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
 
         {/* Workflows directory */}
         <div>
-          <label className="label-sm block mb-2">{t("settings.workflows_dir")}</label>
+          <label className="label-sm block mb-2">
+            {t("settings.workflows_dir")}
+          </label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -435,7 +449,8 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
                 setSettings((s) => ({
                   ...s,
                   upload_target:
-                    e.target.value === "Staging" || (e.target.value === "Local" && isDev)
+                    e.target.value === "Staging" ||
+                    (e.target.value === "Local" && isDev)
                       ? e.target.value
                       : null,
                 }))
@@ -468,7 +483,10 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
           </p>
         )}
         <div className="flex gap-3">
-          <button onClick={handleCancel} className="btn-secondary flex-1 py-2.5 text-sm">
+          <button
+            onClick={handleCancel}
+            className="btn-secondary flex-1 py-2.5 text-sm"
+          >
             {t("settings.cancel")}
           </button>
           <button
@@ -483,7 +501,10 @@ export function SettingsPage({ isDev }: SettingsPageProps) {
 
       {/* PII disable confirmation modal */}
       {showPiiConfirm && (
-        <PiiConfirmModal onCancel={() => setShowPiiConfirm(false)} onAccept={confirmDisablePii} />
+        <PiiConfirmModal
+          onCancel={() => setShowPiiConfirm(false)}
+          onAccept={confirmDisablePii}
+        />
       )}
     </div>
   );

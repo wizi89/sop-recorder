@@ -1,5 +1,9 @@
 import { isReportable } from "../lib/serverErrors";
-import { createErrorReport, debugTriggerFailure, errorReportPhase } from "../lib/tauri";
+import {
+  createErrorReport,
+  debugTriggerFailure,
+  errorReportPhase,
+} from "../lib/tauri";
 
 /**
  * Dev-only buttons that trigger each kind of failure. `silent` is true when
@@ -55,11 +59,18 @@ export function DevFailureTriggers({
                 // exercise the real flow rather than just log.
                 const message = String(e);
                 if (!isReportable(message)) {
-                  console.warn("Klassifiziert als erwartetes Ergebnis, kein Bericht:", message);
+                  console.warn(
+                    "Klassifiziert als erwartetes Ergebnis, kein Bericht:",
+                    message,
+                  );
                   return;
                 }
-                void createErrorReport("command_error", errorReportPhase(), message).catch(
-                  (err) => console.warn("Bericht konnte nicht erstellt werden:", err),
+                void createErrorReport(
+                  "command_error",
+                  errorReportPhase(),
+                  message,
+                ).catch((err) =>
+                  console.warn("Bericht konnte nicht erstellt werden:", err),
                 );
               });
             }}

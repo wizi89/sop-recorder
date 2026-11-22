@@ -1,7 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-type UpdaterStatus = "idle" | "checking" | "available" | "downloading" | "error";
+type UpdaterStatus =
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "error";
 
 // The check and the install go through Rust rather than the plugin's own JS
 // `check()`. That one resolves its endpoint from tauri.conf.json, fixed at

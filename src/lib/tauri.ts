@@ -121,7 +121,9 @@ export interface SessionScreenshot {
  * from the file name, so gaps (failed captures, deleted steps) keep the other
  * steps' numbers.
  */
-export async function listSessionScreenshots(outputDir: string): Promise<SessionScreenshot[]> {
+export async function listSessionScreenshots(
+  outputDir: string,
+): Promise<SessionScreenshot[]> {
   return invoke("list_session_screenshots", { outputDir });
 }
 
@@ -135,7 +137,9 @@ export interface StepCaptureRecord {
 }
 
 /** How each screenshot was captured; a missing sidecar reads as `unknown`. */
-export async function listCaptureRecords(outputDir: string): Promise<StepCaptureRecord[]> {
+export async function listCaptureRecords(
+  outputDir: string,
+): Promise<StepCaptureRecord[]> {
   return invoke("list_capture_records", { outputDir });
 }
 
@@ -152,7 +156,9 @@ export interface LoadedRedactions {
   unreadable: string | null;
 }
 
-export async function loadRedactions(outputDir: string): Promise<LoadedRedactions> {
+export async function loadRedactions(
+  outputDir: string,
+): Promise<LoadedRedactions> {
   return invoke("load_redactions", { outputDir });
 }
 
@@ -171,7 +177,10 @@ export async function resetRedactions(outputDir: string): Promise<void> {
 }
 
 /** Remove a step's screenshot, metadata and boxes. Idempotent. */
-export async function deleteStep(outputDir: string, step: number): Promise<void> {
+export async function deleteStep(
+  outputDir: string,
+  step: number,
+): Promise<void> {
   return invoke("delete_step", { outputDir, step });
 }
 
@@ -250,8 +259,6 @@ export async function getAccessibilityPermissionState(): Promise<AccessibilityPe
     return "unknown";
   }
 }
-
-
 
 /**
  * Relaunch the app so newly granted macOS permissions take effect.
@@ -515,7 +522,10 @@ export function errorReportPhase(): Phase {
  * Idempotent and cheap: repeats are dropped, so callers can fire it from an
  * effect on every render without thinking about it.
  */
-export async function setErrorReportPhase(phase: Phase, force = false): Promise<void> {
+export async function setErrorReportPhase(
+  phase: Phase,
+  force = false,
+): Promise<void> {
   // Each webview is its own JS context with its own mirror, but they share one
   // phase in Rust. So when the settings window sets `settings` and closes, the
   // main window's mirror still says what it said before and the dedup would

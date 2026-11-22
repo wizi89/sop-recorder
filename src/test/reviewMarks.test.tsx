@@ -9,8 +9,10 @@ let records: unknown[] | "fail";
 
 beforeEach(() => {
   vi.mocked(invoke).mockImplementation(async (cmd: string) => {
-    if (cmd === "list_session_screenshots") return PATHS.map((path, i) => ({ step: i + 1, path }));
-    if (cmd === "load_redactions") return { steps: {}, leftover_steps: [], unreadable: null };
+    if (cmd === "list_session_screenshots")
+      return PATHS.map((path, i) => ({ step: i + 1, path }));
+    if (cmd === "load_redactions")
+      return { steps: {}, leftover_steps: [], unreadable: null };
     if (cmd === "list_capture_records") {
       if (records === "fail") throw new Error("sidecars unreadable");
       return records;
@@ -22,14 +24,27 @@ beforeEach(() => {
 });
 
 const step = (path: string) => PATHS.indexOf(path) + 1;
-const ok = (path: string) => ({ step: step(path), path, capture_scope: "window", password_check: "ok" });
+const ok = (path: string) => ({
+  step: step(path),
+  path,
+  capture_scope: "window",
+  password_check: "ok",
+});
 
 async function renderReview() {
   const onConfirm = vi.fn();
   render(
-    <ReviewScreen outputDir="/tmp" captureCount={3} elapsedSec={10} onConfirm={onConfirm} onCancel={() => {}} />,
+    <ReviewScreen
+      outputDir="/tmp"
+      captureCount={3}
+      elapsedSec={10}
+      onConfirm={onConfirm}
+      onCancel={() => {}}
+    />,
   );
-  await waitFor(() => expect(screen.getAllByAltText(/^Schritt \d+$/)).toHaveLength(3));
+  await waitFor(() =>
+    expect(screen.getAllByAltText(/^Schritt \d+$/)).toHaveLength(3),
+  );
   return onConfirm;
 }
 
@@ -38,15 +53,27 @@ const generate = () => screen.getByRole("button", { name: "Generieren" });
 describe("review marks", () => {
   it("marks flagged and fallback steps and needs the confirmation", async () => {
     records = [
-      { step: 1, path: PATHS[0], capture_scope: "window", password_check: "flagged" },
+      {
+        step: 1,
+        path: PATHS[0],
+        capture_scope: "window",
+        password_check: "flagged",
+      },
       ok(PATHS[1]),
-      { step: 3, path: PATHS[2], capture_scope: "monitor_fallback", password_check: "ok" },
+      {
+        step: 3,
+        path: PATHS[2],
+        capture_scope: "monitor_fallback",
+        password_check: "ok",
+      },
     ];
     const onConfirm = await renderReview();
     expect(screen.getAllByText("Prüfen")).toHaveLength(2);
     expect(generate()).toBeDisabled();
 
-    await userEvent.setup().click(screen.getByLabelText("Ich habe die markierten Schritte geprüft"));
+    await userEvent
+      .setup()
+      .click(screen.getByLabelText("Ich habe die markierten Schritte geprüft"));
     expect(generate()).toBeEnabled();
     await userEvent.setup().click(generate());
     expect(onConfirm).toHaveBeenCalled();
@@ -67,7 +94,9 @@ describe("review marks", () => {
     records = PATHS.map(ok);
     await renderReview();
     expect(screen.queryByText("Prüfen")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Ich habe die markierten Schritte geprüft")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Ich habe die markierten Schritte geprüft"),
+    ).not.toBeInTheDocument();
     expect(generate()).toBeEnabled();
   });
 
@@ -79,7 +108,12 @@ describe("review marks", () => {
   });
 
   it("marks every step of a legacy recording", async () => {
-    records = PATHS.map((path) => ({ step: step(path), path, capture_scope: "unknown", password_check: "unknown" }));
+    records = PATHS.map((path) => ({
+      step: step(path),
+      path,
+      capture_scope: "unknown",
+      password_check: "unknown",
+    }));
     await renderReview();
     expect(screen.getAllByText("Prüfen")).toHaveLength(3);
     expect(generate()).toBeDisabled();

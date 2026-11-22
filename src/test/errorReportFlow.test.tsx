@@ -94,51 +94,56 @@ describe("mode always (design D1)", () => {
 
   beforeEach(() => {
     stored = [report()];
-    vi.mocked(invoke).mockImplementation(async (cmd: string, args?: unknown) => {
-      const a = (args ?? {}) as Record<string, unknown>;
-      switch (cmd) {
-        case "refresh_session":
-          return { logged_in: true, email: "anna@example.de" };
-        case "get_settings":
-          return {
-            output_dir: "",
-            logs_dir: "",
-            hide_from_screenshots: true,
-            upload_target: null,
-            skip_pii_check: false,
-            pipeline_version: 1,
-            generation_model: "azure/gpt-4.1",
-            error_reports: "always",
-          };
-        case "get_quota":
-          return {
-            count: 1,
-            limit: 10,
-            remaining: 9,
-            features: { advanced_settings: false },
-          };
-        case "get_microphone_permission_state":
-        case "get_screen_recording_permission_state":
-        case "get_accessibility_permission_state":
-          return "granted";
-        case "list_error_reports":
-          return stored.map((r) => ({ ...r }));
-        case "decide_error_report": {
-          const id = a.reportId as string;
-          stored = stored.map((r) =>
-            r.report_id === id ? { ...r, consent: "granted" as const } : r,
-          );
-          return stored.find((r) => r.report_id === id) ?? null;
+    vi.mocked(invoke).mockImplementation(
+      async (cmd: string, args?: unknown) => {
+        const a = (args ?? {}) as Record<string, unknown>;
+        switch (cmd) {
+          case "refresh_session":
+            return { logged_in: true, email: "anna@example.de" };
+          case "get_settings":
+            return {
+              output_dir: "",
+              logs_dir: "",
+              hide_from_screenshots: true,
+              upload_target: null,
+              skip_pii_check: false,
+              pipeline_version: 1,
+              generation_model: "azure/gpt-4.1",
+              error_reports: "always",
+            };
+          case "get_quota":
+            return {
+              count: 1,
+              limit: 10,
+              remaining: 9,
+              features: { advanced_settings: false },
+            };
+          case "get_microphone_permission_state":
+          case "get_screen_recording_permission_state":
+          case "get_accessibility_permission_state":
+            return "granted";
+          case "list_error_reports":
+            return stored.map((r) => ({ ...r }));
+          case "decide_error_report": {
+            const id = a.reportId as string;
+            stored = stored.map((r) =>
+              r.report_id === id ? { ...r, consent: "granted" as const } : r,
+            );
+            return stored.find((r) => r.report_id === id) ?? null;
+          }
+          case "submit_error_reports": {
+            const granted = stored.filter((r) => r.consent === "granted");
+            stored = stored.filter((r) => r.consent !== "granted");
+            return granted.map((r) => ({
+              report_id: r.report_id,
+              number: "abcdef01",
+            }));
+          }
+          default:
+            return null;
         }
-        case "submit_error_reports": {
-          const granted = stored.filter((r) => r.consent === "granted");
-          stored = stored.filter((r) => r.consent !== "granted");
-          return granted.map((r) => ({ report_id: r.report_id, number: "abcdef01" }));
-        }
-        default:
-          return null;
-      }
-    });
+      },
+    );
   });
 
   it("sends without a dialog and puts the number in the status bar", async () => {
@@ -177,14 +182,18 @@ describe("browser sign-in failures", () => {
   }
 
   const reportCalls = () =>
-    vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "create_error_report");
+    vi
+      .mocked(invoke)
+      .mock.calls.filter(([cmd]) => cmd === "create_error_report");
 
   it("a timeout creates a login report", async () => {
     signedOut("Die Anmeldung im Browser wurde nicht abgeschlossen.");
     const { default: App } = await import("../App");
     render(<App />);
 
-    (await screen.findByRole("button", { name: "Mit Browser anmelden" })).click();
+    (
+      await screen.findByRole("button", { name: "Mit Browser anmelden" })
+    ).click();
 
     await waitFor(() => expect(reportCalls()).toHaveLength(1));
     expect(reportCalls()[0][1]).toMatchObject({
@@ -200,7 +209,9 @@ describe("browser sign-in failures", () => {
     const { default: App } = await import("../App");
     render(<App />);
 
-    (await screen.findByRole("button", { name: "Mit Browser anmelden" })).click();
+    (
+      await screen.findByRole("button", { name: "Mit Browser anmelden" })
+    ).click();
 
     await screen.findByText("Die Anmeldung wurde abgebrochen.");
     expect(reportCalls()).toHaveLength(0);
