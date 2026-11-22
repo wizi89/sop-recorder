@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { expectedOutcome, isReportable } from "../lib/serverErrors";
+import {
+  expectedOutcome,
+  isReportable,
+  parseRateLimit,
+} from "../lib/serverErrors";
 
 /**
  * Design D6: not every `Err` is a defect. One case per exclusion, so a new
@@ -60,6 +64,21 @@ describe("which failures are reportable (design D6)", () => {
 
   it("an empty message is not reportable", () => {
     expect(isReportable("")).toBe(false);
+    expect(expectedOutcome("")).toBe("empty");
+  });
+
+  it("a rate limit without counters still opens the modal, without counters", () => {
+    expect(parseRateLimit('{"error":"rate_limit"}')).toEqual({
+      count: null,
+      limit: null,
+    });
+  });
+
+  it("spaced counters are read", () => {
+    expect(parseRateLimit("Generation limit reached (3 / 5).")).toEqual({
+      count: 3,
+      limit: 5,
+    });
   });
 });
 
