@@ -66,8 +66,10 @@ describe("which failures are reportable (design D6)", () => {
     expect(isReportable("")).toBe(false);
     expect(expectedOutcome("")).toBe("empty");
   });
+});
 
-  it("a rate limit without counters still opens the modal, without counters", () => {
+describe("parseRateLimit reads the counters", () => {
+  it("a rate limit without counters parses with null counters", () => {
     expect(parseRateLimit('{"error":"rate_limit"}')).toEqual({
       count: null,
       limit: null,
