@@ -368,7 +368,7 @@ function MainApp() {
         title: "Aufnahme-Ordner wählen",
       });
       if (typeof dir === "string") {
-        // Guard: make sure the picked folder is actually a recording session
+        // Guard: make sure the picked folder is actually a recording
         // (has captured screenshots) before kicking off a real generation, so a
         // wrong folder fails fast with a friendly message instead of a cryptic
         // pipeline error after upload. list_session_screenshots returns [] when

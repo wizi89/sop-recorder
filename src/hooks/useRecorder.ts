@@ -93,7 +93,7 @@ export function useRecorder() {
   }, []);
 
   /**
-   * Stop the recording session and transition to `review` so the user can
+   * Stop the recording and transition to `review` so the user can
    * inspect captured screenshots before committing to a generation.
    * Does NOT invoke `runGeneration` -- that only happens when the user
    * confirms from the review screen via `confirmGeneration`.
@@ -156,7 +156,7 @@ export function useRecorder() {
 
   /**
    * Confirm from the review screen: invoke the generation pipeline against
-   * the recording session directory and handle the post-generation outcomes
+   * the recording directory and handle the post-generation outcomes
    * (done, error, pii_blocked, rate_limited) via the same logic the old
    * `stop()` used to run inline.
    *
@@ -358,7 +358,7 @@ export function useRecorder() {
   }, []);
 
   /**
-   * Dismiss the rate-limit modal while preserving the recording session
+   * Dismiss the rate-limit modal while preserving the recording
    * directory so the user can still retry-from-disk after topping up quota.
    * Transitions to idle + clears rateLimit but keeps outputDir intact.
    */

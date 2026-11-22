@@ -24,7 +24,7 @@ allow_attributes_without_reason = "warn"
 # Release binaries ship without their symbol table. Cargo's default keeps it,
 # which cost about a quarter of the binary -- 27 MB per architecture, and macOS
 # ships two of them in one universal bundle. Nothing reads those symbols: a
-# crash report from a released build is symbolicated against the build's own
+# crash dump from a released build is symbolicated against the build's own
 # artifacts, not the shipped binary.
 [profile.release]
 strip = true

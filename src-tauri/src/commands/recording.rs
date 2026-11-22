@@ -18,7 +18,7 @@ use crate::capture::window_area::{self, Rect};
 use crate::commands::settings::{read_capture_settings, CaptureSettings};
 use crate::output::pending;
 use crate::output::step_meta::{self, StepMeta};
-use crate::state::{AppState, RecordingSession, RecordingStatus};
+use crate::state::{ActiveRecording, AppState, RecordingStatus};
 
 mod files;
 mod step;
@@ -331,7 +331,7 @@ pub async fn start_recording(
     });
 
     // Create session
-    let session = RecordingSession {
+    let session = ActiveRecording {
         output_dir: output_dir.clone(),
         screenshots_dir,
         guide_title,
