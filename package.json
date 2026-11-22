@@ -34,6 +34,7 @@
     "picomatch": ">=4.0.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
     "@fontsource/manrope": "^5.2.8",
     "@fontsource/orbitron": "^5.2.8",
     "@playwright/test": "^1.64.0",
