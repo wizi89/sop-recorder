@@ -2,7 +2,7 @@
 name: factory-explore
 description: The Explore Station of the Software Factory. Claims every open `agent:explore` issue in one batch, triages each against the code, and gives each exactly one Verdict in a report comment. Use when the fire payload says `station=explore`.
 ---
-<!-- vendored from Home @517d888, do not edit here -->
+<!-- vendored from Home @543be27, do not edit here -->
 
 # Factory: Explore
 
@@ -27,6 +27,8 @@ Explore is read-only on code: no commits, no branches, no PRs. Repro scripts sta
    **Acceptance criteria**: one line each, `AC1: <observable result>`, `AC2: ...`; take the issue's criteria in their wording and add what the plan needs, each one checkable by a command or by reading the repo
    **Files**: `path:line` for each place the change touches, at `<sha>` from `git fetch origin && git rev-parse --short origin/<base>` run in this session, never a commit quoted in the issue or prompt
    **Evidence**: repro or test output that confirms the claim, or "claim did not hold: <why>"
+   **Seams**: where the test goes: each public interface the test drives (`path:symbol`), with one line on what a test there catches and misses; it is the seam Implement's `tdd` or `diagnosing-bugs` tests at, so name the real call site of a bug, not a shallow one. Or "no correct seam: <why>", which is itself a finding for the Verdict
+   **Feedback loop**: which check proves the change: one command (a test invocation, a check from `AGENTS.md`, a curl or Playwright script) that is red today or for the missing behaviour and goes green with the change; for a bug, the command you ran for **Evidence** that reproduces it. "none possible: <why>" makes the Verdict `needs-owner`
    **Blast radius**: <one word> - <what could break>
    **Door**: one-way | two-way (one-way when it touches a door path from AGENTS.md)
    **Open questions**: <list, or "none">
