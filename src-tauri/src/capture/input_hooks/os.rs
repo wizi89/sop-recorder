@@ -23,6 +23,14 @@ pub(super) fn install_os_hook() -> Result<(), String> {
     .map_err(|e| format!("{:?}", e))
 }
 
+/// No input hook outside Windows and macOS. The app ships only there; this
+/// lets the crate build on Linux, where the cloud agent runs clippy and the
+/// tests.
+#[cfg(all(not(windows), not(target_os = "macos")))]
+pub(super) fn install_os_hook() -> Result<(), String> {
+    Err("no input hook on this platform".to_string())
+}
+
 /// Install the process-wide OS input hook and run it. Returns only on failure.
 ///
 /// This is a hand-rolled `CGEventTap` rather than `rdev::listen`, which is what
