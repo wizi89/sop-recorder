@@ -118,3 +118,22 @@ async function mainWindow(browser: Browser): Promise<Page> {
   }
   throw new Error("the app's main window never appeared");
 }
+
+/** Where the end-of-test screenshots go; CI uploads it as `e2e-screens`. */
+export const SCREENS_DIR = "e2e-screens";
+
+/**
+ * The window as a test left it, one PNG per test named after its title. CI
+ * uploads them on every run, so a PR's screens can be set against main's
+ * (docs/agents/data-sources.md). Best effort: a test that already closed the
+ * window has nothing to show, and that must not fail the test.
+ */
+export async function captureScreen(page: Page, title: string) {
+  const name = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  await page
+    .screenshot({ path: path.join(SCREENS_DIR, `${name}.png`) })
+    .catch(() => undefined);
+}

@@ -152,6 +152,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
+    # actions: read finds main's latest screens for the before column.
+    permissions:
+      contents: read
+      actions: read
 
     steps:
       - name: Checkout
@@ -188,7 +192,40 @@ jobs:
         run: reg add "HKLM\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v cogniclone-recorder.exe /d "--remote-debugging-port=9333" /f
 
       - name: End-to-end tests
+        id: e2e
         run: npm run e2e
+
+      # The window at the end of every journey (e2e/app.ts, captureScreen),
+      # on every run, so a PR's screens can be set against main's.
+      - name: Upload the screens
+        id: screens
+        if: always() && steps.e2e.outcome != 'skipped'
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-screens
+          path: e2e-screens/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      # Links this run's screens (after) and main's latest (before) in the
+      # job summary; a UI PR links that summary (docs/agents/data-sources.md).
+      - name: Link the before and after screens
+        if: always() && github.event_name == 'pull_request' && steps.screens.outputs.artifact-url != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AFTER: ${{ steps.screens.outputs.artifact-url }}
+        run: |
+          run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --branch main --event push             --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          id=""
+          [ -n "$run" ] && id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts"             -q '.artifacts[] | select(.name == "e2e-screens" and .expired == false) | .id' | head -1)
+          before="none on main yet"
+          [ -n "$id" ] && before="[main, run $run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run/artifacts/$id)"
+          {
+            echo "### e2e screens"
+            echo "- Before: $before"
+            echo "- After: [this run]($AFTER)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # What the app was showing when a journey failed: Playwright writes the
       # window's accessibility snapshot next to each failure.
