@@ -106,6 +106,10 @@ installs the Tauri system libraries and runs `npm ci`. Its last line says whethe
 Logs, error reports and the CI artifacts, including the e2e screens a UI PR links:
 `docs/agents/data-sources.md`.
 
+At the end of work on code, run `bash scripts/mutation_diff.sh`: cargo-mutants on the changed Rust
+lines, Stryker on the changed TypeScript modules. It reports the survivors as information, not a
+gate; CI's `mutation` job runs it on every PR push. `docs/agents/mutation.md` says how to read it.
+
 The factory can't run the real app. A change to capture, input hooks, windows, permissions or
 audio needs the owner's hands-on check on Windows, and on macOS when macOS code changed, before
 the merge. Say so in the PR body.

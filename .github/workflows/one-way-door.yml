@@ -19,7 +19,8 @@ name: One-way Door
 #   - dependabot: the auto-merge lane merges on its own.
 #   - guardrails: a weakened check stays green, so nobody would notice. They
 #     are this workflow, CI, the hooks, the Semgrep rules, the check scripts
-#     with their baselines and fixtures, and the format and type configs. A
+#     with their baselines and fixtures, the format and type configs, and
+#     any added `required-checks: exempt` line in a workflow. A
 #     Dependabot PR (an action bump in a workflow) gets no guardrail box
 #     while only Dependabot pushed to it.
 # Lockfiles, AGENTS.md and the other workflows are deliberately not door
@@ -75,6 +76,15 @@ jobs:
               scripts/check_*|scripts/test_check_*|scripts/glossary_*) guard=1 ;;
             esac
           done <<< "$files"
+          # A job exempted from the required checks can fail without blocking
+          # a merge (scripts/check_required_checks.py). The exemption may sit
+          # in any workflow, a new one too, so an added exemption line is a
+          # guardrail wherever it is.
+          if gh api --paginate "repos/$REPO/pulls/$PR/files" \
+              --jq '.[] | select(.filename | startswith(".github/workflows/")) | .patch // empty' \
+              | grep -q -E '^\+.*required-checks:[[:space:]]*exempt'; then
+            guard=1
+          fi
           # A Dependabot PR bumps actions in the workflows; the guardrail box
           # would only ask the owner to look at a version number. As soon as
           # anyone else pushes a commit to it, the box applies again.

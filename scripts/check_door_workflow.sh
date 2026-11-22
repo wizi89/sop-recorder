@@ -15,6 +15,7 @@ awk '/run: \|/ { on = 1; next } on { sub(/^          /, ""); print }' "$wf" > "$
 
 gh() {
   case "$*" in
+    *"/files"*".patch"*) cat "$T/patches" ;;
     *"/files"*) cat "$T/files" ;;
     *"/commits"*) tr ' ' '\n' < "$T/commits" ;;
     *"-X POST"*) : ;;
@@ -27,6 +28,8 @@ export REPO=o/r PR=1 T="$tmp"
 
 checked=0; wrong=0
 # case <name> <expected green|red> <author> <commit authors> <files...>; the body persists between cases.
+# The files' workflow patches come from $tmp/patches, empty unless a case writes it.
+: > "$tmp/patches"
 run_case() {
   name=$1 want=$2; export AUTHOR=$3; printf '%s' "$4" > "$tmp/commits"; shift 4
   printf '%s\n' "$@" > "$tmp/files"
@@ -55,6 +58,13 @@ run_case "a later push touches another door" red me me .githooks/pre-commit "$do
 expect "$(grep -c '^- \[x\] Guardrail' "$tmp/body")" 1 "the ticked box stays ticked"
 edit_body 's/^- \[ \]/- [x]/'
 run_case "every box ticked" green me me .githooks/pre-commit "$door"
+
+printf 'New workflow\n' > "$tmp/body"
+run_case "a new workflow without an exemption" green me me .github/workflows/new.yml
+printf '+  # required-checks: exempt -- a reason\n+  job:\n' > "$tmp/patches"
+run_case "a new workflow exempting a job" red me me .github/workflows/new.yml
+expect "$(boxes Guardrail)" 1 "an added exemption asks the guardrail box"
+: > "$tmp/patches"
 
 printf 'Bump\n' > "$tmp/body"
 run_case "Dependabot alone bumps an action" green 'dependabot[bot]' 'dependabot[bot]' .github/workflows/one-way-door.yml

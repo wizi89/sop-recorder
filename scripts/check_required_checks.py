@@ -16,8 +16,8 @@ gap too.
 
 A job that checks nothing (a labeller, an analysis whose results go
 elsewhere) is exempted by a comment directly above its key:
-`# required-checks: exempt -- <reason>`. The exemption is in the workflow,
-which is a One-way Door path, so the owner sees it.
+`# required-checks: exempt -- <reason>`. A PR that adds one, in any
+workflow, gets the One-way Door Guardrail box, so the owner sees it.
 
 Run: gh api repos/<owner>/<repo>/branches/<default> \
        --jq '.protection.required_status_checks.contexts[]' > required.txt

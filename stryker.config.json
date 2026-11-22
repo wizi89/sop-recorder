@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "vitest",
+  "coverageAnalysis": "perTest",
+  "reporters": ["clear-text", "json"],
+  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
+  "ignorePatterns": [".claude", "/src-tauri/target", "/src-tauri/gen", "dist", "e2e", "e2e-screens", "test-results", "reports"],
+  "incremental": false
+}

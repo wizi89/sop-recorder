@@ -144,6 +144,72 @@ jobs:
         shell: bash
         run: bash scripts/check_door_workflow.sh src-tauri/src/network/upload.rs
 
+  # Mutation testing on the code this PR changed (FL-06a/b,
+  # docs/agents/mutation.md): cargo-mutants on the changed Rust lines, Stryker
+  # on the changed TypeScript modules. Information for the author, not a gate:
+  # a surviving mutant never fails it. The report goes to the job summary and
+  # the `mutation-report` artifact. Linux, like the cloud session that runs
+  # the same script; a newer push cancels a run still going.
+  # required-checks: exempt -- information only, survivors never block a merge (FL-06b)
+  mutation:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: mutation-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Cloud setup hook (Linux system libraries)
+        env:
+          CLAUDE_CODE_REMOTE: "true"
+        run: |
+          out=$(CLAUDE_PROJECT_DIR="$PWD" bash .claude/hooks/cloud-setup.sh)
+          echo "$out"
+          case "$out" in *FAILED*) cat /tmp/cloud-setup-*.log; exit 1 ;; esac
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+
+      - name: Mutate the changed code
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/mutation_diff.sh "$BASE" "$RUNNER_TEMP/mutation-report.md"
+
+      - name: Report to the job summary
+        if: always()
+        run: cat "$RUNNER_TEMP/mutation-report.md" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-report
+          path: ${{ runner.temp }}/mutation-report.md
+          if-no-files-found: ignore
+
   # The real app, driven through its window: the journeys unit tests passed
   # over and only a windowed run found (a wait screen that never rendered, an
   # old server sending users into a five-minute wait). Windows only, because
