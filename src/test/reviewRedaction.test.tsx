@@ -348,6 +348,16 @@ describe("review redaction", () => {
     expect(generate().closest("[inert]")).toBeNull();
   });
 
+  it("closes the step editor on Escape after focus left it", async () => {
+    stored = { "3": [[20, 20, 40, 20]] };
+    await renderReview();
+    await openStep(3);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Schwärzung entfernen" }));
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("gives the box remove button a 24x24 px hit area", async () => {
     stored = { "3": [[20, 20, 40, 20]] };
     await renderReview();

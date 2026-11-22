@@ -169,8 +169,17 @@ export function StepEditor({
   const frame = useRef<HTMLDivElement>(null);
   const img = useRef<HTMLImageElement>(null);
   const done = useRef<HTMLButtonElement>(null);
-  // Focus starts inside the dialog, so Escape and Tab work from the first key.
+  // Focus starts inside the dialog, so Tab works from the first key.
   useEffect(() => done.current?.focus(), []);
+  // On the document, not the dialog: a mouse draw or a removed box drops focus
+  // to <body>, and Escape must still close the editor.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const [layout, setLayout] = useState<{ content: ContentRect; w: number; h: number } | null>(
     null,
   );
@@ -235,12 +244,6 @@ export function StepEditor({
       aria-modal="true"
       aria-label={t("review.step_label", { n: thumb.step })}
       className="absolute inset-0 z-10 flex flex-col bg-surface"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.stopPropagation();
-          onClose();
-        }
-      }}
     >
       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
         <p className="text-on-surface text-sm font-semibold flex-1">
