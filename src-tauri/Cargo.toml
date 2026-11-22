@@ -20,6 +20,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # ships two of them in one universal bundle. Nothing reads those symbols: a
 # crash report from a released build is symbolicated against the build's own
 # artifacts, not the shipped binary.
+# Rules from CODING_STANDARDS.md turned into lints (factory Phase 3a). CI runs
+# clippy with -D warnings, so "warn" fails the build there.
+[lints.clippy]
+# A lint is fixed, not allowed away: an #[allow] must say why in `reason`.
+allow_attributes_without_reason = "warn"
+
 [profile.release]
 strip = true
 
