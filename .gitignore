@@ -43,3 +43,8 @@ src-tauri/keys.pub
 
 # Python bytecode from scripts/
 __pycache__/
+
+# Mutation testing (scripts/mutation_diff.sh)
+.stryker-tmp/
+reports/mutation/
+mutants.out*/
