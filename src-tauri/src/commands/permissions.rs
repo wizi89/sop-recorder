@@ -127,10 +127,10 @@ impl LastLogged {
     }
 }
 
-#[allow(dead_code)] // Read only on macOS.
+#[allow(dead_code, reason = "read only on macOS")]
 static ACCESSIBILITY_LOG: LastLogged = LastLogged::new();
 static MIC_LOG: LastLogged = LastLogged::new();
-#[allow(dead_code)] // Read only on macOS.
+#[allow(dead_code, reason = "read only on macOS")]
 static SCREEN_LOG: LastLogged = LastLogged::new();
 
 /// Whether the global input hook can be installed.

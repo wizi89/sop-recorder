@@ -33,26 +33,24 @@ With no spec, the Spec sub-agent skips and the report says "no spec available". 
 
 ### 3. Identify the standards
 
-- `CODING_STANDARDS.md`, always. Every finding cites the rule ID (`G1`, `C1`, `R5`).
+- `CODING_STANDARDS.md`, always. Every finding cites the rule ID (`G1`, `C1`, `R4`).
 - `docs/server-contract.md` when the diff changes what the app sends to or reads from the server (C1, C2).
 - `docs/ARCHITECTURE.md` "What leaves the machine" when the diff changes what leaves the machine (C3).
 - `GLOSSARY.md`: names in the diff use its terms (G9). A name that contradicts the glossary is a **Mysterious Name** finding.
 - `docs/adr/` when the diff touches a decision an ADR records: going against one without a new ADR is a finding (G10).
 
-Skip a rule only when its tool checks the whole rule on this diff (CI's `tsc`, `cargo fmt`, `cargo clippy`). F3's source scan covers known call sites only, so a new `listen` cleanup still needs a look.
+Skip what a check enforces: the "Checks that replaced rules" table in `CODING_STANDARDS.md` (CI's `tsc`, `cargo fmt`, `cargo clippy`, the Semgrep rules). The Semgrep rule catches a direct unlisten call; the `cancelled` guard in a new `listen` cleanup still needs a look (F3).
 
 Read the diff against these hotspots first. They are where this repo's rules break:
 
 - **G1, always a hard finding:** anything private in code, comments, commit messages or the PR body. That means customer, pilot or pricing details, internal hosts, or internals of the private server repo. The server is referred to only through `docs/server-contract.md`.
 - a change to request or response shapes without a matching `docs/server-contract.md` change (C1), or a new endpoint missing from the `server-contract` job (C2);
 - new data leaving the machine without the ARCHITECTURE table changed (C3);
-- platform code outside `cfg(windows)` / `cfg(target_os = "macos")`, or a change that builds on one platform only (R5);
 - `Monitor::scale_factor()` mixed with monitor geometry (R3);
 - a side effect placed beside the call sites instead of inside the state change (R4);
-- a direct unlisten call, or a `listen` cleanup without the `cancelled` guard (F3);
+- a `listen` cleanup without the `cancelled` guard, or one that breaks on a second teardown (F3);
 - UI text outside `t()` and `src/i18n/de.ts`, or German without real umlauts (F2);
-- a user-visible change with no `CHANGELOG.md` line under `## [Unreleased]` (G4);
-- a PR title that isn't a Conventional Commit (G5).
+- a user-visible change with no `CHANGELOG.md` line under `## [Unreleased]`, or a PR title that isn't a Conventional Commit (`AGENTS.md`).
 
 On top of the documented rules, the Standards axis always carries the **smell baseline** below:
 
@@ -97,7 +95,7 @@ With no spec, skip the Spec sub-agent and say so in the report.
 A cloud session has no Tauri system libraries, no Windows or macOS, and no real input, capture or audio. List each check the diff triggers, with who runs it:
 
 - `src-tauri/` changed: `cargo clippy` and `cargo test --lib` run in CI only. Name the `ci` check and its state on the head commit.
-- Capture, input hooks, windows, permissions or audio changed: the owner checks it by hand on Windows, and on macOS when macOS code changed (T5). Name the `docs/manual-tests/` fixture when one fits.
+- Capture, input hooks, windows, permissions or audio changed: the owner checks it by hand on Windows, and on macOS when macOS code changed (`AGENTS.md`). Name the `docs/manual-tests/` fixture when one fits.
 - e2e: CI on Windows only.
 
 ### 6. Aggregate

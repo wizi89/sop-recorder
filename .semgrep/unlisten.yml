@@ -1,0 +1,116 @@
+# Custom rule for CODING_STANDARDS.md F3.
+# Tauri declares UnlistenFn as `() => void`, but listen() resolves to an async
+# function whose promise can reject. A direct call leaves that rejection
+# unhandled, and the error reporter then reports itself (FINDINGS 2026-09-04).
+# Every unlisten goes through safeUnlisten (src/lib/safeUnlisten.ts), the only
+# place allowed to call one. The rule matches the shapes the repo had before
+# that fix: a call by an unlisten-like name, a promise's resolved value called
+# in its then-callback, each element of an array called in forEach, and a
+# value awaited from listen(), once() or an on* source, a value declared
+# UnlistenFn, a React ref by an unlisten-like name, and a for...of over an
+# UnlistenFn[]. Not matched: .map callbacks and destructured then-arguments.
+# The then and forEach shapes match any callback that calls its argument; a
+# harmless one gets `// nosemgrep: direct-unlisten-call` with the reason.
+# Fixtures: .semgrep/fixtures/unlisten-{ok,bad}.ts; CI asserts both.
+rules:
+  - id: direct-unlisten-call
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      An unlisten function is called directly. Tauri's unlisten returns a
+      promise that can reject, and nothing catches it here. Pass it to
+      safeUnlisten (src/lib/safeUnlisten.ts) instead: safeUnlisten(fn),
+      promise.then(safeUnlisten) or fns.forEach(safeUnlisten).
+    paths:
+      exclude:
+        - src/lib/safeUnlisten.ts
+        - src/test/
+    pattern-either:
+      # By name: unlisten, unlistenFoo, stop (a bare function, not a method;
+      # `stop?.()` was the 2026-09-04 bug). Not `off`: the safe wrappers use it.
+      - patterns:
+          - pattern: $F()
+          - metavariable-regex:
+              metavariable: $F
+              regex: (?i)^((?!safeunlisten$)\w*unlisten\w*|stop)$
+      # Held in a React ref: unlistenRef.current?.().
+      - patterns:
+          - pattern: $R.current()
+          - metavariable-regex:
+              metavariable: $R
+              regex: (?i)^\w*(unlisten|stop)\w*$
+      # A promise's resolved value called in its then-callback: the shape of
+      # listen(...).then((fn) => fn()).
+      - patterns:
+          - pattern-either:
+              - pattern-inside: $P.then(($F) => ...)
+              - pattern-inside: $P.then(function ($F) { ... })
+          - pattern: $F()
+      # Each element of an array called: fns.forEach((fn) => fn()).
+      - patterns:
+          - pattern-either:
+              - pattern-inside: $A.forEach(($F) => ...)
+              - pattern-inside: $A.forEach(function ($F) { ... })
+          - pattern: $F()
+      # A value awaited from listen()/once() and called later.
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  $F = await $L(...);
+                  ...
+              - pattern-inside: |
+                  const $F = await $L(...);
+                  ...
+          - metavariable-regex:
+              metavariable: $L
+              regex: ^(listen|once)$
+          - pattern: $F()
+      # The same from a method: win.listen(), or a window's on* event source
+      # (getCurrentWindow().onFocusChanged()). A bare onGrant() is a prop
+      # handler, not an event source, so on* counts only as a method.
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  $F = await $O.$L(...);
+                  ...
+              - pattern-inside: |
+                  const $F = await $O.$L(...);
+                  ...
+          - metavariable-regex:
+              metavariable: $L
+              regex: ^(listen|once|on[A-Z]\w*)$
+          - pattern: $F()
+      # Anything declared as an UnlistenFn.
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  let $F: UnlistenFn | undefined;
+                  ...
+              - pattern-inside: |
+                  let $F: UnlistenFn;
+                  ...
+              - pattern-inside: |
+                  let $F: UnlistenFn | null;
+                  ...
+              - pattern-inside: |
+                  let $F: UnlistenFn | null = $INIT;
+                  ...
+              - pattern-inside: |
+                  let $F: UnlistenFn | undefined = $INIT;
+                  ...
+              - pattern-inside: |
+                  const $F: UnlistenFn = $INIT;
+                  ...
+          - pattern: $F()
+      # Each element of an UnlistenFn[] called in a for...of loop.
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  let $A: UnlistenFn[] = $INIT;
+                  ...
+              - pattern-inside: |
+                  const $A: UnlistenFn[] = $INIT;
+                  ...
+          - pattern-inside: |
+              for (const $F of $A) { ... }
+          - pattern: $F()

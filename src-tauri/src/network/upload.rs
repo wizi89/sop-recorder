@@ -75,9 +75,10 @@ fn capture_counts(
 /// Upload audio + screenshots to the generation endpoint.
 /// Returns the SSE stream URL or response.
 // ponytail: ten real parameters, not an abstraction waiting to happen.
-// Bundling them into a struct would move the same list one line up and touch
-// every caller of the upload path for a lint; revisit if an eleventh appears.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a struct would move the same list one line up and touch every caller of the upload path for a lint; revisit if an eleventh appears"
+)]
 pub async fn upload_multipart(
     access_token: &str,
     audio_path: &Path,
@@ -205,9 +206,10 @@ pub async fn upload_multipart(
 
 /// Retry logic with exponential backoff for transient errors.
 // ponytail: eleven real parameters, not an abstraction waiting to happen.
-// Bundling them into a struct would move the same list one line up and touch
-// every caller of the upload path for a lint; revisit if a twelfth appears.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "a struct would move the same list one line up and touch every caller of the upload path for a lint; revisit if a twelfth appears"
+)]
 pub async fn upload_with_retry(
     access_token: &str,
     audio_path: &Path,

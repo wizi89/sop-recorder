@@ -269,12 +269,28 @@ jobs:
       - name: No new avoided GLOSSARY.md terms
         run: python3 scripts/check_glossary_terms.py
 
+  # The custom Semgrep rules in .semgrep/ (today: no direct unlisten call).
+  # Runs on every change, like glossary: it is cheap, and a skipped run proves
+  # nothing. The script fails when the bad fixture stops going red, when the
+  # good fixture goes red, or when src/ has a finding or no scanned file.
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Semgrep
+        run: pipx install "semgrep==$(python3 scripts/check_semgrep.py --version)"
+
+      - name: Custom rules, proven on their fixtures
+        run: python3 scripts/check_semgrep.py
+
   # The one check branch protection requires. A job skipped at job level
   # reports under its bare name, not per matrix leg, so requiring the legs
   # would leave a docs-only PR pending forever; this gate passes when every
   # job succeeded or was skipped, and fails on any failure or cancellation.
   ci:
-    needs: [changes, glossary, test, e2e, build]
+    needs: [changes, glossary, semgrep, test, e2e, build]
     if: always()
     runs-on: ubuntu-latest
 

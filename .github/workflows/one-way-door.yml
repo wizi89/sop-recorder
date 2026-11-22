@@ -1,0 +1,113 @@
+name: One-way Door
+
+# Marks a PR that touches a One-way Door path with the label `one-way-door`
+# and appends a checklist to the PR body once, so the label never depends on
+# the agent's judgement alone (ported from the server repo). While a box of
+# that checklist is unticked the job fails, so a door PR shows red until the
+# owner has checked it. Ticking a box edits the body, which re-runs the job.
+#
+# The doors here are what a revert cannot take back:
+#   - release: a merge to main builds installers and a v* tag ships them
+#     through the auto-updater; a broken updater, signing or bundle config
+#     strands every installed copy on that version.
+#   - permissions: what the WebView and the OS let the app do.
+#   - contract: what the server accepts; an old app in the field keeps
+#     sending the old shape.
+#   - privacy: what leaves the machine (docs/ARCHITECTURE.md "What leaves the
+#     machine"); data already sent cannot be recalled.
+#   - dependabot: the auto-merge lane merges on its own.
+# Lockfiles, AGENTS.md and the other workflows are deliberately not door
+# paths: a revert fully restores them.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+# The newest body decides: ticking boxes in quick succession must not leave an
+# older, red run as the PR's last result.
+concurrency:
+  group: one-way-door-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  mark:
+    name: One-way Door marker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label and checklist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+
+          release=0; perms=0; contract=0; privacy=0; lane=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              .github/workflows/release.yml|src-tauri/tauri.conf.json|src-tauri/tauri.macos.conf.json|src-tauri/tauri.signing.conf.json|src-tauri/Info.plist) release=1 ;;
+              src-tauri/Entitlements.plist|src-tauri/capabilities/*) perms=1 ;;
+              docs/server-contract.md) contract=1 ;;
+              src-tauri/src/network/upload.rs|src-tauri/src/network/reports.rs|src-tauri/src/network/auth.rs|src-tauri/src/error_reports.rs|src-tauri/src/commands/error_reports.rs) privacy=1 ;;
+              src-tauri/src/commands/generate/redact.rs|src-tauri/src/output/redactions.rs) privacy=1 ;;
+              src-tauri/src/capture/password_check.rs|src-tauri/src/capture/password_check/*|src-tauri/src/capture/window_area.rs|src-tauri/src/capture/window_area/*) privacy=1 ;;
+              .github/workflows/dependabot-lane.yml|.github/workflows/dependabot-red.yml) lane=1 ;;
+            esac
+          done <<< "$files"
+
+          if [ $((release + perms + contract + privacy + lane)) -eq 0 ]; then
+            echo "No One-way Door paths touched."
+            exit 0
+          fi
+
+          gh api -X POST "repos/$REPO/issues/$PR/labels" -f "labels[]=one-way-door" > /dev/null \
+            || echo "::warning::could not add label one-way-door"
+
+          marker='<!-- one-way-door-checklist -->'
+          body=$(gh api "repos/$REPO/pulls/$PR" --jq '.body // ""')
+          # Whole-line match: a body that merely quotes the marker in prose
+          # must not count as already carrying the checklist.
+          if printf '%s\n' "$body" | tr -d '\r' | grep -qxF "$marker"; then
+            echo "Checklist already present."
+          else
+          list=""
+          if [ $release -eq 1 ]; then
+            list+="- [ ] Release: Was an installer built from this head (\`[build]\` or a manual CI run) installed on Windows, and on macOS when macOS config changed, and does it still find and apply an update?"$'\n'
+          fi
+          if [ $perms -eq 1 ]; then
+            list+="- [ ] Permissions: Does the PR body name each capability or entitlement added or widened, and why the app needs it?"$'\n'
+          fi
+          if [ $contract -eq 1 ]; then
+            list+="- [ ] Contract: Does the server side already accept this, per the contract phase line in \`AGENTS.md\`, and does the \`server-contract\` job in \`release.yml\` cover a new endpoint?"$'\n'
+          fi
+          if [ $privacy -eq 1 ]; then
+            list+="- [ ] Privacy: Do \`docs/ARCHITECTURE.md\` \"What leaves the machine\" and \`docs/PRIVACY.md\` still describe exactly what is sent? If what is sent changed: did the owner's hands-on check on Windows confirm it?"$'\n'
+          fi
+          if [ $lane -eq 1 ]; then
+            list+="- [ ] Dependabot lane: What does a revert of this PR leave behind (PRs the lane merged in the meantime)?"$'\n'
+          fi
+
+          new_body=$(printf '%s\n\n%s\n## One-way Door checklist\n\n%s' "$body" "$marker" "$list")
+          jq -n --arg b "$new_body" '{body: $b}' \
+            | gh api -X PATCH "repos/$REPO/pulls/$PR" --input - > /dev/null \
+            || echo "::warning::could not update the PR body"
+          echo "Checklist appended."
+          body=$new_body
+          fi
+
+          # The gate: every box after the marker must be ticked.
+          open=$(printf '%s\n' "$body" | tr -d '\r' \
+            | awk -v m="$marker" '$0 == m { on = 1; next } on && /^- \[ \]/')
+          if [ -n "$open" ]; then
+            echo "::error::One-way Door checklist has unticked items. Tick them once each is checked:"
+            printf '%s\n' "$open"
+            exit 1
+          fi
+          echo "One-way Door checklist complete."
