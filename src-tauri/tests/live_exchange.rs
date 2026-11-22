@@ -1,6 +1,6 @@
 //! Opt-in: the recorder's own exchange against a real API.
 //!
-//! OpenSpec change: browser-login, tasks 7.1/7.6. Every other test in this
+//! Browser sign-in (docs/adr/0006). Every other test in this
 //! crate stubs the server, which proves the recorder's handling of a response
 //! shape but not that the deployed endpoint produces it. This one closes that
 //! seam without needing a browser or a window.

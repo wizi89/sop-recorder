@@ -4,6 +4,7 @@
 - Default to the simplest solution that works, no unrequested abstractions.
 - Surprises go to `docs/FINDINGS.md`; drain it with `drain-findings`. For a symptom, grep FINDINGS
   and the Wiki index first.
+- Domain terms: `GLOSSARY.md`. Decisions that are hard to reverse: `docs/adr/`.
 - Modules, the life of a recording, and what leaves the machine: `docs/ARCHITECTURE.md`.
 - Roadmap and current status of the whole product: `../9_sop-sorcery/docs/ROADMAP.md` and
   `project-status.md` next to it.
