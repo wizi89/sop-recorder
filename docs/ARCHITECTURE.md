@@ -40,7 +40,7 @@ A Tauri v2 app: Rust does capture, audio, input hooks, sign-in and networking; a
 
 ## Sign-in
 
-Browser sign-in with PKCE: a loopback listener on `127.0.0.1:<random port>`, the browser opens `{webapp}/desktop/authorize`, the code is exchanged at `POST /auth/desktop/exchange`. The refresh token lives in the OS keychain (service `cogniclone`, `cogniclone-dev` for dev builds). The in-app password form (`POST /auth/signin`) stays as a second way in; a failed browser sign-in creates an error report (under the user's report setting). Spec: `openspec/specs/user-authentication/spec.md`.
+Browser sign-in with PKCE: a loopback listener on `127.0.0.1:<random port>`, the browser opens `{webapp}/desktop/authorize`, the code is exchanged at `POST /auth/desktop/exchange`. The refresh token lives in the OS keychain (service `cogniclone`, `cogniclone-dev` for dev builds). The in-app password form (`POST /auth/signin`) stays as a second way in; a failed browser sign-in creates an error report (under the user's report setting). Decision: [ADR 0006](./adr/0006-browser-sign-in-over-loopback.md).
 
 ## What leaves the machine
 
@@ -64,10 +64,9 @@ Tracked here until fixed:
 
 - Generate waits for in-flight captures without a deadline (`generate.rs:135`).
 - Any failed session refresh, including a server 5xx, signs the user out (`network/auth.rs:418-421`).
-- No startup scan for unfinished recordings; `output::pending::find_pending` is unused outside tests.
 - The upload is built in memory as one request with a 300 s timeout.
 - A missing or failing microphone fails the whole recording.
 
 ## Working on it
 
-Commands, tests and release flow: [README](../README.md). Behaviour that surprised us: [FINDINGS.md](./FINDINGS.md). Specs: `openspec/specs/`. CI runs vitest, `cargo test --lib`, `cargo fmt --check`, `clippy -D warnings` and `tsc` on Windows and macOS; keep all of them green.
+Commands, tests and release flow: [README](../README.md). Behaviour that surprised us: [FINDINGS.md](./FINDINGS.md). Domain terms: [GLOSSARY.md](../GLOSSARY.md). Decisions: [docs/adr/](./adr/). CI runs vitest, `cargo test --lib`, `cargo fmt --check`, `clippy -D warnings` and `tsc` on Windows and macOS; keep all of them green.

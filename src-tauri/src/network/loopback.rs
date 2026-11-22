@@ -1,13 +1,12 @@
 //! The loopback callback listener. **This is the deep-link swap point.**
 //!
-//! OpenSpec change: browser-login. When the app registers the `cogniclone://`
+//! Decision: `docs/adr/0006-browser-sign-in-over-loopback.md`. When the app registers the `cogniclone://`
 //! URL scheme, this entire file is deleted and replaced by a
 //! `start_deep_link()` returning the same `Callback` shape, fed by
 //! `tauri-plugin-deep-link`'s `on_open_url`, with a `Reply` whose `finish`
 //! does nothing -- under a scheme the browser has no connection waiting on the
 //! app. Nothing in `network/auth.rs`, the command, the server or the UI
-//! changes. See "What the deep-link switch costs" in
-//! `openspec/changes/archive/2026-10-19-browser-login/archive-note.md`.
+//! changes. The cost of that switch is listed in the ADR.
 //!
 //! It is ~200 lines over `tokio::net::TcpListener` rather than a web
 //! framework: its whole job is to parse one request line, in code scheduled

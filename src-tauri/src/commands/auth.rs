@@ -114,7 +114,7 @@ pub async fn get_session_state(session: State<'_, SessionCache>) -> Result<Sessi
     })
 }
 
-// -- Browser sign-in (OpenSpec: browser-login) --------------------------------
+// -- Browser sign-in (docs/adr/0006) -------------------------------------------
 
 /// How long the user has to finish in the browser.
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(300);

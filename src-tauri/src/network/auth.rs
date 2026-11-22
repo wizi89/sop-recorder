@@ -117,7 +117,7 @@ pub async fn sign_in(email: &str, password: &str, api_base: &str) -> Result<Auth
     })
 }
 
-// -- Browser sign-in (OpenSpec: browser-login) --------------------------------
+// -- Browser sign-in (docs/adr/0006) -------------------------------------------
 //
 // The user's credentials are entered in their real browser, where their
 // password manager works. The browser hands back a one-time code, which the

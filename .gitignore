@@ -16,9 +16,6 @@ dist-ssr
 .claude/worktrees/
 .claude/settings.local.json
 .claude/review-logs/
-# OpenSpec files stay uncommitted until the OpenSpec exit
-.claude/skills/openspec-*/
-.claude/commands/opsx/
 
 # Editor directories and files
 .vscode/*
