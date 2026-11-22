@@ -9,6 +9,12 @@
   `project-status.md` next to it.
 - The default branch here is `main`; the server repo's is `master`.
 - The code rules a PR is reviewed against: `CODING_STANDARDS.md`.
+- A change a user can notice adds a line under `## [Unreleased]` in `CHANGELOG.md`, in the Keep a
+  Changelog sections (`Added`, `Changed`, `Fixed`), written for the user.
+- PR titles (the squash commit) use Conventional Commits: `fix:`, `feat(<area>):`, `docs:`,
+  `chore:`, `chore(deps):`.
+- Prototype code lives only on `prototype/*` branches and never reaches `main`. What a prototype
+  taught goes into the issue, an ADR or `GLOSSARY.md`; the code does not.
 - Server contract: `docs/server-contract.md`. Contract changes: breaking allowed. (Until go-live;
   then this line becomes "Contract changes: additive only", in both repos.)
 
@@ -38,11 +44,20 @@ and the wanted behaviour, nothing from the private repo (no customer, pilot or p
 Labels: `agent:explore`, `agent:implement`, `agent:review` (PR), `agent:in-progress`,
 `agent:blocked`, `agent:deps`, `needs-owner`, `owner-merge`, `one-way-door`.
 
-One-way door paths (Implement adds `one-way-door` and the checklist when a diff touches one):
-`.github/workflows/release.yml`, `src-tauri/tauri.conf.json`, `src-tauri/tauri.macos.conf.json`,
-`src-tauri/tauri.signing.conf.json`, `src-tauri/Entitlements.plist`, `src-tauri/Info.plist`,
-`src-tauri/capabilities/`, `docs/server-contract.md`, `.github/workflows/dependabot-lane.yml`,
-`.github/workflows/dependabot-red.yml`.
+One-way door paths. `.github/workflows/one-way-door.yml` adds the `one-way-door` label and a
+checklist when a PR touches one, and stays red until every box is ticked; keep this list and the
+workflow's in step.
+
+- Release: `.github/workflows/release.yml`, `src-tauri/tauri.conf.json`,
+  `src-tauri/tauri.macos.conf.json`, `src-tauri/tauri.signing.conf.json`, `src-tauri/Info.plist`.
+- Permissions: `src-tauri/Entitlements.plist`, `src-tauri/capabilities/`.
+- Contract: `docs/server-contract.md`.
+- What leaves the machine: `src-tauri/src/network/upload.rs`, `src-tauri/src/network/reports.rs`,
+  `src-tauri/src/network/auth.rs`, `src-tauri/src/error_reports.rs`,
+  `src-tauri/src/commands/error_reports.rs`, `src-tauri/src/commands/generate/redact.rs`,
+  `src-tauri/src/output/redactions.rs`, `src-tauri/src/capture/password_check.rs` and
+  `password_check/`, `src-tauri/src/capture/window_area.rs` and `window_area/`.
+- Dependabot: `.github/workflows/dependabot-lane.yml`, `.github/workflows/dependabot-red.yml`.
 
 ## Pre-commit checks
 
@@ -58,6 +73,8 @@ split it first, in its own commit with behaviour unchanged. That split is in sco
 The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
 
 - Always: `npm ci`, `npm test`, `npx tsc --noEmit`.
+- Always, in its own CI job `semgrep`: `python scripts/check_semgrep.py`, the custom Semgrep rules
+  in `.semgrep/` (needs `semgrep` or `uvx`). It also proves each rule still flags its bad fixture.
 - When `src-tauri/` changed, also run in `src-tauri/`: `cargo fmt --check`,
   `cargo clippy --all-targets -- -D warnings`, `cargo test --lib`.
 - e2e (`npm run e2e`) runs only in CI on Windows; don't run it locally.
@@ -65,7 +82,8 @@ The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
 In a cloud session (`CLAUDE_CODE_REMOTE=true`) the image has no Tauri system libraries, and a
 Linux build would check neither the Windows nor the macOS code paths. There:
 
-- Run `npm ci`, `npm test`, `npx tsc --noEmit` in the session, and `cargo fmt --check` in
+- Run `npm ci`, `npm test`, `npx tsc --noEmit` and `python scripts/check_semgrep.py` in the
+  session, and `cargo fmt --check` in
   `src-tauri/` when `cargo` is installed (it compiles nothing).
 - `cargo clippy` and `cargo test --lib` are **CI-only**: open the draft PR, then wait for CI's
   `ci` check on the head commit (`gh api repos/wizi89/sop-recorder/commits/<sha>/check-runs`).

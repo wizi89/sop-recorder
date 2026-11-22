@@ -195,7 +195,7 @@ The before proves the old behaviour was really broken or missing. The after prov
 
 ### Hands-on check
 
-The factory can't run the real app. A change to capture, input hooks, windows, permissions or audio needs the owner's hands-on check on Windows, and on macOS when macOS code changed, before the merge (`AGENTS.md`, rule T5). Say which one and what to try. "Not needed" names why: tests cover it, or the change has no runtime effect.
+The factory can't run the real app. A change to capture, input hooks, windows, permissions or audio needs the owner's hands-on check on Windows, and on macOS when macOS code changed, before the merge (`AGENTS.md`). Say which one and what to try. "Not needed" names why: tests cover it, or the change has no runtime effect.
 
 ### Not verified here
 
