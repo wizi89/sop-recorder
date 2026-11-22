@@ -52,7 +52,8 @@ else
   out="$work/mutants.out"
   # 0: all caught, 2: some missed, 3: some timed out. Anything else: it did not run.
   if [ -f "$out/outcomes.json" ] && { [ "$status" -eq 0 ] || [ "$status" -eq 2 ] || [ "$status" -eq 3 ]; }; then
-    n() { [ -f "$out/$1.txt" ] && grep -c . "$out/$1.txt" || echo 0; }
+    # grep -c prints 0 and exits 1 on an empty list; a missing list is 0 too.
+    n() { c=0; [ -f "$out/$1.txt" ] && c=$(grep -c . "$out/$1.txt" || true); echo "${c:-0}"; }
     echo "Caught $(n caught), missed $(n missed), timeout $(n timeout), unviable $(n unviable)." >>"$report"
     if [ "$(n missed)" -gt 0 ]; then
       echo >>"$report"
