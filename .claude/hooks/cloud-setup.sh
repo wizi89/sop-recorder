@@ -13,9 +13,9 @@
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
-# Tauri v2 on Linux, plus PipeWire and libclang for xcap's screen capture.
+# Tauri v2 on Linux, plus PipeWire, libclang and libgbm for xcap's screen capture.
 PACKAGES="libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev
-libssl-dev libasound2-dev libpipewire-0.3-dev libclang-dev pkg-config build-essential"
+libssl-dev libasound2-dev libpipewire-0.3-dev libclang-dev libgbm-dev pkg-config build-essential"
 
 sudo_cmd=""
 [ "$(id -u)" -eq 0 ] || sudo_cmd="sudo -n"

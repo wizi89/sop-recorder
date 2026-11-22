@@ -1,3 +1,11 @@
+// Linux has no input hook (os.rs returns an error there); the crate builds
+// on Linux only so cloud sessions and CI's Linux leg can run clippy and the
+// tests, so the hook's plumbing is unused on that target.
+#![cfg_attr(
+    all(not(windows), not(target_os = "macos")),
+    allow(dead_code, unused_imports)
+)]
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
