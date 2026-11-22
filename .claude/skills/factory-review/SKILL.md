@@ -2,7 +2,7 @@
 name: factory-review
 description: The Review Station of the Software Factory. Reviews an `agent:review` PR in fresh context against the issue and the repo's coding standards, fixes what it can, posts a verdict and marks the PR ready for the owner's merge. Use when the fire payload says `station=review`.
 ---
-<!-- vendored from Home @543be27, do not edit here -->
+<!-- vendored from Home @534940c, do not edit here -->
 
 # Factory: Review
 
@@ -47,7 +47,7 @@ You are a fresh context by design. Judge the diff against the spec; Implement's 
 
 6. **Mark ready.** Take the PR out of draft. `gh pr ready` and REST cannot do this in a cloud session (GraphQL only), so use the built-in GitHub tool; if none can, write "owner: mark ready" in the verdict. Remove `agent:in-progress` and `agent:review` from the PR. Done when the PR is ready (or the verdict says why not) and carries neither label.
 
-7. **Owner-merge.** Without `needs-owner`, wait for the checks of the reviewed SHA (`.head.sha` after your last push in step 4): poll every 5 min, up to 60 min. When CI is green and the `staging` status is green, re-read `.head.sha`; only if it still equals the reviewed SHA, add `owner-merge` to the PR. A repo whose `AGENTS.md` names no `staging` status gets `owner-merge` once CI is green, under the same SHA check. A door PR whose One-way Door check is red only for unticked checklist boxes is waiting on the local session's staging verification: stop polling, no `owner-merge`, and the verdict line says "awaiting local staging verification". If the head moved, red, or still pending at the timeout: no `owner-merge`; add one line to the verdict comment (edit it) naming the check and its state, or the unreviewed new SHA. Done when the PR has `owner-merge` for the reviewed SHA or the verdict says what held it back.
+7. **Owner-merge.** Without `needs-owner`, wait for the checks of the reviewed SHA (`.head.sha` after your last push in step 4): poll every 5 min, up to 60 min. When CI is green and the `staging` status is green, re-read `.head.sha`; only if it still equals the reviewed SHA, add `owner-merge` to the PR. A repo whose `AGENTS.md` names no `staging` status gets `owner-merge` once CI is green, under the same SHA check. A door PR whose One-way Door check is red only for unticked checklist boxes is waiting on the local session's staging verification: stop polling, no `owner-merge`, and the verdict line says "awaiting local staging verification". When the only unticked box is the Guardrail box, it waits on the owner, who ticks it at merge: add `owner-merge` once the other checks are green, never tick it yourself, and the verdict line names any check the diff weakens. If the head moved, red, or still pending at the timeout: no `owner-merge`; add one line to the verdict comment (edit it) naming the check and its state, or the unreviewed new SHA. Done when the PR has `owner-merge` for the reviewed SHA or the verdict says what held it back.
 
 ## Shared rules
 
