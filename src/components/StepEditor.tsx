@@ -80,9 +80,15 @@ export function BoxOverlay({
                   right: 0,
                   top: 0,
                   pointerEvents: "auto",
-                  fontSize: "0.625rem",
+                  // A 24x24 px hit area at the least (WCAG 2.5.8).
+                  minWidth: 24,
+                  minHeight: 24,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.75rem",
                   lineHeight: 1,
-                  padding: "1px 4px",
+                  padding: 0,
                   background: "rgba(255,255,255,0.85)",
                   color: "#000",
                 }}
@@ -133,7 +139,7 @@ export function StepEditor({
   desired,
   drawingDisabled,
   saving,
-  saveFailed,
+  saveError,
   confirmDelete,
   onAdd,
   onRemove,
@@ -148,7 +154,8 @@ export function StepEditor({
   desired: RedactionBox[];
   drawingDisabled: boolean;
   saving: boolean;
-  saveFailed: boolean;
+  /** Why the last save of this step failed; unset when it did not. */
+  saveError?: string;
   confirmDelete: boolean;
   onAdd: (b: RedactionBox) => void;
   onRemove: (b: RedactionBox) => void;
@@ -161,6 +168,18 @@ export function StepEditor({
   const { t } = useTranslation();
   const frame = useRef<HTMLDivElement>(null);
   const img = useRef<HTMLImageElement>(null);
+  const done = useRef<HTMLButtonElement>(null);
+  // Focus starts inside the dialog, so Tab works from the first key.
+  useEffect(() => done.current?.focus(), []);
+  // On the document, not the dialog: a mouse draw or a removed box drops focus
+  // to <body>, and Escape must still close the editor.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const [layout, setLayout] = useState<{ content: ContentRect; w: number; h: number } | null>(
     null,
   );
@@ -222,6 +241,7 @@ export function StepEditor({
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label={t("review.step_label", { n: thumb.step })}
       className="absolute inset-0 z-10 flex flex-col bg-surface"
     >
@@ -234,7 +254,7 @@ export function StepEditor({
             </span>
           )}
         </p>
-        {saveFailed && (
+        {saveError !== undefined && (
           <button className="btn-secondary px-2 py-1 text-xs" onClick={onRetrySave}>
             {t("review.redact_retry")}
           </button>
@@ -248,10 +268,16 @@ export function StepEditor({
         >
           {t("review.delete_step")}
         </button>
-        <button className="btn-primary px-2 py-1 text-xs" onClick={onClose}>
+        <button ref={done} className="btn-primary px-2 py-1 text-xs" onClick={onClose}>
           {t("review.close")}
         </button>
       </div>
+      {/* The alert list behind the dialog is covered, so the error is said here. */}
+      {saveError !== undefined && (
+        <p role="alert" className="px-4 pb-2 text-xs" style={{ color: "#F87171" }}>
+          {t("review.redact_save_failed", { n: thumb.step, error: saveError })}
+        </p>
+      )}
       {confirmDelete && (
         <div className="px-4 pb-2 flex flex-col gap-1.5 text-xs">
           <p className="text-on-surface-variant leading-snug">

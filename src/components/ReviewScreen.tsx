@@ -86,10 +86,16 @@ export function ReviewScreen({
 
   const [stored, setStored] = useState<BoxesByStep>({});
   const [desired, setDesired] = useState<BoxesByStep>({});
+  // Two box changes before the next render must both land (#58).
+  const desiredRef = useRef<BoxesByStep>({});
+  desiredRef.current = desired;
   const [failedSaves, setFailedSaves] = useState<Record<number, string>>({});
   const [leftovers, setLeftovers] = useState<number[]>([]);
   const [unreadable, setUnreadable] = useState<string | null>(null);
   const [opError, setOpError] = useState<string | null>(null);
+  // The refusal came from the last Generate; a later successful delete, reset
+  // or resync may have fixed its cause. A new Generate remounts this screen.
+  const [refusalCleared, setRefusalCleared] = useState(false);
   const [pending, setPending] = useState(0);
   const queue = useRef<Promise<void>>(Promise.resolve());
 
@@ -182,9 +188,14 @@ export function ReviewScreen({
     [enqueue, outputDir],
   );
 
-  const setStepBoxes = (step: number, list: RedactionBox[]) => {
-    setDesired((d) => ({ ...d, [step]: list }));
-    saveStep(step, list);
+  /** `change` gets the latest list, not this render's, so no change is lost. */
+  const setStepBoxes = (step: number, change: (list: RedactionBox[]) => RedactionBox[]) => {
+    const before = desiredRef.current[step] ?? [];
+    const next = change(before);
+    if (next === before) return;
+    desiredRef.current = { ...desiredRef.current, [step]: next };
+    setDesired((d) => ({ ...d, [step]: next }));
+    saveStep(step, next);
   };
 
   /** After a delete failed, the disk decides what is left (D5). */
@@ -197,6 +208,7 @@ export function ReviewScreen({
       const loaded = await loadRedactions(outputDir);
       setLeftovers(loaded.leftover_steps ?? []);
       setUnreadable(loaded.unreadable ?? null);
+      setRefusalCleared(true);
     } catch (e) {
       setOpError(String(e));
     }
@@ -208,6 +220,7 @@ export function ReviewScreen({
         try {
           await deleteStep(outputDir, step);
           setOpError(null);
+          setRefusalCleared(true);
           if (thumbsRef.current.some((x) => x.step === step)) {
             setDeletedCount((n) => n + 1);
           }
@@ -241,6 +254,7 @@ export function ReviewScreen({
         setDesired({});
         setFailedSaves({});
         setOpError(null);
+        setRefusalCleared(true);
         const loaded = await loadRedactions(outputDir);
         setLeftovers(loaded.leftover_steps ?? []);
         setUnreadable(loaded.unreadable ?? null);
@@ -266,6 +280,9 @@ export function ReviewScreen({
 
   return (
     <div className="relative flex flex-col h-full bg-surface">
+      {/* `contents` keeps the flex layout; `inert` keeps focus and clicks out
+          of the screen behind the open step (#58). */}
+      <div className="contents" inert={open !== null}>
       <div className="px-4 pt-4 pb-2">
         <p className="text-on-surface text-sm font-semibold">
           {t("review.title")}
@@ -295,7 +312,7 @@ export function ReviewScreen({
           </p>
         )}
         {[
-          uploadError && t("review.upload_refused", { error: uploadError }),
+          uploadError && !refusalCleared && t("review.upload_refused", { error: uploadError }),
           opError,
           ...failedSteps.map((n) =>
             t("review.redact_save_failed", { n, error: failedSaves[n] }),
@@ -475,6 +492,7 @@ export function ReviewScreen({
           {t("review.confirm")}
         </button>
       </div>
+      </div>
 
       {open && (
         <StepEditor
@@ -483,20 +501,16 @@ export function ReviewScreen({
           desired={desired[open.step] ?? []}
           drawingDisabled={unreadable !== null}
           saving={pending > 0}
-          saveFailed={failedSaves[open.step] !== undefined}
+          saveError={failedSaves[open.step]}
           confirmDelete={confirmDelete}
-          onAdd={(b) => {
+          onAdd={(b) =>
             // A second identical box would share its React key and its removal.
-            if (hasBox(desired[open.step], b)) return;
-            setStepBoxes(open.step, [...(desired[open.step] ?? []), b]);
-          }}
-          onRemove={(b) =>
-            setStepBoxes(
-              open.step,
-              (desired[open.step] ?? []).filter((x) => boxKey(x) !== boxKey(b)),
-            )
+            setStepBoxes(open.step, (list) => (hasBox(list, b) ? list : [...list, b]))
           }
-          onRetrySave={() => saveStep(open.step, desired[open.step] ?? [])}
+          onRemove={(b) =>
+            setStepBoxes(open.step, (list) => list.filter((x) => boxKey(x) !== boxKey(b)))
+          }
+          onRetrySave={() => saveStep(open.step, desiredRef.current[open.step] ?? [])}
           onAskDelete={() => setConfirmDelete(true)}
           onCancelDelete={() => setConfirmDelete(false)}
           onDelete={() => {

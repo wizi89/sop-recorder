@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { invoke } from "@tauri-apps/api/core";
 import { ReviewScreen } from "../components/ReviewScreen";
@@ -186,8 +186,11 @@ describe("review redaction", () => {
     await renderReview();
     await openStep(1);
     drag([10, 10], [30, 20]);
+    // The editor covers the alert list behind it, so it says so itself.
     await waitFor(() =>
-      expect(screen.getByText(/Schwärzung für Schritt 1 konnte nicht gespeichert werden/)).toBeInTheDocument(),
+      expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent(
+        "Schwärzung für Schritt 1 konnte nicht gespeichert werden: disk full",
+      ),
     );
     expect(screen.queryByTestId("redaction-applied")).toBeNull();
     expect(screen.getByTestId("redaction-pending")).toBeInTheDocument();
@@ -273,6 +276,96 @@ describe("review redaction", () => {
   it("shows why an upload was refused", async () => {
     await renderReview({ uploadError: "Schritt 7 wurde nicht vollständig gelöscht" });
     expect(screen.getByText(/Nicht hochgeladen: Schritt 7/)).toBeInTheDocument();
+  });
+
+  it("keeps both of two box changes made before the next render", async () => {
+    await renderReview();
+    await openStep(3);
+    // Two boxes added from the same render: both pointer-ups end one held drag.
+    const frame = screen.getByTestId("redaction-frame");
+    fireEvent.pointerDown(frame, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+    act(() => {
+      fireEvent.pointerUp(frame, { clientX: 40, clientY: 40, pointerId: 1 });
+      fireEvent.pointerUp(frame, { clientX: 80, clientY: 80, pointerId: 1 });
+    });
+    await waitFor(() => expect(generate()).toBeEnabled());
+    const saves = calls.filter(([c]) => c === "save_redactions");
+    expect(saves[saves.length - 1][1]).toEqual({
+      outputDir: "/rec",
+      step: 3,
+      boxes: [
+        [20, 20, 60, 60],
+        [20, 20, 140, 140],
+      ],
+    });
+    expect(stored["3"]).toHaveLength(2);
+  });
+
+  it("keeps a draw followed by a remove of another box in the same render", async () => {
+    stored = { "3": [[20, 20, 40, 20]] };
+    await renderReview();
+    await openStep(3);
+    const remove = screen.getByRole("button", { name: "Schwärzung entfernen" });
+    const frame = screen.getByTestId("redaction-frame");
+    fireEvent.pointerDown(frame, { button: 0, clientX: 50, clientY: 50, pointerId: 1 });
+    act(() => {
+      fireEvent.pointerUp(frame, { clientX: 90, clientY: 80, pointerId: 1 });
+      fireEvent.click(remove);
+    });
+    await waitFor(() => expect(generate()).toBeEnabled());
+    expect(stored["3"]).toEqual([[100, 100, 80, 60]]);
+  });
+
+  it("drops the upload refusal once a retried delete succeeds", async () => {
+    leftovers = [7];
+    await renderReview({ uploadError: "Schritt 7 wurde nicht vollständig gelöscht" });
+    expect(screen.getByText(/Nicht hochgeladen: Schritt 7/)).toBeInTheDocument();
+    deleteImpl = async () => {
+      leftovers = [];
+    };
+    await userEvent.setup().click(screen.getByRole("button", { name: "Erneut löschen" }));
+    await waitFor(() => expect(screen.queryByText(/Nicht hochgeladen/)).toBeNull());
+  });
+
+  it("drops the upload refusal once a reset succeeds", async () => {
+    unreadable = "expected value at line 1";
+    await renderReview({ uploadError: "Schwärzungen nicht lesbar" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Schwärzungen zurücksetzen" }));
+    await user.click(screen.getByRole("button", { name: "Löschen" }));
+    await waitFor(() => expect(screen.queryByText(/Nicht hochgeladen/)).toBeNull());
+  });
+
+  it("the step editor is modal: focus inside, content behind inert, Escape closes", async () => {
+    await renderReview();
+    await openStep(3);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(generate().closest("[inert]")).not.toBeNull();
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(generate().closest("[inert]")).toBeNull();
+  });
+
+  it("closes the step editor on Escape after focus left it", async () => {
+    stored = { "3": [[20, 20, 40, 20]] };
+    await renderReview();
+    await openStep(3);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Schwärzung entfernen" }));
+    // The removed button took focus with it.
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("gives the box remove button a 24x24 px hit area", async () => {
+    stored = { "3": [[20, 20, 40, 20]] };
+    await renderReview();
+    await openStep(3);
+    const style = screen.getByRole("button", { name: "Schwärzung entfernen" }).style;
+    expect(parseFloat(style.minWidth)).toBeGreaterThanOrEqual(24);
+    expect(parseFloat(style.minHeight)).toBeGreaterThanOrEqual(24);
   });
 
   it("keeps the failed-capture total from when the screen opened", async () => {
