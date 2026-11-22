@@ -3,7 +3,11 @@
 // tests, so the hook's plumbing is unused on that target.
 #![cfg_attr(
     all(not(windows), not(target_os = "macos")),
-    allow(dead_code, unused_imports)
+    allow(
+        dead_code,
+        unused_imports,
+        reason = "no input hook on Linux; the crate builds there only for clippy and the tests"
+    )
 )]
 
 use std::sync::atomic::{AtomicBool, Ordering};
