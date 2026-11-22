@@ -4,6 +4,10 @@ The desktop app that records a workflow on the user's machine, with narration an
 action, and sends it to the server, which turns it into a guide. German UI words are given in
 quotes where the UI uses them.
 
+`_Avoid_:` lists specific synonyms that must not be used for the term in code or docs; generic
+words are not listed. `scripts/check_glossary_terms.py` checks every entry without a qualifier in
+parentheses.
+
 ## Language
 
 ### Recording
@@ -28,12 +32,11 @@ _Avoid_: voice-over
 
 **Step**:
 One user action during a recording, a left click or the Return key, documented by one screenshot.
-_Avoid_: event, click (for the step itself)
+_Avoid_: click (for the step itself)
 
 **Step number**:
 The label a step gets when it is captured. It never changes: numbers can have gaps, and their order
 is the order of the steps.
-_Avoid_: index, position
 
 **Trigger**:
 What started a step: a click or the Return key.
@@ -64,7 +67,7 @@ monitor ("Ganzer Bildschirm"). It is fixed for a recording when it starts.
 **Active window**:
 The window the user is working in at a step, together with the window that owns it and the menus or
 dropdowns it has open. The default capture mode shows only this.
-_Avoid_: current window, focused window
+_Avoid_: focused window
 
 **Capture area**:
 The part of the monitor a step's screenshot keeps.
@@ -97,7 +100,7 @@ The "Prüfen" mark on a step the user has to look at before Generate: its passwo
 or unknown, its capture scope is a fallback or unknown, its window list was partial, or it has no
 capture record. A check that is off does not mark the step. One tick confirms all
 marked steps of a recording.
-_Avoid_: flag (for the mark), warning
+_Avoid_: flag (for the mark)
 
 **Redaction**:
 A box the user draws on a step on the review screen. It is blacked out in what is sent; the
@@ -127,7 +130,7 @@ recording ("Aus Ordner generieren").
 
 **Guide**:
 The step-by-step instructions the server makes from one recording, saved next to it.
-_Avoid_: SOP (for the file), document
+_Avoid_: SOP (for the file)
 
 **Generation job**:
 The server's run that turns one recording into a guide. The recorder can follow it again after its

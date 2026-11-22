@@ -33,6 +33,14 @@ this file states the rules.
   checks only that behaviour stayed the same. Hooks are never skipped (`--no-verify`) or edited to
   get a commit through. Source: `AGENTS.md` Pre-commit checks.
   Tool: `.githooks/pre-commit` (token cap, report-only for now).
+- **G9.** Names in code, UI text and docs use the `GLOSSARY.md` terms, never a term the
+  glossary lists under `_Avoid_`. Source: `AGENTS.md` Domain language. Tool:
+  `scripts/check_glossary_terms.py` (CI job `glossary`) for entries without a qualifier; the
+  reviewer checks the qualified ones.
+- **G10.** A product *why* (a decision that is hard to reverse, surprising without context, and
+  the result of a real trade-off) goes in an ADR in `docs/adr/`, not in a code comment; the comment
+  may point to the ADR. Reversing a decision means a new ADR that says which one it replaces.
+  Source: `AGENTS.md` Domain language.
 
 ## Server contract
 

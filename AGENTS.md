@@ -4,7 +4,6 @@
 - Default to the simplest solution that works, no unrequested abstractions.
 - Surprises go to `docs/FINDINGS.md`; drain it with `drain-findings`. For a symptom, grep FINDINGS
   and the Wiki index first.
-- Domain terms: `GLOSSARY.md`. Decisions that are hard to reverse: `docs/adr/`.
 - Modules, the life of a recording, and what leaves the machine: `docs/ARCHITECTURE.md`.
 - Roadmap and current status of the whole product: `../9_sop-sorcery/docs/ROADMAP.md` and
   `project-status.md` next to it.
@@ -12,6 +11,15 @@
 - The code rules a PR is reviewed against: `CODING_STANDARDS.md`.
 - Server contract: `docs/server-contract.md`. Contract changes: breaking allowed. (Until go-live;
   then this line becomes "Contract changes: additive only", in both repos.)
+
+## Domain language and planning
+
+- Domain terms: `GLOSSARY.md`. Decisions that are hard to reverse: `docs/adr/`. The owner owns
+  both (`.github/CODEOWNERS`); a change to either is pointed out in the PR body.
+- Plan by size. A tiny diff with no open question is done in one shot. Anything else starts
+  with `/grill-with-docs`, which settles the open questions with the owner and records terms and
+  ADRs as it goes. `/wayfinder` only when the effort is too foggy for one grilling session.
+- A station has no owner to grill: an open question becomes `needs-owner`.
 
 ## Agents never merge
 

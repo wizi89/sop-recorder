@@ -55,7 +55,7 @@ Closes #<issue>
 
 ## Sections
 
-Skip all preambles and keep prose brief. Use the terms of `docs/ARCHITECTURE.md` and `docs/server-contract.md` (recording, step, screenshot, upload, ...). Quote German UI strings as they appear, with real umlauts.
+Skip all preambles and keep prose brief. Use the domain terms in `GLOSSARY.md` (recording, step, capture mode, review mark, ...). Quote German UI strings as they appear, with real umlauts.
 
 ### Summary
 

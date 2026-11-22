@@ -39,3 +39,6 @@ src-tauri/keys.pub
 # Local agent/tooling config
 .mcp.json
 .serena/
+
+# Python bytecode from scripts/
+__pycache__/
