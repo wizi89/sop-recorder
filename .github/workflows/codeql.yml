@@ -1,11 +1,17 @@
 name: CodeQL
 
-# Advanced setup instead of GitHub's default setup, for one reason: default
-# setup cannot skip paths, so a PR that changed only Markdown (vendored
-# skills, docs) ran the full scan, Rust alone for ~9 minutes. paths-ignore
-# skips the run only when EVERY changed file matches; the weekly schedule
-# scans main in full regardless. Not a required check, so a skipped run
-# blocks nothing.
+# Advanced setup instead of GitHub's default setup, because default setup
+# cannot skip work: a PR that changed only Markdown ran the full scan, Rust
+# alone for ~9 minutes (build-mode none still extracts every Tauri
+# dependency). Two filters keep PRs cheap:
+#
+# - paths-ignore skips the whole run when EVERY changed file is docs.
+# - On a PR, the `languages` job scans only the languages whose files the PR
+#   changed: Rust for src-tauri/, Actions for .github/, JS/TS for the rest.
+#
+# A push to main, a manual run and the weekly schedule scan every language,
+# so main always has a full, current analysis to compare PRs against. Not a
+# required check, so a skipped language blocks nothing.
 
 on:
   push:
@@ -16,13 +22,59 @@ on:
     paths-ignore: ["**/*.md", "docs/**", ".claude/**"]
   schedule:
     - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  # Anything that cannot be decided (not a PR, a diff base missing from the
+  # clone) scans every language: a wrong guess should cost minutes, never a
+  # skipped scan.
+  languages:
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.pick.outputs.list }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Pick the languages the change touches
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        # --no-renames lists both paths of a rename, so a file moved out of a
+        # language's tree still scans that language.
+        run: |
+          all='["actions","javascript-typescript","rust"]'
+          list="$all"
+          if [ "$EVENT" = pull_request ] && [ -n "$PR_BASE" ] \
+            && files=$(git diff --no-renames --name-only "$PR_BASE"...HEAD) \
+            && [ -n "$files" ]; then
+            actions=false; js=false; rust=false
+            while IFS= read -r f; do
+              case "$f" in
+                *.md|docs/*|.claude/*) ;;
+                .github/*) actions=true ;;
+                src-tauri/*.js|src-tauri/*.ts|src-tauri/*.html) rust=true; js=true ;;
+                src-tauri/*) rust=true ;;
+                *) js=true ;;
+              esac
+            done <<< "$files"
+            list=$(printf '%s\n' "actions:$actions" "javascript-typescript:$js" "rust:$rust" \
+              | sed -n 's/:true$//p' | jq -R . | jq -cs .)
+          fi
+          echo "Changed files:"; printf '%s\n' "${files:-<not a PR or not computed>}"
+          echo "list=$list" | tee -a "$GITHUB_OUTPUT"
+
   analyze:
     name: Analyze (${{ matrix.language }})
+    needs: languages
+    if: needs.languages.outputs.list != '[]'
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -31,7 +83,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [actions, javascript-typescript, rust]
+        language: ${{ fromJSON(needs.languages.outputs.list) }}
 
     steps:
       - name: Checkout
