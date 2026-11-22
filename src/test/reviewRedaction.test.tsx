@@ -353,7 +353,8 @@ describe("review redaction", () => {
     await renderReview();
     await openStep(3);
     await userEvent.setup().click(screen.getByRole("button", { name: "Schwärzung entfernen" }));
-    (document.activeElement as HTMLElement | null)?.blur();
+    // The removed button took focus with it.
+    expect(document.activeElement).toBe(document.body);
     fireEvent.keyDown(document.body, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
