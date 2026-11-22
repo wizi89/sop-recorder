@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import check_glossary_terms as check  # noqa: E402
+import check_glossary_terms as check
 
 FIXTURE = Path(__file__).resolve().parent / "glossary_fixture"
 
@@ -39,8 +39,13 @@ class Matching(unittest.TestCase):
         return bool(check.term_pattern(term).search(text))
 
     def test_joined_words_and_plural(self):
-        for text in ("a prompt chain", "prompt_chain = 1", "promptChains", "prompt-chain",
-                     "the prompt\n   chain"):
+        for text in (
+            "a prompt chain",
+            "prompt_chain = 1",
+            "promptChains",
+            "prompt-chain",
+            "the prompt\n   chain",
+        ):
             self.assertTrue(self.find("prompt chain", text), text)
 
     def test_whole_words_only(self):
@@ -53,9 +58,17 @@ class Matching(unittest.TestCase):
         self.assertFalse(self.find("SOP", "SOPDocument"))
         self.assertFalse(self.find("SOP", "generate_sop_steps"))
 
+    def test_a_defined_terms_code_name_is_not_its_avoided_synonym(self):
+        pattern = check.term_pattern("SOP document", spaced_only=True)
+        self.assertTrue(pattern.search("the SOP document"))
+        self.assertFalse(pattern.search("sop_document = build()"))
+        self.assertFalse(pattern.search("SOPDocument"))
+        self.assertEqual(check.defined_terms("**SOPDocument**:\nx\n"), {"sopdocument"})
+
     def test_qualified_entries_are_skipped(self):
         terms, skipped = check.parse_glossary(
-            "_Avoid_: event, click (for the step itself)\n_Avoid_: `tenant`, workspace\n")
+            "_Avoid_: event, click (for the step itself)\n_Avoid_: `tenant`, workspace\n"
+        )
         self.assertEqual(terms, ["event", "tenant", "workspace"])
         self.assertEqual(skipped, ["click (for the step itself)"])
 

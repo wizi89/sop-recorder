@@ -12,7 +12,9 @@ skipped and counted as skipped.
 A term matches as a whole phrase in any case, plural included, with its words
 joined by a space, `_`, `-` or nothing: "prompt chain" finds prompt_chain and
 promptChains. An all-capitals term ("SOP") matches case-sensitively, so
-SOPDocument does not count. Phrases listed one per line in
+SOPDocument does not count. When a term's joined form is the name of a
+defined term ("SOP document" and **SOPDocument**), only the form with a space
+counts, so sop_document stays the defined term's code name. Phrases listed one per line in
 `scripts/glossary_terms_allowed.txt` never count (names such as "SOP Sorcery").
 
 Hits that already exist are recorded per file and term in
@@ -35,6 +37,8 @@ EXCLUDE_PREFIXES = (
     "GLOSSARY.md",
     "CHANGELOG.md",
     "docs/changelog/",
+    "archive/",
+    "docs/archive/",
     "scripts/check_glossary_terms.py",
     "scripts/test_check_glossary_terms.py",
     "scripts/glossary_terms_",
@@ -43,7 +47,13 @@ EXCLUDE_PREFIXES = (
     ".claude/skills/",
     "node_modules/",
 )
-EXCLUDE_NAMES = ("package-lock.json", "Cargo.lock", "uv.lock", "pnpm-lock.yaml", "yarn.lock")
+EXCLUDE_NAMES = (
+    "package-lock.json",
+    "Cargo.lock",
+    "uv.lock",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+)
 MAX_BYTES = 1_000_000
 
 
@@ -54,7 +64,7 @@ def parse_glossary(text):
         stripped = line.strip()
         if not stripped.startswith("_Avoid_:"):
             continue
-        for entry in stripped[len("_Avoid_:"):].split(","):
+        for entry in stripped[len("_Avoid_:") :].split(","):
             entry = entry.strip().strip("`\"'").strip()
             if not entry:
                 continue
@@ -65,8 +75,25 @@ def parse_glossary(text):
     return terms, skipped
 
 
-def term_pattern(term):
+def defined_terms(text):
+    """The normalised names of the terms the glossary defines (`**Name**:`)."""
+    return {
+        normalise(m.group(1))
+        for m in re.finditer(r"^\*\*(.+?)\*\*:", text, re.MULTILINE)
+    }
+
+
+def normalise(term):
+    return re.sub(r"[^a-z0-9]", "", term.lower())
+
+
+def term_pattern(term, spaced_only=False):
+    """spaced_only: the joined form names a defined term (SOP document vs
+    SOPDocument), so only the form with whitespace between the words counts."""
     words = term.split()
+    if spaced_only:
+        body = r"\s+".join(re.escape(w) for w in words) + r"(?:e?s)?"
+        return re.compile(r"(?<![A-Za-z0-9])(?i:" + body + r")(?![A-Za-z0-9])")
     if term.isupper():
         body = r"(?:\s+|[_-])?".join(re.escape(w) for w in words) + r"s?"
         return re.compile(r"(?<![A-Za-z0-9])" + body + r"(?![A-Za-z0-9])")
@@ -77,14 +104,22 @@ def term_pattern(term):
 
 def blank_allowed(text, allowed):
     for phrase in allowed:
-        text = re.sub(re.escape(phrase), lambda m: " " * len(m.group(0)), text, flags=re.I)
+        text = re.sub(
+            re.escape(phrase),
+            lambda m: " " * len(m.group(0)),
+            text,
+            flags=re.IGNORECASE,
+        )
     return text
 
 
 def list_files(root):
     out = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-        cwd=root, capture_output=True, encoding="utf-8", check=True,
+        cwd=root,
+        capture_output=True,
+        encoding="utf-8",
+        check=True,
     ).stdout
     files = []
     for rel in out.splitlines():
@@ -110,8 +145,13 @@ def scan(root):
         raise SystemExit(f"no GLOSSARY.md in {root}")
     terms, skipped = parse_glossary(glossary)
     allowed_file = read_text(root / ALLOWED) or ""
-    allowed = [p.strip() for p in allowed_file.splitlines() if p.strip() and not p.startswith("#")]
-    patterns = [(t, term_pattern(t)) for t in terms]
+    allowed = [
+        p.strip()
+        for p in allowed_file.splitlines()
+        if p.strip() and not p.startswith("#")
+    ]
+    defined = defined_terms(glossary)
+    patterns = [(t, term_pattern(t, normalise(t) in defined)) for t in terms]
     hits, checked = {}, 0
     for rel in list_files(root):
         text = read_text(root / rel)
@@ -131,20 +171,34 @@ def main(argv):
         print(__doc__.strip())
         return 0
     update = "--update" in argv
-    root = Path(argv[argv.index("--root") + 1]) if "--root" in argv else Path(__file__).resolve().parent.parent
+    root = (
+        Path(argv[argv.index("--root") + 1])
+        if "--root" in argv
+        else Path(__file__).resolve().parent.parent
+    )
     root = root.resolve()
     hits, checked, terms, skipped = scan(root)
-    print(f"glossary terms: checked {checked} files for {len(terms)} avoid terms "
-          f"({len(skipped)} qualified entries skipped)")
+    print(
+        f"glossary terms: checked {checked} files for {len(terms)} avoid terms "
+        f"({len(skipped)} qualified entries skipped)"
+    )
     if checked == 0 or not terms:
         print("FAIL: nothing was checked")
         return 1
-    counts = {rel: {t: len(lines) for t, lines in by_term.items()} for rel, by_term in hits.items()}
+    counts = {
+        rel: {t: len(lines) for t, lines in by_term.items()}
+        for rel, by_term in hits.items()
+    }
     baseline_path = root / BASELINE
     if update:
-        baseline_path.write_text(json.dumps(counts, indent=2, sort_keys=True) + "\n",
-                                 encoding="utf-8", newline="\n")
-        print(f"baseline written: {sum(sum(c.values()) for c in counts.values())} hits in {len(counts)} files")
+        baseline_path.write_text(
+            json.dumps(counts, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        print(
+            f"baseline written: {sum(sum(c.values()) for c in counts.values())} hits in {len(counts)} files"
+        )
         return 0
     baseline = json.loads(read_text(baseline_path) or "{}")
     new, shrunk = [], 0
@@ -152,14 +206,18 @@ def main(argv):
         for term, lines in sorted(by_term.items()):
             allowed_count = baseline.get(rel, {}).get(term, 0)
             if len(lines) > allowed_count:
-                new.append(f"{rel}:{','.join(map(str, lines))}: \"{term}\" "
-                           f"({len(lines)} hits, baseline {allowed_count})")
+                new.append(
+                    f'{rel}:{",".join(map(str, lines))}: "{term}" '
+                    f"({len(lines)} hits, baseline {allowed_count})"
+                )
     for rel, by_term in baseline.items():
         for term, count in by_term.items():
             if len(hits.get(rel, {}).get(term, [])) < count:
                 shrunk += 1
     if shrunk:
-        print(f"note: {shrunk} baseline entries are above today's count; run --update to shrink them")
+        print(
+            f"note: {shrunk} baseline entries are above today's count; run --update to shrink them"
+        )
     if new:
         print("FAIL: use the GLOSSARY.md term instead of these avoided ones:")
         print("\n".join("  " + n for n in new))
