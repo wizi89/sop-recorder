@@ -80,7 +80,7 @@ const EXPECTED_OUTCOMES: ReadonlyArray<{
 
 /** The id of the expected outcome this message is, or null if it is a defect. */
 export function expectedOutcome(msg: string): string | null {
-  if (msg.length === 0) return "empty";
+  if (!msg) return "empty";
   return EXPECTED_OUTCOMES.find((o) => o.matches(msg))?.id ?? null;
 }
 
