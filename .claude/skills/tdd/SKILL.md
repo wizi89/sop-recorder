@@ -2,7 +2,7 @@
 name: tdd
 description: Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests.
 ---
-<!-- Vendored from mattpocock-skills 1.3.1 `tdd` (MIT, see LICENSE) through Home @534940c, unchanged. Refresh it from Home's pin; edit nothing here. -->
+<!-- Vendored from mattpocock-skills 1.3.1 `tdd` (MIT, see LICENSE) through Home @d79a5f5, unchanged. Refresh it from Home's pin; edit nothing here. -->
 
 # Test-Driven Development
 

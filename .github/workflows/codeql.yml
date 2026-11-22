@@ -31,6 +31,7 @@ jobs:
   # Anything that cannot be decided (not a PR, a diff base missing from the
   # clone) scans every language: a wrong guess should cost minutes, never a
   # skipped scan.
+  # required-checks: exempt -- picks the languages for the scan below, checks nothing
   languages:
     runs-on: ubuntu-latest
     outputs:
@@ -71,6 +72,7 @@ jobs:
           echo "Changed files:"; printf '%s\n' "${files:-<not a PR or not computed>}"
           echo "list=$list" | tee -a "$GITHUB_OUTPUT"
 
+  # required-checks: exempt -- alerts go to code scanning, not to the job result, and docs-only PRs skip the workflow
   analyze:
     name: Analyze (${{ matrix.language }})
     needs: languages
