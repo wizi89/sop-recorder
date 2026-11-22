@@ -86,7 +86,43 @@ fn saved(marker_box: Option<MarkerBox>) -> SavedStep {
         marker_box,
         capture_scope: step_meta::CaptureScope::Window,
         password_check: step_meta::PasswordCheck::Ok,
+        window_list_partial: false,
     }
+}
+
+/// A partial window list marks the step whatever the masking setting: it is
+/// decided from the geometry alone, before the masking-off return (#57).
+#[test]
+fn a_partial_window_list_is_noticed_in_either_snapshot() {
+    use window_area::{Geometry, Snapshot};
+    let partial = Snapshot {
+        partial: true,
+        ..Default::default()
+    };
+    assert!(!window_list_partial(None));
+    assert!(!window_list_partial(Some(&Geometry::default())));
+    for snapshots in [
+        [partial.clone(), Snapshot::default()],
+        [Snapshot::default(), partial],
+    ] {
+        assert!(window_list_partial(Some(&Geometry {
+            snapshots,
+            ..Default::default()
+        })));
+    }
+}
+
+/// The source guard for the same decision: the partial flag is computed
+/// before `check_step` hands over to the password check, whose first line
+/// returns when masking is off.
+#[test]
+fn the_partial_flag_does_not_depend_on_masking() {
+    let source = include_str!("step.rs").replace("\r\n", "\n");
+    let body = &source[source.find("pub(super) fn check_step(").unwrap()..];
+    let body = &body[..body.find("\n}\n").unwrap()];
+    let partial = body.find("window_list_partial(held.geometry").unwrap();
+    let check = body.find("password_check_step(checker").unwrap();
+    assert!(partial < check, "{body}");
 }
 
 #[tokio::test]

@@ -236,13 +236,19 @@ When password masking is on, a step SHALL be saved and flagged if any window vis
 
 ### Requirement: Uncertain steps must be acknowledged before generation
 
-The review screen SHALL mark every step that is flagged, was captured as a full display in the active window mode, or carries no record of how it was captured. When at least one step is marked, generation SHALL stay disabled until the user ticks a single confirmation that they checked the marked steps.
+The review screen SHALL mark every step that is flagged, was captured as a full display in the active window mode, was captured from a partial window list (one that may leave out shell windows such as notifications, which are then not blacked out), or carries no record of how it was captured. A partial window list marks the step with password masking on or off, and is recorded with the step apart from the password check. When at least one step is marked, generation SHALL stay disabled until the user ticks a single confirmation that they checked the marked steps.
 
 #### Scenario: A recording with flagged steps
 
 - **WHEN** the review screen shows a recording with two flagged steps
 - **THEN** both steps carry a visible mark
 - **AND** generate is disabled until the user ticks "Ich habe die markierten Schritte geprüft"
+
+#### Scenario: The window list is partial
+
+- **WHEN** the list of windows taken for a step is partial, with password masking on or off
+- **THEN** the step is marked and the confirmation is required
+- **AND** the step's password check outcome is unchanged by it
 
 #### Scenario: A recording made before this version
 
