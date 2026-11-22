@@ -1,4 +1,4 @@
-# Custom rule (course feedback-loops/05; CODING_STANDARDS.md F3).
+# Custom rule for CODING_STANDARDS.md F3.
 # Tauri declares UnlistenFn as `() => void`, but listen() resolves to an async
 # function whose promise can reject. A direct call leaves that rejection
 # unhandled, and the error reporter then reports itself (FINDINGS 2026-09-04).
@@ -6,7 +6,11 @@
 # place allowed to call one. The rule matches the shapes the repo had before
 # that fix: a call by an unlisten-like name, a promise's resolved value called
 # in its then-callback, each element of an array called in forEach, and a
-# value awaited from listen() or declared UnlistenFn.
+# value awaited from listen(), once() or an on* source, a value declared
+# UnlistenFn, a React ref by an unlisten-like name, and a for...of over an
+# UnlistenFn[]. Not matched: .map callbacks and destructured then-arguments.
+# The then and forEach shapes match any callback that calls its argument; a
+# harmless one gets `// nosemgrep: direct-unlisten-call` with the reason.
 # Fixtures: .semgrep/fixtures/unlisten-{ok,bad}.ts; CI asserts both.
 rules:
   - id: direct-unlisten-call
@@ -29,6 +33,12 @@ rules:
           - metavariable-regex:
               metavariable: $F
               regex: (?i)^((?!safeunlisten$)\w*unlisten\w*|stop)$
+      # Held in a React ref: unlistenRef.current?.().
+      - patterns:
+          - pattern: $R.current()
+          - metavariable-regex:
+              metavariable: $R
+              regex: (?i)^\w*(unlisten|stop)\w*$
       # A promise's resolved value called in its then-callback: the shape of
       # listen(...).then((fn) => fn()).
       - patterns:
@@ -59,7 +69,8 @@ rules:
                   ...
           - metavariable-regex:
               metavariable: $L
-              regex: ^(listen|once)$
+              # listen/once, and the window's on* event sources (onFocusChanged).
+              regex: ^(listen|once|on[A-Z]\w*)$
           - pattern: $F()
       # Anything declared as an UnlistenFn.
       - patterns:
@@ -71,6 +82,27 @@ rules:
                   let $F: UnlistenFn;
                   ...
               - pattern-inside: |
+                  let $F: UnlistenFn | null;
+                  ...
+              - pattern-inside: |
+                  let $F: UnlistenFn | null = $INIT;
+                  ...
+              - pattern-inside: |
+                  let $F: UnlistenFn | undefined = $INIT;
+                  ...
+              - pattern-inside: |
                   const $F: UnlistenFn = $INIT;
                   ...
+          - pattern: $F()
+      # Each element of an UnlistenFn[] called in a for...of loop.
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  let $A: UnlistenFn[] = $INIT;
+                  ...
+              - pattern-inside: |
+                  const $A: UnlistenFn[] = $INIT;
+                  ...
+          - pattern-inside: |
+              for (const $F of $A) { ... }
           - pattern: $F()

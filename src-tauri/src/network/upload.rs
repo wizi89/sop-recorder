@@ -77,7 +77,7 @@ fn capture_counts(
 // ponytail: ten real parameters, not an abstraction waiting to happen.
 #[allow(
     clippy::too_many_arguments,
-    reason = "a struct would move the same list one line up and touch every caller               of the upload path for a lint; revisit if an eleventh appears"
+    reason = "a struct would move the same list one line up and touch every caller of the upload path for a lint; revisit if an eleventh appears"
 )]
 pub async fn upload_multipart(
     access_token: &str,
@@ -208,7 +208,7 @@ pub async fn upload_multipart(
 // ponytail: eleven real parameters, not an abstraction waiting to happen.
 #[allow(
     clippy::too_many_arguments,
-    reason = "a struct would move the same list one line up and touch every caller               of the upload path for a lint; revisit if a twelfth appears"
+    reason = "a struct would move the same list one line up and touch every caller of the upload path for a lint; revisit if a twelfth appears"
 )]
 pub async fn upload_with_retry(
     access_token: &str,

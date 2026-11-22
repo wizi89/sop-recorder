@@ -88,7 +88,7 @@ jobs:
             list+="- [ ] Contract: Does the server side already accept this, per the contract phase line in \`AGENTS.md\`, and does the \`server-contract\` job in \`release.yml\` cover a new endpoint?"$'\n'
           fi
           if [ $privacy -eq 1 ]; then
-            list+="- [ ] Privacy: Do \`docs/ARCHITECTURE.md\` \"What leaves the machine\" and \`docs/PRIVACY.md\` still describe exactly what is sent, and did the owner's hands-on check on Windows confirm it?"$'\n'
+            list+="- [ ] Privacy: Do \`docs/ARCHITECTURE.md\` \"What leaves the machine\" and \`docs/PRIVACY.md\` still describe exactly what is sent? If what is sent changed: did the owner's hands-on check on Windows confirm it?"$'\n'
           fi
           if [ $lane -eq 1 ]; then
             list+="- [ ] Dependabot lane: What does a revert of this PR leave behind (PRs the lane merged in the meantime)?"$'\n'

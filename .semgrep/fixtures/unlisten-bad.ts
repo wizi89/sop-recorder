@@ -69,3 +69,28 @@ export function heldInStop() {
     }
   };
 }
+
+export function inARef(unlistenRef: { current: (() => void) | null }) {
+  return () => unlistenRef.current?.(); // 11
+}
+
+export async function windowSource() {
+  const off = await getCurrentWindow().onFocusChanged(() => {});
+  off(); // 12
+}
+
+export function nullable() {
+  let off: UnlistenFn | null = null;
+  return () => {
+    if (off) off(); // 13
+  };
+}
+
+export function loopOverAll() {
+  const all: UnlistenFn[] = [];
+  return () => {
+    for (const fn of all) {
+      fn(); // 14
+    }
+  };
+}

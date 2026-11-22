@@ -280,7 +280,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install Semgrep
-        run: pipx install semgrep==1.186.0
+        run: pipx install "semgrep==$(python3 scripts/check_semgrep.py --version)"
 
       - name: Custom rules, proven on their fixtures
         run: python3 scripts/check_semgrep.py

@@ -52,3 +52,19 @@ export function unrelatedCallbacks(onDone: () => void) {
   void fetch("/x").then((r) => r.json());
   onDone();
 }
+
+export function refOfSomethingElse(timerRef: { current: (() => void) | null }) {
+  timerRef.current?.();
+}
+
+export async function awaitedHandlerResult(onGrant: () => Promise<() => void>) {
+  const done = await onGrant();
+  void done;
+}
+
+export function loopSafely() {
+  const all: UnlistenFn[] = [];
+  return () => {
+    for (const fn of all) safeUnlisten(fn);
+  };
+}

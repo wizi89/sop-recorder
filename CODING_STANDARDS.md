@@ -9,6 +9,10 @@ are stable; a deleted rule leaves a gap.
 - **G1.** This repo is public. No material from the private repo in code, commits, PR text or
   issue comments: no customer, pilot, pricing or internal infrastructure details.
 - **G2.** Default to the simplest solution that works. No abstractions the task did not ask for.
+- **G3.** A surprise that took real debugging time and is not plain from the code gets a
+  `docs/FINDINGS.md` entry (newest at the top, `Symptom / Cause / Rule`) in the same task.
+- **G7.** CI reads signing keys and secrets only from `secrets.*`, never from a file in the repo
+  or a value in a workflow. (A committed secret is caught by the checks below.)
 - **G8.** A split of a file over the 5000-token cap, in its own commit before the change, is in
   scope: never flag it as scope creep, check only that behaviour stayed the same.
 - **G9.** Names in code, UI text and docs use the `GLOSSARY.md` terms. The CI job `glossary`
@@ -36,12 +40,18 @@ are stable; a deleted rule leaves a gap.
 
 ## Rust
 
+- **R2.** A clippy lint is fixed, not allowed away. An `#[allow]` is the last resort, and its
+  `reason` says why the fix would be worse, not what the lint is. (That a reason exists is a
+  check, below.)
 - **R3.** Monitor geometry: never combine `Monitor::scale_factor()` with
   `Monitor::width()/height()/x()/y()`; derive the density from the capture
   (`capture_image().width() / Monitor::width()`). Source: `docs/findings/2026-09-and-earlier.md`
   2026-08-29.
 - **R4.** A side effect that must accompany a state change lives inside the function that makes
   the change, not beside each call. Source: `docs/findings/2026-09-and-earlier.md` 2026-09-04.
+- **R5.** A platform-only dependency goes in the matching `[target.'cfg(...)'.dependencies]`
+  table of `src-tauri/Cargo.toml`, not in `[dependencies]`. (That both platforms build is a
+  check, below.)
 
 ## Tests
 
@@ -62,7 +72,7 @@ Skip these in review; CI fails on them.
 | F1 TypeScript strict flags | `src/test/tsconfig.test.ts`; `npx tsc --noEmit` |
 | F3 direct unlisten call | `.semgrep/unlisten.yml`, run by `python scripts/check_semgrep.py` (CI job `semgrep`) |
 | G6 LF line endings | `.gitattributes` |
-| G7 no committed secrets | `.gitignore`; GitHub secret scanning with push protection |
+| G7 no committed secrets (the `secrets.*` half stays a rule) | `.gitignore`; GitHub secret scanning with push protection |
 | R1 `cargo fmt` | CI `cargo fmt --check` |
 | R2 clippy clean, an allowed lint says why | CI `cargo clippy --all-targets -- -D warnings`; `allow_attributes_without_reason` in `src-tauri/Cargo.toml` |
 | R5 both platforms build | CI `test` matrix (Windows and macOS) |
