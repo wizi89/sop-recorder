@@ -93,8 +93,9 @@ A step for which the recorder could not see every window over the capture area, 
 window may not have been masked.
 
 **Review mark**:
-The "Prüfen" mark on a step the user has to look at before Generate: its password check is not ok,
-its capture scope is a fallback or unknown, or its window list was partial. One tick confirms all
+The "Prüfen" mark on a step the user has to look at before Generate: its password check is flagged
+or unknown, its capture scope is a fallback or unknown, its window list was partial, or it has no
+capture record. A check that is off does not mark the step. One tick confirms all
 marked steps of a recording.
 _Avoid_: flag (for the mark), warning
 
