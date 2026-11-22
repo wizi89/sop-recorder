@@ -58,13 +58,21 @@ workflow's in step.
   `src-tauri/src/output/redactions.rs`, `src-tauri/src/capture/password_check.rs` and
   `password_check/`, `src-tauri/src/capture/window_area.rs` and `window_area/`.
 - Dependabot: `.github/workflows/dependabot-lane.yml`, `.github/workflows/dependabot-red.yml`.
+- Guardrails (a weakened check stays green): `.github/workflows/one-way-door.yml`,
+  `.github/workflows/ci.yml`, `.github/workflows/codeql.yml`, `.githooks/`,
+  `.claude/hooks/enable-githooks.sh`, `.semgrep/`, `.gitattributes`, `biome.json`, `tsconfig.json`,
+  `tsconfig.node.json`, `src/test/tsconfig.test.ts`, `scripts/check_*`, `scripts/test_check_*`,
+  `scripts/glossary_*`. The box asks "Does this weaken a check?" and is the owner's: no session
+  ticks it. A Dependabot PR gets none while only Dependabot pushed to it.
 
 ## Pre-commit checks
 
 The git hooks in `.githooks/` turn on by themselves when `core.hooksPath` is unset: a SessionStart hook runs
-`git config core.hooksPath .githooks`. The pre-commit hook reports two things on the staged
-files: a file over the 5000-token cap, and `rustfmt` findings. It is report-only for now and
-never blocks. Never skip a hook (`--no-verify`) or edit one to get a commit through.
+`git config core.hooksPath .githooks`. The pre-commit hook blocks the commit when a staged code
+file is over the 5000-token cap (docs and data are not capped; generated Tauri files are exempt),
+or a staged file fails `rustfmt --check` or Biome's format check (Biome needs `npm ci`). It runs
+in about 2 seconds; tsc, clippy and the tests stay in CI. Never skip a hook (`--no-verify`) or
+edit one to get a commit through.
 `sh .githooks/selftest.sh` proves the pre-commit hook still catches what it should.
 
 **Editing a large file means splitting it.** When a file you change is over the token cap,

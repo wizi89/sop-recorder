@@ -118,6 +118,18 @@ jobs:
       - name: Frontend format
         run: npx biome ci .
 
+      # The hook blocks on its planted violations and lets a clean stage
+      # through; the last two lines of its output are the hook's own summary.
+      - name: Pre-commit hook, proven on its fixtures
+        shell: bash
+        run: sh .githooks/selftest.sh
+
+      # The One-way Door gate on stubbed PRs: red with an unticked box, green
+      # without a door or with every box ticked.
+      - name: One-way Door gate, proven on its fixtures
+        shell: bash
+        run: bash scripts/check_door_workflow.sh src-tauri/src/network/upload.rs
+
   # The real app, driven through its window: the journeys unit tests passed
   # over and only a windowed run found (a wait screen that never rendered, an
   # old server sending users into a five-minute wait). Windows only, because

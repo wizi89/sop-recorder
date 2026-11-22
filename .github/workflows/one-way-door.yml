@@ -1,10 +1,11 @@
 name: One-way Door
 
 # Marks a PR that touches a One-way Door path with the label `one-way-door`
-# and appends a checklist to the PR body once, so the label never depends on
-# the agent's judgement alone (ported from the server repo). While a box of
-# that checklist is unticked the job fails, so a door PR shows red until the
-# owner has checked it. Ticking a box edits the body, which re-runs the job.
+# and appends a checklist to the PR body, so the label never depends on the
+# agent's judgement alone (ported from the server repo). Each box is appended
+# once, also when a later push touches another door. While a box of that
+# checklist is unticked the job fails, so a door PR shows red until the owner
+# has checked it. Ticking a box edits the body, which re-runs the job.
 #
 # The doors here are what a revert cannot take back:
 #   - release: a merge to main builds installers and a v* tag ships them
@@ -16,8 +17,17 @@ name: One-way Door
 #   - privacy: what leaves the machine (docs/ARCHITECTURE.md "What leaves the
 #     machine"); data already sent cannot be recalled.
 #   - dependabot: the auto-merge lane merges on its own.
+#   - guardrails: a weakened check stays green, so nobody would notice. They
+#     are this workflow, CI, the hooks, the Semgrep rules, the check scripts
+#     with their baselines and fixtures, and the format and type configs. A
+#     Dependabot PR (an action bump in a workflow) gets no guardrail box
+#     while only Dependabot pushed to it.
 # Lockfiles, AGENTS.md and the other workflows are deliberately not door
 # paths: a revert fully restores them.
+# Limits: a PR runs its own copy of this workflow (pull_request), so a diff
+# to this file is read by the owner, not trusted to gate itself. A ticked box
+# stays ticked when a later push changes the same door again.
+# scripts/check_door_workflow.sh proves the gate on stubbed PRs in CI.
 
 on:
   pull_request:
@@ -44,11 +54,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
           files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
 
-          release=0; perms=0; contract=0; privacy=0; lane=0
+          release=0; perms=0; contract=0; privacy=0; lane=0; guard=0
           while IFS= read -r f; do
             [ -z "$f" ] && continue
             case "$f" in
@@ -59,10 +70,20 @@ jobs:
               src-tauri/src/commands/generate/redact.rs|src-tauri/src/output/redactions.rs) privacy=1 ;;
               src-tauri/src/capture/password_check.rs|src-tauri/src/capture/password_check/*|src-tauri/src/capture/window_area.rs|src-tauri/src/capture/window_area/*) privacy=1 ;;
               .github/workflows/dependabot-lane.yml|.github/workflows/dependabot-red.yml) lane=1 ;;
+              .github/workflows/one-way-door.yml|.github/workflows/ci.yml|.github/workflows/codeql.yml) guard=1 ;;
+              .githooks/*|.claude/hooks/enable-githooks.sh|.semgrep/*|.gitattributes|biome.json|tsconfig.json|tsconfig.node.json|src/test/tsconfig.test.ts) guard=1 ;;
+              scripts/check_*|scripts/test_check_*|scripts/glossary_*) guard=1 ;;
             esac
           done <<< "$files"
+          # A Dependabot PR bumps actions in the workflows; the guardrail box
+          # would only ask the owner to look at a version number. As soon as
+          # anyone else pushes a commit to it, the box applies again.
+          if [ "$AUTHOR" = "dependabot[bot]" ] && [ $guard -eq 1 ]; then
+            others=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[] | (.author.login // "unknown")' | grep -vxF 'dependabot[bot]' || true)
+            if [ -z "$others" ]; then guard=0; fi
+          fi
 
-          if [ $((release + perms + contract + privacy + lane)) -eq 0 ]; then
+          if [ $((release + perms + contract + privacy + lane + guard)) -eq 0 ]; then
             echo "No One-way Door paths touched."
             exit 0
           fi
@@ -70,13 +91,6 @@ jobs:
           gh api -X POST "repos/$REPO/issues/$PR/labels" -f "labels[]=one-way-door" > /dev/null \
             || echo "::warning::could not add label one-way-door"
 
-          marker='<!-- one-way-door-checklist -->'
-          body=$(gh api "repos/$REPO/pulls/$PR" --jq '.body // ""')
-          # Whole-line match: a body that merely quotes the marker in prose
-          # must not count as already carrying the checklist.
-          if printf '%s\n' "$body" | tr -d '\r' | grep -qxF "$marker"; then
-            echo "Checklist already present."
-          else
           list=""
           if [ $release -eq 1 ]; then
             list+="- [ ] Release: Was an installer built from this head (\`[build]\` or a manual CI run) installed on Windows, and on macOS when macOS config changed, and does it still find and apply an update?"$'\n'
@@ -93,13 +107,39 @@ jobs:
           if [ $lane -eq 1 ]; then
             list+="- [ ] Dependabot lane: What does a revert of this PR leave behind (PRs the lane merged in the meantime)?"$'\n'
           fi
+          if [ $guard -eq 1 ]; then
+            list+="- [ ] Guardrail: Does this weaken a check (a rule, fixture, baseline entry, ignore, path filter, hook, job or checklist box removed or loosened)? Tick once it does not, or once the PR body says why it must."$'\n'
+          fi
 
-          new_body=$(printf '%s\n\n%s\n## One-way Door checklist\n\n%s' "$body" "$marker" "$list")
-          jq -n --arg b "$new_body" '{body: $b}' \
-            | gh api -X PATCH "repos/$REPO/pulls/$PR" --input - > /dev/null \
-            || echo "::warning::could not update the PR body"
-          echo "Checklist appended."
-          body=$new_body
+          marker='<!-- one-way-door-checklist -->'
+          body=$(gh api "repos/$REPO/pulls/$PR" --jq '.body // ""')
+          # Whole-line match: a body that merely quotes the marker in prose
+          # must not count as carrying the checklist.
+          has_marker=0
+          if printf '%s\n' "$body" | tr -d '\r' | grep -qxF "$marker"; then has_marker=1; fi
+          # A box is present when its question stands after the marker,
+          # ticked or not; only the missing ones are appended.
+          after=$(printf '%s\n' "$body" | tr -d '\r' | awk -v m="$marker" '$0 == m { on = 1; next } on')
+          missing=""
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            if ! grep -qF -- "${line#- \[ \] }" <<< "$after"; then missing+="$line"$'\n'; fi
+          done <<< "$list"
+
+          if [ -z "$missing" ]; then
+            echo "Checklist already has a box for every touched door."
+          else
+            if [ $has_marker -eq 1 ]; then
+              new_body=$(printf '%s\n%s' "$body" "$missing")
+            else
+              new_body=$(printf '%s\n\n%s\n## One-way Door checklist\n\n%s' "$body" "$marker" "$missing")
+            fi
+            jq -n --arg b "$new_body" '{body: $b}' \
+              | gh api -X PATCH "repos/$REPO/pulls/$PR" --input - > /dev/null \
+              || echo "::warning::could not update the PR body"
+            echo "Checklist boxes appended:"
+            printf '%s' "$missing"
+            body=$new_body
           fi
 
           # The gate: every box after the marker must be ticked.

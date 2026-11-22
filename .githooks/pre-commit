@@ -1,47 +1,101 @@
 #!/bin/sh
-# Fast feedback on what this commit stages, in a few seconds:
-#   1. Token cap: a staged text file over 5000 tokens (bytes / 4) should be
-#      split. Agents edit big files badly; splitting one is in scope.
+# Blocks the commit when what it stages fails one of three fast checks (under
+# 3 s, staged files only):
+#   1. Token cap: a staged code file over 5000 tokens (bytes / 4). Split it
+#      first, in its own commit with behaviour unchanged; that split is in scope
+#      for any task. Docs and data are not capped, only code.
 #   2. rustfmt --check on the staged Rust files.
-# REPORT-ONLY for now: it prints findings and never blocks. It becomes blocking
-# after the one-time reformat. Never skip it with --no-verify and never edit it
-# to get a commit through; agents report what it says under Friction.
-# Type checks (tsc), clippy and tests take longer and stay in CI.
+#   3. Biome's format check on the staged TypeScript, JavaScript and CSS files.
+# Type checks (tsc), clippy and tests take longer and stay in CI, which also
+# runs both format checks.
+# The format and lint checks read the working tree, not the index: stage whole
+# files. CI checks what was committed.
+# rustfmt also follows `mod` declarations, so a module file it reaches is
+# checked even when it is not staged.
+# Never skip it with --no-verify and never edit it to get a commit through;
+# fix what it reports, or report it under Friction.
 # Enabled by .claude/hooks/enable-githooks.sh. `sh .githooks/selftest.sh` proves it.
 
 CAP=5000
-# Exempt from the cap: lockfiles and generated Tauri files. Read by awk through
-# ENVIRON, so no escape mangling.
-SKIP='([.]lock$|-lock[.]json$|^src-tauri/icons/|^src-tauri/gen/)'
+# Capped: code. Exempt: generated Tauri files. Read by awk through ENVIRON, so
+# no escape mangling.
+CODE='[.](rs|ts|tsx|js|jsx|mjs|cjs|css|sh|ps1|cmd)$'
+SKIP='(^src-tauri/gen/)'
+WEB='[.](ts|tsx|js|jsx|mjs|cjs|css)$'
+root=$PWD  # git runs hooks from the top of the work tree
+# On Windows the node wrapper in .bin costs a second; call the binary directly.
+biome="$root/node_modules/.bin/biome"
+for b in "$root"/node_modules/@biomejs/cli-win32-*/biome.exe; do
+  [ -x "$b" ] && biome=$b && break
+done
 
 # Staged text files, one per line: renames count under the new name, binary
 # files (numstat "-") are skipped, and paths may contain spaces.
 list=$(mktemp)
-trap 'rm -f "$list" "$list.size"' EXIT
+trap 'rm -f "$list" "$list.size" "$list.fmt"' EXIT
 git -c core.quotePath=false diff --cached --numstat --no-renames --diff-filter=ACMR |
   awk -F'\t' '$1 != "-" { print $3 }' > "$list"
 [ -s "$list" ] || exit 0
+failed=""
 
 # One git call for every size (each process start costs on Windows).
 sed 's/^/:/' "$list" | git cat-file --batch-check='%(objectsize)' > "$list.size"
-SKIP="$SKIP" CAP="$CAP" awk '
+CODE="$CODE" SKIP="$SKIP" CAP="$CAP" awk '
   NR == FNR { size[FNR] = $1; next }
-  $0 ~ ENVIRON["SKIP"] { next }
+  $0 !~ ENVIRON["CODE"] || $0 ~ ENVIRON["SKIP"] { next }
   { n++; t = int(size[FNR] / 4) }
-  t > ENVIRON["CAP"] + 0 { o++; printf "pre-commit (report-only): %s is ~%d tokens, over the %d cap; split it\n", $0, t, ENVIRON["CAP"] }
-  END { printf "pre-commit: token cap checked %d staged file(s), %d over the cap\n", n, o }
-' "$list.size" "$list" >&2
+  t > ENVIRON["CAP"] + 0 { o++; printf "pre-commit: %s is ~%d tokens, over the %d cap; split it first\n", $0, t, ENVIRON["CAP"] }
+  END { printf "pre-commit: token cap checked %d staged code file(s), %d over the cap\n", n, o; exit (o > 0) }
+' "$list.size" "$list" >&2 || failed="$failed token-cap"
 
-n=$(grep -c '[.]rs$' "$list")
+# Runs one tool on the staged files ($@ after the name). Exit 1 is a finding
+# and blocks; any other non-zero exit means the tool itself could not run,
+# which skips it: CI still runs it.
+check() {
+  name=$1; shift
+  "$@" >&2
+  rc=$?
+  case $rc in
+    0) ;;
+    1) failed="$failed $name" ;;
+    *) echo "pre-commit: $name could not run (exit $rc), skipped (CI still runs it)" >&2 ;;
+  esac
+}
+# One path per argument, spaces included (a newline in a path is not supported).
+IFS='
+'
+set -f
+
+# Generated files are not format-checked either.
+grep -vE "$SKIP" "$list" > "$list.fmt"
+n=$(grep -c '[.]rs$' "$list.fmt")
 if [ "$n" -gt 0 ]; then
-  if command -v rustfmt >/dev/null 2>&1; then
+  # rustup installs a rustfmt proxy even without the component; the probe
+  # tells a missing rustfmt from a finding.
+  if rustfmt --version >/dev/null 2>&1; then
     echo "pre-commit: rustfmt --check on $n staged Rust file(s)" >&2
-    grep '[.]rs$' "$list" | tr '\n' '\0' |
-      xargs -0 rustfmt --check --edition 2021 >&2 ||
-      echo "pre-commit (report-only): rustfmt findings above" >&2
+    # shellcheck disable=SC2046
+    check rustfmt rustfmt --check --edition 2021 $(grep '[.]rs$' "$list.fmt")
   else
-    echo "pre-commit: rustfmt not found, format check skipped" >&2
+    echo "pre-commit: rustfmt not found, Rust format check skipped (CI still runs it)" >&2
   fi
 fi
 
+n=$(grep -cE "$WEB" "$list.fmt")
+if [ "$n" -gt 0 ]; then
+  if [ -x "$biome" ]; then
+    echo "pre-commit: Biome format check on $n staged web file(s)" >&2
+    # Biome's own includes in biome.json decide; a staged file outside them
+    # is not an error.
+    # shellcheck disable=SC2046
+    check biome "$biome" format --no-errors-on-unmatched --files-ignore-unknown=true $(grep -E "$WEB" "$list.fmt")
+  else
+    echo "pre-commit: Biome not installed (npm ci), web format check skipped (CI still runs it)" >&2
+  fi
+fi
+
+if [ -n "$failed" ]; then
+  echo "pre-commit: commit blocked by:$failed. Fix the files above (\`cargo fmt\`, \`npx biome format --write <file>\`), stage them, commit again." >&2
+  exit 1
+fi
 exit 0
