@@ -1,0 +1,6 @@
+# One-time reformats. Use: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub reads this file by itself. Merge the PR that adds an entry with a
+# merge commit, so the SHA stays the one on main.
+
+# Biome format of the frontend
+ac5efeb6b01f1b452f20f9aaa76daa0c259a2065
