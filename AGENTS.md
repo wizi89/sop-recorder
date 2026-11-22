@@ -34,6 +34,10 @@ auto-updater. An agent never merges a PR and never enables auto-merge: when CI i
 the label `owner-merge` on the PR and stops; the owner merges. When checks fail or it had to
 guess, it labels the issue `needs-owner`.
 
+A step only a person can take (a secret, a signing certificate, a store or dashboard setting)
+goes to `needs-owner` with the reason, plus a `/wizard` script that walks the owner through it.
+The wizard asks for every secret itself, so the value never passes through the session.
+
 Exception (owner decision 2026-11-18): `dependabot-lane.yml` enables auto-merge on Dependabot PRs
 whose bumps are all patches. Agents still never merge or enable auto-merge. A `github_actions`
 bump never takes that lane or goes to the Deps Station: it gets `owner-merge` (owner decision
