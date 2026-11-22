@@ -67,7 +67,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # Linux is not shipped. It runs because the cloud agent's loop runs
+        # there: this leg proves the setup hook installs what clippy and the
+        # tests need, and keeps the crate building on Linux.
+        os: [windows-latest, macos-latest, ubuntu-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -90,6 +93,17 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+
+      # The hook never fails a session, so it reports FAILED instead; here
+      # that fails the leg.
+      - name: Cloud setup hook (Linux system libraries)
+        if: runner.os == 'Linux'
+        env:
+          CLAUDE_CODE_REMOTE: "true"
+        run: |
+          out=$(CLAUDE_PROJECT_DIR="$PWD" bash .claude/hooks/cloud-setup.sh)
+          echo "$out"
+          case "$out" in *FAILED*) cat /tmp/cloud-setup-*.log; exit 1 ;; esac
 
       - name: Install frontend dependencies
         run: npm ci
