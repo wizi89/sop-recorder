@@ -20,6 +20,8 @@ are stable; a deleted rule leaves a gap.
 - **G10.** A product *why* (a decision that is hard to reverse, surprising without context, and
   the result of a real trade-off) goes in an ADR in `docs/adr/`, not in a code comment; the comment
   may point to the ADR. Reversing a decision means a new ADR that says which one it replaces.
+- **G11.** A new check ships with a bad fixture it must flag, and fails when it checked zero
+  files: a check that scanned nothing proves nothing (`scripts/check_semgrep.py` shows how).
 
 ## Server contract
 

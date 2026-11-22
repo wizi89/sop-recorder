@@ -59,7 +59,7 @@ export function refOfSomethingElse(timerRef: { current: (() => void) | null }) {
 
 export async function awaitedHandlerResult(onGrant: () => Promise<() => void>) {
   const done = await onGrant();
-  void done;
+  done();
 }
 
 export function loopSafely() {

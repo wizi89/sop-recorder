@@ -59,17 +59,25 @@ rules:
                   $F = await $L(...);
                   ...
               - pattern-inside: |
-                  $F = await $O.$L(...);
-                  ...
-              - pattern-inside: |
                   const $F = await $L(...);
+                  ...
+          - metavariable-regex:
+              metavariable: $L
+              regex: ^(listen|once)$
+          - pattern: $F()
+      # The same from a method: win.listen(), or a window's on* event source
+      # (getCurrentWindow().onFocusChanged()). A bare onGrant() is a prop
+      # handler, not an event source, so on* counts only as a method.
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  $F = await $O.$L(...);
                   ...
               - pattern-inside: |
                   const $F = await $O.$L(...);
                   ...
           - metavariable-regex:
               metavariable: $L
-              # listen/once, and the window's on* event sources (onFocusChanged).
               regex: ^(listen|once|on[A-Z]\w*)$
           - pattern: $F()
       # Anything declared as an UnlistenFn.
