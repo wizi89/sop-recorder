@@ -34,6 +34,10 @@ auto-updater. An agent never merges a PR and never enables auto-merge: when CI i
 the label `owner-merge` on the PR and stops; the owner merges. When checks fail or it had to
 guess, it labels the issue `needs-owner`.
 
+A step only a person can take (a secret, a signing certificate, a store or dashboard setting)
+goes to `needs-owner` with the reason, plus a `/wizard` script that walks the owner through it.
+The wizard asks for every secret itself, so the value never passes through the session.
+
 Exception (owner decision 2026-11-18): `dependabot-lane.yml` enables auto-merge on Dependabot PRs
 whose bumps are all patches. Agents still never merge or enable auto-merge. A `github_actions`
 bump never takes that lane or goes to the Deps Station: it gets `owner-merge` (owner decision
@@ -88,16 +92,19 @@ The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
   `cargo clippy --all-targets -- -D warnings`, `cargo test --lib`.
 - e2e (`npm run e2e`) runs only in CI on Windows; don't run it locally.
 
-In a cloud session (`CLAUDE_CODE_REMOTE=true`) the image has no Tauri system libraries, and a
-Linux build would check neither the Windows nor the macOS code paths. There:
+In a cloud session (`CLAUDE_CODE_REMOTE=true`), the SessionStart hook `.claude/hooks/cloud-setup.sh`
+installs the Tauri system libraries and runs `npm ci`. Its last line says whether that worked. There:
 
-- Run `npm ci`, `npm test`, `npx tsc --noEmit`, `npx biome ci .` and `python scripts/check_semgrep.py`
-  in the session, and `cargo fmt --check` in
-  `src-tauri/` when `cargo` is installed (it compiles nothing).
-- `cargo clippy` and `cargo test --lib` are **CI-only**: open the draft PR, then wait for CI's
-  `ci` check on the head commit (`gh api repos/wizi89/sop-recorder/commits/<sha>/check-runs`).
-  It gates `test (windows-latest)`, `test (macos-latest)` and `e2e`, which a Markdown-only
-  change skips. Its result is the check result; a red `ci` counts as a failed round.
+- Run everything in the `test` list above, `cargo clippy` and `cargo test --lib` included. CI's
+  `test (ubuntu-latest)` leg runs the same hook and checks, so they keep working.
+- A Linux build checks neither the Windows nor the macOS code paths, and e2e needs Windows. So CI's
+  `ci` check is still the result: open the draft PR, then wait for `ci` on the head commit
+  (`gh api repos/wizi89/sop-recorder/commits/<sha>/check-runs`). It gates `test (windows-latest)`,
+  `test (macos-latest)` and `e2e`, which a Markdown-only change skips. A red `ci` counts as a
+  failed round.
+
+Logs, error reports and the CI artifacts, including the e2e screens a UI PR links:
+`docs/agents/data-sources.md`.
 
 The factory can't run the real app. A change to capture, input hooks, windows, permissions or
 audio needs the owner's hands-on check on Windows, and on macOS when macOS code changed, before

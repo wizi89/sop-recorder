@@ -7,7 +7,7 @@
  * wait. Each failure message below says which.
  */
 import { test as base, expect, chromium, type Page } from "@playwright/test";
-import { launchApp } from "./app";
+import { captureScreen, launchApp } from "./app";
 import { startStubs, TOKENS, type Stubs } from "./stubs";
 
 const test = base.extend<{ stubs: Stubs; app: Page }>({
@@ -16,9 +16,10 @@ const test = base.extend<{ stubs: Stubs; app: Page }>({
     await use(stubs);
     await stubs.close();
   },
-  app: async ({ stubs }, use) => {
+  app: async ({ stubs }, use, testInfo) => {
     const app = await launchApp(stubs);
     await use(app.page);
+    await captureScreen(app.page, testInfo.title);
     await app.quit();
   },
 });
