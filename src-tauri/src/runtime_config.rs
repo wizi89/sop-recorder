@@ -72,7 +72,7 @@ pub struct RuntimeOverride {
 impl RuntimeOverride {
     /// Whether the installation has switched error reports off.
     pub fn error_reports_forced_off(&self) -> bool {
-        Some(false) == self.error_reports_enabled
+        self.error_reports_enabled == Some(false)
     }
 }
 
