@@ -61,4 +61,7 @@ else
   echo "$out" | grep -qF "ugly.ts" || fail "Biome finding for src/ugly.ts missing"
   echo "$out" | grep -qF " biome." || fail "biome missing from the block message"
 fi
+# The hook's own summary of the planted stage, for CI's log (the readiness
+# gate reads these two lines).
+echo "$out" | grep -E '^pre-commit: (token cap checked|commit blocked by)' | sed 's/^/selftest: /'
 echo "selftest passed"

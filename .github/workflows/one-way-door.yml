@@ -20,9 +20,14 @@ name: One-way Door
 #   - guardrails: a weakened check stays green, so nobody would notice. They
 #     are this workflow, CI, the hooks, the Semgrep rules, the check scripts
 #     with their baselines and fixtures, and the format and type configs. A
-#     Dependabot PR (an action bump in a workflow) gets no guardrail box.
+#     Dependabot PR (an action bump in a workflow) gets no guardrail box
+#     while only Dependabot pushed to it.
 # Lockfiles, AGENTS.md and the other workflows are deliberately not door
 # paths: a revert fully restores them.
+# Limits: a PR runs its own copy of this workflow (pull_request), so a diff
+# to this file is read by the owner, not trusted to gate itself. A ticked box
+# stays ticked when a later push changes the same door again.
+# scripts/check_door_workflow.sh proves the gate on stubbed PRs in CI.
 
 on:
   pull_request:
@@ -66,11 +71,17 @@ jobs:
               src-tauri/src/capture/password_check.rs|src-tauri/src/capture/password_check/*|src-tauri/src/capture/window_area.rs|src-tauri/src/capture/window_area/*) privacy=1 ;;
               .github/workflows/dependabot-lane.yml|.github/workflows/dependabot-red.yml) lane=1 ;;
               .github/workflows/one-way-door.yml|.github/workflows/ci.yml|.github/workflows/codeql.yml) guard=1 ;;
-              .githooks/*|.claude/hooks/enable-githooks.sh|.semgrep/*|biome.json|tsconfig.json|src/test/tsconfig.test.ts) guard=1 ;;
+              .githooks/*|.claude/hooks/enable-githooks.sh|.semgrep/*|.gitattributes|biome.json|tsconfig.json|tsconfig.node.json|src/test/tsconfig.test.ts) guard=1 ;;
               scripts/check_*|scripts/test_check_*|scripts/glossary_*) guard=1 ;;
             esac
           done <<< "$files"
-          if [ "$AUTHOR" = "dependabot[bot]" ]; then guard=0; fi
+          # A Dependabot PR bumps actions in the workflows; the guardrail box
+          # would only ask the owner to look at a version number. As soon as
+          # anyone else pushes a commit to it, the box applies again.
+          if [ "$AUTHOR" = "dependabot[bot]" ] && [ $guard -eq 1 ]; then
+            others=$(gh api --paginate "repos/$REPO/pulls/$PR/commits" --jq '.[] | (.author.login // "unknown")' | grep -vxF 'dependabot[bot]' || true)
+            if [ -z "$others" ]; then guard=0; fi
+          fi
 
           if [ $((release + perms + contract + privacy + lane + guard)) -eq 0 ]; then
             echo "No One-way Door paths touched."

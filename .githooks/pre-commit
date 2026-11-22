@@ -8,6 +8,10 @@
 #   3. Biome's format check on the staged TypeScript, JavaScript and CSS files.
 # Type checks (tsc), clippy and tests take longer and stay in CI, which also
 # runs both format checks.
+# The format and lint checks read the working tree, not the index: stage whole
+# files. CI checks what was committed.
+# rustfmt also follows `mod` declarations, so a module file it reaches is
+# checked even when it is not staged.
 # Never skip it with --no-verify and never edit it to get a commit through;
 # fix what it reports, or report it under Friction.
 # Enabled by .claude/hooks/enable-githooks.sh. `sh .githooks/selftest.sh` proves it.
@@ -44,14 +48,34 @@ CODE="$CODE" SKIP="$SKIP" CAP="$CAP" awk '
   END { printf "pre-commit: token cap checked %d staged code file(s), %d over the cap\n", n, o; exit (o > 0) }
 ' "$list.size" "$list" >&2 || failed="$failed token-cap"
 
+# Runs one tool on the staged files ($@ after the name). Exit 1 is a finding
+# and blocks; any other non-zero exit means the tool itself could not run,
+# which skips it: CI still runs it.
+check() {
+  name=$1; shift
+  "$@" >&2
+  rc=$?
+  case $rc in
+    0) ;;
+    1) failed="$failed $name" ;;
+    *) echo "pre-commit: $name could not run (exit $rc), skipped (CI still runs it)" >&2 ;;
+  esac
+}
+# One path per argument, spaces included (a newline in a path is not supported).
+IFS='
+'
+set -f
+
 # Generated files are not format-checked either.
 grep -vE "$SKIP" "$list" > "$list.fmt"
 n=$(grep -c '[.]rs$' "$list.fmt")
 if [ "$n" -gt 0 ]; then
-  if command -v rustfmt >/dev/null 2>&1; then
+  # rustup installs a rustfmt proxy even without the component; the probe
+  # tells a missing rustfmt from a finding.
+  if rustfmt --version >/dev/null 2>&1; then
     echo "pre-commit: rustfmt --check on $n staged Rust file(s)" >&2
-    grep '[.]rs$' "$list.fmt" | tr '\n' '\0' |
-      xargs -0 rustfmt --check --edition 2021 >&2 || failed="$failed rustfmt"
+    # shellcheck disable=SC2046
+    check rustfmt rustfmt --check --edition 2021 $(grep '[.]rs$' "$list.fmt")
   else
     echo "pre-commit: rustfmt not found, Rust format check skipped (CI still runs it)" >&2
   fi
@@ -63,8 +87,8 @@ if [ "$n" -gt 0 ]; then
     echo "pre-commit: Biome format check on $n staged web file(s)" >&2
     # Biome's own includes in biome.json decide; a staged file outside them
     # is not an error.
-    grep -E "$WEB" "$list.fmt" | tr '\n' '\0' |
-      xargs -0 "$biome" format --no-errors-on-unmatched --files-ignore-unknown=true >&2 || failed="$failed biome"
+    # shellcheck disable=SC2046
+    check biome "$biome" format --no-errors-on-unmatched --files-ignore-unknown=true $(grep -E "$WEB" "$list.fmt")
   else
     echo "pre-commit: Biome not installed (npm ci), web format check skipped (CI still runs it)" >&2
   fi

@@ -60,9 +60,10 @@ workflow's in step.
 - Dependabot: `.github/workflows/dependabot-lane.yml`, `.github/workflows/dependabot-red.yml`.
 - Guardrails (a weakened check stays green): `.github/workflows/one-way-door.yml`,
   `.github/workflows/ci.yml`, `.github/workflows/codeql.yml`, `.githooks/`,
-  `.claude/hooks/enable-githooks.sh`, `.semgrep/`, `biome.json`, `tsconfig.json`,
-  `src/test/tsconfig.test.ts`, `scripts/check_*`, `scripts/test_check_*`, `scripts/glossary_*`.
-  The box asks "Does this weaken a check?"; a Dependabot PR gets none.
+  `.claude/hooks/enable-githooks.sh`, `.semgrep/`, `.gitattributes`, `biome.json`, `tsconfig.json`,
+  `tsconfig.node.json`, `src/test/tsconfig.test.ts`, `scripts/check_*`, `scripts/test_check_*`,
+  `scripts/glossary_*`. The box asks "Does this weaken a check?" and is the owner's: no session
+  ticks it. A Dependabot PR gets none while only Dependabot pushed to it.
 
 ## Pre-commit checks
 
