@@ -2,7 +2,7 @@
 name: factory-implement
 description: The Implement Station of the Software Factory. Builds an explored issue on `agent/<n>-<slug>`, opens a draft PR with door, blast radius and check output, and hands it to Review; also does rework on a PR. Use when the fire payload says `station=implement`.
 ---
-<!-- vendored from Home @534940c, do not edit here -->
+<!-- vendored from Home @d79a5f5, do not edit here -->
 
 # Factory: Implement
 
@@ -48,7 +48,9 @@ Input is the fire payload text: `station=implement repo=<owner/name> number=<n> 
    - [ ] Production prompt change: before/after output attached
    ```
 
-   Done when every door path in the diff is either absent or marked.
+   **Answer every box the owner ticks.** For each owner box (the Guardrail box "Does this weaken a check?" first), the body has a section that answers it: per check the diff touches, one line saying stronger, same or weaker, and for each weaker one why that is acceptable; then the action ("tick the box, merge"). The owner verifies the answer; they never work it out from a bare box.
+
+   Done when every door path in the diff is either absent or marked, and every owner box has its answer in the body.
 
 9. **Report and hand off.** Post one comment on the issue (on rework, on the PR too):
 

@@ -17,6 +17,7 @@ permissions:
   pull-requests: write
 
 jobs:
+  # required-checks: exempt -- labels and auto-merges Dependabot PRs, checks nothing
   dependabot-lane:
     if: >-
       github.event.pull_request.user.login == 'dependabot[bot]' &&

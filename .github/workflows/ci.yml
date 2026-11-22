@@ -9,8 +9,8 @@ on:
         default: true
   push:
     branches: [main, "feature/**"]
+  # A PR into any base, integration branches too: CI is the only hard gate.
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -300,12 +300,33 @@ jobs:
       - name: Custom rules, proven on their fixtures
         run: python3 scripts/check_semgrep.py
 
-  # The one check branch protection requires. A job skipped at job level
+  # CI is the only hard gate, so every PR job has to block the merge when it
+  # fails (FL-03e). The script reads the required checks from branch
+  # protection and says what counts as covered; it runs on every change,
+  # docs included, because a workflow change is what it guards.
+  required-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Required checks, proven on their fixtures
+        run: python3 -m unittest discover -s scripts -p "test_check_required_checks.py"
+
+      - name: Required checks cover every PR job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/branches/$DEFAULT_BRANCH"             --jq '.protection.required_status_checks.contexts[]' > "$RUNNER_TEMP/required.txt"
+          python3 scripts/check_required_checks.py --required-file "$RUNNER_TEMP/required.txt"
+
+  # The check branch protection requires, next to the One-way Door marker. A job skipped at job level
   # reports under its bare name, not per matrix leg, so requiring the legs
   # would leave a docs-only PR pending forever; this gate passes when every
   # job succeeded or was skipped, and fails on any failure or cancellation.
   ci:
-    needs: [changes, glossary, semgrep, test, e2e, build]
+    needs: [changes, glossary, semgrep, required-checks, test, e2e, build]
     if: always()
     runs-on: ubuntu-latest
 
