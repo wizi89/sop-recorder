@@ -40,7 +40,7 @@ interface RecorderState {
   /** Why the last upload was refused because of the review screen's boxes
    *  (review-redaction D5). Such a refusal returns to the review screen, not
    *  the error screen, whose Retry would repeat it. */
-  reviewError?: string | null;
+  reviewError: string | null;
 }
 
 export function useRecorder() {
@@ -53,6 +53,7 @@ export function useRecorder() {
     errorJobId: null,
     piiFindings: null,
     rateLimit: null,
+    reviewError: null,
   });
   const generatingRef = useRef(false);
   // Keep the latest outputDir in a ref so async actions can read it without
@@ -74,6 +75,7 @@ export function useRecorder() {
         errorJobId: null,
         piiFindings: null,
         rateLimit: null,
+        reviewError: null,
       });
     } catch (e) {
       setState({
@@ -85,6 +87,7 @@ export function useRecorder() {
         errorJobId: null,
         piiFindings: null,
         rateLimit: null,
+        reviewError: null,
       });
     }
   }, []);
@@ -247,6 +250,7 @@ export function useRecorder() {
       errorJobId: null,
       piiFindings: null,
       rateLimit: null,
+      reviewError: null,
     });
   }, []);
 
@@ -268,6 +272,7 @@ export function useRecorder() {
       errorJobId: null,
       piiFindings: null,
       rateLimit: null,
+      reviewError: null,
     });
   }, []);
 
@@ -281,6 +286,7 @@ export function useRecorder() {
       errorJobId: null,
       piiFindings: null,
       rateLimit: null,
+      reviewError: null,
     });
   }, []);
 

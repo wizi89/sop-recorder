@@ -16,6 +16,7 @@ describe("useRecorder", () => {
     expect(result.current.outputDir).toBeNull();
     expect(result.current.error).toBeNull();
     expect(result.current.statusMessage).toBe("");
+    expect(result.current.reviewError).toBeNull();
   });
 
   it("transitions to recording on start", async () => {
