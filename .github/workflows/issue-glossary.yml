@@ -55,11 +55,16 @@ jobs:
             printf '%s\nGlossary check: OK, the issue now uses the GLOSSARY.md terms.\n' "$marker" > "$body"
           else
             {
-              printf '%s\nGlossary check: this issue uses terms GLOSSARY.md lists under `_Avoid_`. ' "$marker"
-              printf 'Edit the issue to use the defined term; quote an old name in `code` if the issue renames it.\n\n'
-              printf 'Line numbers count the title as line 1 and the body from line 3.\n\n```\n'
+              echo "$marker"
+              cat <<'TEXT'
+          Glossary check: this issue uses terms GLOSSARY.md lists under `_Avoid_`. Edit the issue to use the defined term; quote an old name in `code` if the issue renames it.
+
+          Line numbers count the title as line 1 and the body from line 3.
+
+          ```
+          TEXT
               cat "$RUNNER_TEMP/out.txt"
-              printf '```\n'
+              echo '```'
             } > "$body"
           fi
           if [ -n "$id" ]; then
