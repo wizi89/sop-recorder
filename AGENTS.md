@@ -88,6 +88,8 @@ The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
   fixes it).
 - Always, in its own CI job `semgrep`: `python scripts/check_semgrep.py`, the custom Semgrep rules
   in `.semgrep/` (needs `semgrep` or `uvx`). It also proves each rule still flags its bad fixture.
+- Always, in its own CI job `glossary`: `python3 scripts/check_glossary_terms.py` (a second; run
+  it before pushing, a miss costs a CI round).
 - When `src-tauri/` changed, also run in `src-tauri/`: `cargo fmt --check`,
   `cargo clippy --all-targets -- -D warnings`, `cargo test --lib`.
 - e2e (`npm run e2e`) runs only in CI on Windows; don't run it locally.

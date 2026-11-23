@@ -87,3 +87,30 @@ only the owner promotes one into a rule above.
 
 - New behaviour comes with tests at the highest seam that exercises it (a rule in the server
   repo, not yet stated here).
+
+Wanted in two or more Reviews (2026-11-15 to 2026-11-23):
+
+- The Conventional Commit types include `ci:`, `test:` and `fix(ci):`, which `main` already uses
+  ([#43](https://github.com/wizi89/sop-recorder/issues/43#issuecomment-6991877837),
+  [#54](https://github.com/wizi89/sop-recorder/issues/54#issuecomment-7062712340),
+  [#87](https://github.com/wizi89/sop-recorder/issues/87#issuecomment-7086864483)).
+- A one-way door checklist for client doors (`docs/server-contract.md`, what leaves the machine);
+  the current checklist is the server template
+  ([#26](https://github.com/wizi89/sop-recorder/issues/26#issuecomment-7063187576)).
+- Whether append-only logs (`CHANGELOG.md`, `docs/FINDINGS.md`) are exempt from the token cap
+  ([#26](https://github.com/wizi89/sop-recorder/issues/26#issuecomment-7062991435)).
+- Workflows pass actionlint and keep `permissions:` least-privilege
+  ([#46](https://github.com/wizi89/sop-recorder/issues/46#issuecomment-7013475487),
+  [#54](https://github.com/wizi89/sop-recorder/issues/54#issuecomment-7062712340)).
+
+Wanted once:
+
+- A FINDINGS search covers `docs/findings/` too; the poisoned-mutex source guard is listed (#26).
+- A PR that shifts `AGENTS.md` lines updates the `AGENTS.md:N` references (#46).
+- A Markdown line width; a written label-state contract between the workflows and the Deps
+  Station (#54).
+- A doc comment width; `docs/PRIVACY.md` kept in step with `docs/ARCHITECTURE.md` (#63).
+- Colours come from theme tokens, not hex (#76).
+- A test's name claims only what it asserts (#87).
+- A unit test lives next to the function it covers; user-facing CHANGELOG lines do not name
+  internal files (#92).
