@@ -65,7 +65,7 @@ instead of pointing at a PR body or a removed spec.
 
 ## 2026-11-23 The glossary check runs only in CI
 
-**Symptom:** the `glossary` CI job flagged "blur" in a test Review had added, which cost a CI
+**Symptom:** the `glossary` CI job flagged an avoided term in a test Review had added, which cost a CI
 round ([#76](https://github.com/wizi89/sop-recorder/issues/76#issuecomment-7075715353)).
 
 **Cause:** the session checks are `npm test` and `tsc`; `scripts/check_glossary_terms.py` is not
