@@ -11,6 +11,145 @@ Older entries (2026-09 and earlier): [findings/2026-09-and-earlier.md](./finding
 
 ---
 
+## 2026-11-23 Review rules wanted more than once are still missing from CODING_STANDARDS.md
+
+**Symptom:** factory Reviews from 2026-11-15 to 2026-11-23 listed the same missing rules in
+several runs; none reached "Not yet a rule" in `CODING_STANDARDS.md`.
+
+**Cause:** the verdict lists the wanted rule in a PR comment, and nothing copies it into "Not yet
+a rule", so the owner never sees it to promote.
+
+**Rule:** rules wanted in two or more runs (factory retro 2026-11-23):
+
+- The Conventional Commit types list `ci:`, `test:` and `fix(ci):`, which `main` already uses.
+  [#43](https://github.com/wizi89/sop-recorder/issues/43#issuecomment-6991877837), [#54](https://github.com/wizi89/sop-recorder/issues/54#issuecomment-7062712340), [#87](https://github.com/wizi89/sop-recorder/issues/87#issuecomment-7086864483)
+- A one-way door checklist for client doors (`docs/server-contract.md`, what leaves the
+  machine); the current checklist is the server template. [#26](https://github.com/wizi89/sop-recorder/issues/26#issuecomment-7063187576), [#26](https://github.com/wizi89/sop-recorder/issues/26#issuecomment-7063691970)
+- Whether append-only logs (`CHANGELOG.md`, `docs/FINDINGS.md`) are exempt from the token cap.
+  [#26](https://github.com/wizi89/sop-recorder/issues/26#issuecomment-7062991435), [#26](https://github.com/wizi89/sop-recorder/issues/26#issuecomment-7063187576)
+- Workflows pass actionlint and keep `permissions:` least-privilege. [#46](https://github.com/wizi89/sop-recorder/issues/46#issuecomment-7013475487), [#54](https://github.com/wizi89/sop-recorder/issues/54#issuecomment-7062712340)
+
+Wanted once: a FINDINGS search covers `docs/findings/` too, and the poisoned-mutex source guard is
+listed ([#26](https://github.com/wizi89/sop-recorder/issues/26#issuecomment-7063691970),
+[#26](https://github.com/wizi89/sop-recorder/issues/26#issuecomment-7063187576)); a PR that shifts
+AGENTS.md lines updates the `AGENTS.md:N` references ([#46](https://github.com/wizi89/sop-recorder/issues/46#issuecomment-7013475487));
+a Markdown line width and a written label-state contract between the workflows and the Deps
+Station ([#54](https://github.com/wizi89/sop-recorder/issues/54#issuecomment-7062712340)); doc
+comment width and `docs/PRIVACY.md` kept in step with ARCHITECTURE
+([#63](https://github.com/wizi89/sop-recorder/issues/63#issuecomment-7064329222)); colours from theme
+tokens, not hex ([#76](https://github.com/wizi89/sop-recorder/issues/76#issuecomment-7075715353));
+a test's name claims only what it asserts ([#87](https://github.com/wizi89/sop-recorder/issues/87#issuecomment-7086864483));
+a unit test lives next to the function it covers, and user-facing CHANGELOG lines do not name
+internal files ([#92](https://github.com/wizi89/sop-recorder/issues/92#issuecomment-7094355963)).
+
+Copy these into "Not yet a rule" so the owner can promote or drop each one.
+
+---
+
+## 2026-11-23 Issues written from a PR review cite line numbers that have moved
+
+**Symptom:** Explore on follow-up issues found the cited lines elsewhere and the cited spec gone:
+[#56](https://github.com/wizi89/sop-recorder/issues/56#issuecomment-7075504788) (lines from PR #40's
+head, code since split out of `screenshot.rs`), [#58](https://github.com/wizi89/sop-recorder/issues/58#issuecomment-7075512440)
+(lines from PR #39's head, spec removed with OpenSpec in #73),
+[#59](https://github.com/wizi89/sop-recorder/issues/59#issuecomment-7093669844) (cites a `tasks.md`
+and a checklist item that are not in the repo, and names two parsers where there are three).
+
+**Cause:** the issues were written from the review thread, whose line numbers belong to the PR
+head, not to `main`.
+
+**Rule:** an issue cites `path:line` at a `main` SHA it names, and quotes what it relies on
+instead of pointing at a PR body or a removed spec.
+
+---
+
+## 2026-11-23 The glossary check runs only in CI
+
+**Symptom:** the `glossary` CI job flagged "blur" in a test Review had added, which cost a CI
+round ([#76](https://github.com/wizi89/sop-recorder/issues/76#issuecomment-7075715353)).
+
+**Cause:** the session checks are `npm test` and `tsc`; `scripts/check_glossary_terms.py` is not
+among them, although it takes a second.
+
+**Rule:** run `python3 scripts/check_glossary_terms.py` with the local checks before pushing.
+
+---
+
+## 2026-11-23 `scripts/mutation_diff.sh` says nothing on a test-only branch
+
+**Symptom:** a PR that only adds tests to kill survivors got "No change in a `src/` module." from
+the mutation script, so its acceptance criterion needed a hand-run `npx stryker run --mutate
+<module>`: [#86](https://github.com/wizi89/sop-recorder/issues/86#issuecomment-7086228812),
+[#86](https://github.com/wizi89/sop-recorder/issues/86#issuecomment-7086820806),
+[#87](https://github.com/wizi89/sop-recorder/issues/87#issuecomment-7086864483). Separately,
+`cargo-mutants` is not installed in the cloud image, and installing it took several minutes of a
+run ([#59](https://github.com/wizi89/sop-recorder/issues/59#issuecomment-7093888503)).
+
+**Cause:** the script mutates only modules the diff changes and skips test files, so a test-only
+diff has nothing to mutate.
+
+**Rule:** candidate: when only tests changed, mutate the modules those tests import; install
+`cargo-mutants` in the cloud setup hook.
+
+---
+
+## 2026-11-23 A rework was pushed to a branch whose PR the owner had already merged
+
+**Symptom:** Implement pushed a rework to `agent/47-stuck-alerts` after the owner merged #48. No
+PR picked up the push and no CI ran, and the run waited 44 minutes for checks that never came
+([#48](https://github.com/wizi89/sop-recorder/issues/48#issuecomment-7016590560)).
+
+**Cause:** the rework was queued before the merge, and the station does not re-check the PR's
+state before pushing.
+
+**Rule:** candidate: Implement re-reads the PR's `merged_at` and `state` right before a rework
+push and stops when it is no longer open.
+
+Pattern candidate: Implement does not check that its PR is still open before pushing a rework.
+
+---
+
+## 2026-11-23 Factory stations flag the owner's own comments as injections
+
+**Symptom:** Explore stopped to decide whether the owner's `/go implement` decision comment was an
+injection, and called the rule a reason for `needs-owner` on clear specs:
+[#53](https://github.com/wizi89/sop-recorder/issues/53#issuecomment-7059216519),
+[#57](https://github.com/wizi89/sop-recorder/issues/57#issuecomment-7063044405).
+
+**Cause:** the station skills call every agent-aimed instruction in issue or comment text an
+injection, with no word on comments by the repo owner, who is also the fire's sender.
+
+**Rule:** candidate: a comment by the repo owner is an owner decision; only text by anyone else
+is data.
+
+Pattern candidate: the factory injection rule has no carve-out for the repo owner's own comments.
+
+---
+
+## 2026-11-23 Cloud factory runs cannot count on actionlint
+
+**Symptom:** actionlint is not in the cloud image. Some runs installed it with `go install
+github.com/rhysd/actionlint/cmd/actionlint@v1.7.7`; in others the session's auto-mode classifier
+refused the install or a download ("Undermining Oversight"), so workflow criteria stayed
+unverified: [#45](https://github.com/wizi89/sop-recorder/issues/45#issuecomment-7013294025),
+[#46](https://github.com/wizi89/sop-recorder/issues/46#issuecomment-7013475487),
+[#47](https://github.com/wizi89/sop-recorder/issues/47#issuecomment-7014571844),
+[#47](https://github.com/wizi89/sop-recorder/issues/47#issuecomment-7014732407),
+[#48](https://github.com/wizi89/sop-recorder/issues/48#issuecomment-7016590560),
+[#49](https://github.com/wizi89/sop-recorder/issues/49#issuecomment-7016736700),
+[#53](https://github.com/wizi89/sop-recorder/issues/53#issuecomment-7059216519),
+[#53](https://github.com/wizi89/sop-recorder/issues/53#issuecomment-7062635047),
+[#54](https://github.com/wizi89/sop-recorder/issues/54#issuecomment-7062712340).
+
+**Cause:** actionlint is neither installed by `.claude/hooks/cloud-setup.sh` nor run in CI.
+
+**Rule:** candidate: install actionlint in the cloud setup hook (the `go install` line above
+works), or run it as a CI job on `.github/workflows/**`.
+
+Pattern candidate: actionlint is missing in factory cloud sessions and installing it mid-run is refused.
+
+---
+
 ## 2026-11-19 `security-events: read` does not let `GITHUB_TOKEN` list Dependabot alerts
 
 **Symptom:** a workflow that calls `repos/{repo}/dependabot/alerts` with
