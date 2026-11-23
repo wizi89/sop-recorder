@@ -5,7 +5,8 @@
 #     with a space;
 #   - exempt and uncapped files (generated Tauri code, a large doc) are not
 #     capped;
-#   - clean staged files: the hook lets the commit through (exit 0).
+#   - clean staged files: the hook lets the commit through (exit 0);
+#   - a failing test: the hook runs no tests, so it lets it through too.
 # Biome runs from this repo's node_modules when installed (npm ci).
 # Run: sh .githooks/selftest.sh
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -34,6 +35,20 @@ out=$(sh "$hook" 2>&1); rc=$?
 echo "$out" | grep -qF "token cap checked 2 staged code file(s), 0 over the cap" || fail "clean stage: wrong file count"
 echo "$out" | grep -qF "is ~6000 tokens" && fail "clean stage: an exempt or uncapped file was capped"
 git commit -qm base --no-verify
+
+# A failing test: the hook runs no tests (they run in CI), so it lets this
+# through (coverage row FL-04c).
+printf 'import { it } from "vitest";
+
+it("fails", () => {
+	throw new Error("the hook must not run tests");
+});
+' > src/fails.test.ts
+git add -A
+out=$(sh "$hook" 2>&1); rc=$?
+[ "$rc" -eq 0 ] || fail "failing test: hook exited $rc, it must not run tests"
+echo "selftest: a failing test does not block the hook; the tests run in CI"
+git rm -q --cached src/fails.test.ts && rm src/fails.test.ts
 
 # Violations.
 big moved.css c; git add -A && git commit -qm moved --no-verify
