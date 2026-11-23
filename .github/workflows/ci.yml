@@ -452,6 +452,10 @@ jobs:
       - name: Install actionlint
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
+      # Without shellcheck on PATH, actionlint skips the run: blocks and passes.
+      - name: Shellcheck is on the runner
+        run: shellcheck --version
+
       - name: Lint the workflows
         run: ~/go/bin/actionlint -ignore 'unknown permission scope "vulnerability-alerts"'
 
