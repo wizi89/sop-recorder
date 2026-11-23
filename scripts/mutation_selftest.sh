@@ -2,9 +2,11 @@
 # Proves scripts/mutation_diff.sh catches a weak test (coverage rows FL-06a,
 # CD-05c), in a throwaway repo with this repo's layout. A branch adds an age
 # gate in Rust and in TypeScript. Each test checks the label of one adult and
-# one child but never the boundary, so for each tool:
-#   - a mutant of the boundary (`>=` -> `>`) must survive;
-#   - the mutants of the label must die.
+# one child, so the mutants of the label must die. Each also leaves a gap a
+# mutant must get through:
+#   - TypeScript: the boundary is never asked, so `>=` -> `>` survives;
+#   - Rust: no test calls `is_senior` (cargo-mutants makes no `>` mutant of
+#     `>=`), so its mutants are missed.
 # Needs cargo-mutants and this repo's node_modules (npm ci). Linux and macOS.
 # Run: bash scripts/mutation_selftest.sh
 set -euo pipefail
@@ -47,6 +49,10 @@ pub fn label(age: u32) -> &'static str {
     if is_adult(age) { "adult" } else { "child" }
 }
 
+pub fn is_senior(age: u32) -> bool {
+    age >= 65
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -87,8 +93,8 @@ survived="$(echo "$ts" | sed -E 's/^Killed [0-9]+, survived ([0-9]+).*/\1/')"
 [ "$missed" -gt 0 ] || fail "the weak Rust test let no mutant through"
 [ "$killed" -gt 0 ] || fail "Stryker killed no mutant"
 [ "$survived" -gt 0 ] || fail "the weak TypeScript test let no mutant survive"
-echo "$out" | grep -qF 'src/lib.rs' || fail "the Rust survivor list does not name src/lib.rs"
+echo "$out" | grep -qF 'is_senior' || fail "the Rust missed list does not name is_senior"
 echo "$out" | grep -qF 'src/lib/agegate.ts:1' || fail "the TypeScript survivor list does not name isAdult"
 # The readiness gate reads these two lines.
-echo "mutation selftest: the weak tests let a boundary mutant through in Rust and TypeScript, as expected"
+echo "mutation selftest: the weak tests let a mutant through in Rust and TypeScript, as expected"
 echo "mutation selftest: checked $((caught + missed)) Rust and $((killed + survived)) TypeScript mutants"

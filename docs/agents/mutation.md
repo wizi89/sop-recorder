@@ -27,7 +27,7 @@ This is information for the author, not a gate. A survivor never fails a run.
   artifact `mutation-report`. It is not part of `ci`, so it never blocks a
   merge; a newer push cancels a run still going.
 
-`bash scripts/mutation_selftest.sh` proves the script on every push, in the Linux `test` leg: in a throwaway repo, weak tests must let a boundary mutant through in Rust and in TypeScript.
+`bash scripts/mutation_selftest.sh` proves the script on every push, in the Linux `test` leg: in a throwaway repo, weak tests must let a mutant through in Rust and in TypeScript.
 
 ## Reading the report
 

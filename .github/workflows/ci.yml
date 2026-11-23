@@ -152,8 +152,8 @@ jobs:
         shell: bash
         run: bash scripts/check_door_workflow.sh src-tauri/src/network/upload.rs
 
-      # mutation_diff.sh on a throwaway repo: weak tests must let a boundary
-      # mutant through in Rust and TypeScript (docs/agents/mutation.md).
+      # mutation_diff.sh on a throwaway repo: weak tests must let a mutant
+      # through in Rust and TypeScript (docs/agents/mutation.md).
       - name: Install cargo-mutants
         if: runner.os == 'Linux'
         uses: taiki-e/install-action@v2
