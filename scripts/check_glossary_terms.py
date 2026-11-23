@@ -4,6 +4,12 @@ Usage:
   python scripts/check_glossary_terms.py             check this repo against the baseline
   python scripts/check_glossary_terms.py --update    rewrite the baseline from today's hits
   python scripts/check_glossary_terms.py --root DIR  check another tree (the bad fixture)
+  python scripts/check_glossary_terms.py --text FILE check one text: an issue's title and body
+
+`--text` has no baseline: any hit fails. It checks prose only. Fenced code
+blocks and `code spans` are skipped, so an issue can still quote the old name
+it renames. The `Issue glossary` workflow runs it on every opened or edited
+issue, and a planning session runs it on a draft before publishing it.
 
 An `_Avoid_:` line is a comma-separated list. An entry with a qualifier in
 parentheses ("click (for the step itself)") depends on context, so it is
@@ -14,7 +20,9 @@ joined by a space, `_`, `-` or nothing: "prompt chain" finds prompt_chain and
 promptChains. An all-capitals term ("SOP") matches case-sensitively, so
 SOPDocument does not count. When a term's joined form is the name of a
 defined term ("SOP document" and **SOPDocument**), only the form with a space
-counts, so sop_document stays the defined term's code name. Phrases listed one per line in
+counts, so sop_document stays the defined term's code name. The same holds
+for that name in capitals (ENABLE_SOP_DOCUMENT_OUTPUTS): the "SOP" inside it
+does not count. Phrases listed one per line in
 `scripts/glossary_terms_allowed.txt` never count (names such as "SOP Sorcery").
 
 Hits that already exist are recorded per file and term in
@@ -75,6 +83,27 @@ def parse_glossary(text):
     return terms, skipped
 
 
+def defined_names(text):
+    """The names of the terms the glossary defines (`**Name**:`), as written."""
+    return [m.group(1) for m in re.finditer(r"^\*\*(.+?)\*\*:", text, re.MULTILINE)]
+
+
+def code_name_pattern(names):
+    """Matches a defined CamelCase name written with underscores, in any case.
+
+    SOPDocument is also sop_document and SOP_DOCUMENT; neither is an avoided
+    synonym, so both are blanked before the avoid terms are matched.
+    """
+    forms = []
+    for name in names:
+        words = re.findall(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+", name)
+        if " " not in name and len(words) > 1:
+            forms.append("_".join(re.escape(w) for w in words))
+    if not forms:
+        return None
+    return re.compile(r"(?<![A-Za-z0-9])(?i:" + "|".join(forms) + r")(?![A-Za-z0-9])")
+
+
 def defined_terms(text):
     """The normalised names of the terms the glossary defines (`**Name**:`)."""
     return {
@@ -102,15 +131,24 @@ def term_pattern(term, spaced_only=False):
     return re.compile(start + r"(?i:" + body + r")(?![a-z0-9])")
 
 
-def blank_allowed(text, allowed):
+def blank(match):
+    """Spaces for a match, newlines kept, so line numbers stay right."""
+    return re.sub(r"[^\n]", " ", match.group(0))
+
+
+def blank_allowed(text, allowed, code_names=None):
     for phrase in allowed:
-        text = re.sub(
-            re.escape(phrase),
-            lambda m: " " * len(m.group(0)),
-            text,
-            flags=re.IGNORECASE,
-        )
+        text = re.sub(re.escape(phrase), blank, text, flags=re.IGNORECASE)
+    if code_names is not None:
+        text = code_names.sub(blank, text)
     return text
+
+
+def blank_code(text):
+    """Blank fenced code blocks and `code spans`: they quote names, not prose."""
+    fence = r"^ {0,3}(```|~~~).*?(?:^ {0,3}\1[^\n]*$|\Z)"
+    text = re.sub(fence, blank, text, flags=re.MULTILINE | re.DOTALL)
+    return re.sub(r"(`+)[^`\n]*?\1", blank, text)
 
 
 def list_files(root):
@@ -138,32 +176,70 @@ def read_text(path):
         return None
 
 
+class Rules:
+    """What GLOSSARY.md and the allow list say, ready to match."""
+
+    def __init__(self, root):
+        glossary = read_text(root / "GLOSSARY.md")
+        if glossary is None:
+            raise SystemExit(f"no GLOSSARY.md in {root}")
+        self.terms, self.skipped = parse_glossary(glossary)
+        allowed_file = read_text(root / ALLOWED) or ""
+        self.allowed = [
+            p.strip()
+            for p in allowed_file.splitlines()
+            if p.strip() and not p.startswith("#")
+        ]
+        defined = defined_terms(glossary)
+        self.code_names = code_name_pattern(defined_names(glossary))
+        self.patterns = [
+            (t, term_pattern(t, normalise(t) in defined)) for t in self.terms
+        ]
+
+    def hits(self, text):
+        """Map term -> [line numbers] for one text."""
+        text = blank_allowed(text, self.allowed, self.code_names)
+        found = {}
+        for term, pattern in self.patterns:
+            lines = [text.count("\n", 0, m.start()) + 1 for m in pattern.finditer(text)]
+            if lines:
+                found[term] = lines
+        return found
+
+
 def scan(root):
     """Return (hits, checked, terms, skipped); hits maps path -> term -> [line numbers]."""
-    glossary = read_text(root / "GLOSSARY.md")
-    if glossary is None:
-        raise SystemExit(f"no GLOSSARY.md in {root}")
-    terms, skipped = parse_glossary(glossary)
-    allowed_file = read_text(root / ALLOWED) or ""
-    allowed = [
-        p.strip()
-        for p in allowed_file.splitlines()
-        if p.strip() and not p.startswith("#")
-    ]
-    defined = defined_terms(glossary)
-    patterns = [(t, term_pattern(t, normalise(t) in defined)) for t in terms]
+    rules = Rules(root)
     hits, checked = {}, 0
     for rel in list_files(root):
         text = read_text(root / rel)
         if text is None:
             continue
         checked += 1
-        text = blank_allowed(text, allowed)
-        for term, pattern in patterns:
-            lines = [text.count("\n", 0, m.start()) + 1 for m in pattern.finditer(text)]
-            if lines:
-                hits.setdefault(rel, {})[term] = lines
-    return hits, checked, terms, skipped
+        found = rules.hits(text)
+        if found:
+            hits[rel] = found
+    return hits, checked, rules.terms, rules.skipped
+
+
+def check_text(root, path):
+    """`--text`: any avoided term in the prose of one text fails."""
+    rules = Rules(root)
+    text = read_text(path)
+    if text is None:
+        print(f"FAIL: cannot read {path}")
+        return 1
+    if not rules.terms:
+        print("FAIL: GLOSSARY.md lists no avoid terms")
+        return 1
+    found = rules.hits(blank_code(text))
+    if not found:
+        print(f"OK: no avoided GLOSSARY.md terms ({len(rules.terms)} checked)")
+        return 0
+    print("FAIL: use the GLOSSARY.md term instead of these avoided ones:")
+    for term, lines in sorted(found.items()):
+        print(f'  line {",".join(map(str, lines))}: "{term}"')
+    return 1
 
 
 def main(argv):
@@ -177,6 +253,8 @@ def main(argv):
         else Path(__file__).resolve().parent.parent
     )
     root = root.resolve()
+    if "--text" in argv:
+        return check_text(root, Path(argv[argv.index("--text") + 1]))
     hits, checked, terms, skipped = scan(root)
     print(
         f"glossary terms: checked {checked} files for {len(terms)} avoid terms "

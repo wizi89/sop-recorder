@@ -77,6 +77,53 @@ class Matching(unittest.TestCase):
         self.assertFalse(self.find("SOP", text))
 
 
+class CodeNames(unittest.TestCase):
+    def test_a_defined_name_in_capitals_is_its_code_name(self):
+        pattern = check.code_name_pattern(["SOPDocument", "Guide", "Legacy bridge"])
+        text = check.blank_allowed(
+            "ENABLE_SOP_DOCUMENT_OUTPUTS and sop_document_id", [], pattern
+        )
+        self.assertFalse(check.term_pattern("SOP").search(text))
+
+    def test_a_bare_avoided_term_still_counts(self):
+        pattern = check.code_name_pattern(["SOPDocument"])
+        text = check.blank_allowed("PARENT_SOP_ID and one SOP", [], pattern)
+        self.assertEqual(len(check.term_pattern("SOP").findall(text)), 2)
+
+
+class IssueText(unittest.TestCase):
+    """`--text`: the Issue glossary workflow's check (DL-04a)."""
+
+    def check_text(self, text):
+        path = Path(self.tmp.name) / "issue.md"
+        path.write_text(text, encoding="utf-8")
+        return run("--root", str(FIXTURE), "--text", str(path))
+
+    def setUp(self):
+        import tempfile
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_an_avoided_term_in_prose_goes_red_with_its_line(self):
+        code, out = self.check_text("Spec: tenant keys\n\nEach tenant gets a key.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn('line 1,3: "tenant"', out)
+
+    def test_quoted_code_does_not_count(self):
+        text = "Rename `prompt_chain` to the new name.\n\n```\nprompt_chain = 1\n```\n"
+        code, out = self.check_text(text)
+        self.assertEqual(code, 0, out)
+
+    def test_an_unclosed_fence_blanks_to_the_end(self):
+        code, out = self.check_text("Log:\n```\ntenant=1\n")
+        self.assertEqual(code, 0, out)
+
+    def test_blanking_keeps_line_numbers(self):
+        text = "```\na\nb\n```\ntenant\n"
+        self.assertEqual(check.blank_code(text).count("\n"), text.count("\n"))
+
+
 class ThisRepo(unittest.TestCase):
     def test_repo_has_no_new_avoided_terms(self):
         code, out = run()
