@@ -92,25 +92,7 @@ Pattern candidate: the factory injection rule has no carve-out for the repo owne
 
 ## 2026-11-23 Cloud factory runs cannot count on actionlint
 
-**Symptom:** actionlint is not in the cloud image. Some runs installed it with `go install
-github.com/rhysd/actionlint/cmd/actionlint@v1.7.7`; in others the session's auto-mode classifier
-refused the install or a download ("Undermining Oversight"), so workflow criteria stayed
-unverified: [#45](https://github.com/wizi89/sop-recorder/issues/45#issuecomment-7013294025),
-[#46](https://github.com/wizi89/sop-recorder/issues/46#issuecomment-7013475487),
-[#47](https://github.com/wizi89/sop-recorder/issues/47#issuecomment-7014571844),
-[#47](https://github.com/wizi89/sop-recorder/issues/47#issuecomment-7014732407),
-[#48](https://github.com/wizi89/sop-recorder/issues/48#issuecomment-7016590560),
-[#49](https://github.com/wizi89/sop-recorder/issues/49#issuecomment-7016736700),
-[#53](https://github.com/wizi89/sop-recorder/issues/53#issuecomment-7059216519),
-[#53](https://github.com/wizi89/sop-recorder/issues/53#issuecomment-7062635047),
-[#54](https://github.com/wizi89/sop-recorder/issues/54#issuecomment-7062712340).
-
-**Cause:** actionlint is neither installed by `.claude/hooks/cloud-setup.sh` nor run in CI.
-
-**Rule:** candidate: install actionlint in the cloud setup hook (the `go install` line above
-works), or run it as a CI job on `.github/workflows/**`.
-
-Pattern candidate: actionlint is missing in factory cloud sessions and installing it mid-run is refused.
+Graduated: the `actionlint` job in `.github/workflows/ci.yml`.
 
 ---
 

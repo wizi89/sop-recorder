@@ -437,6 +437,24 @@ jobs:
       - name: Custom rules, proven on their fixtures
         run: python3 scripts/check_semgrep.py
 
+  # actionlint on .github/workflows/, with shellcheck (preinstalled on the
+  # runner) on every `run:` block. Runs on every change, like glossary. A
+  # broken `if:` or context can skip a check and stay green, and cloud
+  # sessions cannot count on installing actionlint (FINDINGS 2026-11-23).
+  # Dependabot does not bump this pin; raise it by hand. vulnerability-alerts
+  # is a real scope actionlint does not know yet (FINDINGS 2026-11-19).
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: Lint the workflows
+        run: ~/go/bin/actionlint -ignore 'unknown permission scope "vulnerability-alerts"'
+
   # CI is the only hard gate, so every PR job has to block the merge when it
   # fails (FL-03e). The script reads the required checks from branch
   # protection and says what counts as covered; it runs on every change,
@@ -463,7 +481,7 @@ jobs:
   # would leave a docs-only PR pending forever; this gate passes when every
   # job succeeded or was skipped, and fails on any failure or cancellation.
   ci:
-    needs: [changes, glossary, semgrep, required-checks, test, e2e, build]
+    needs: [changes, glossary, semgrep, actionlint, required-checks, test, e2e, build]
     if: always()
     runs-on: ubuntu-latest
 
