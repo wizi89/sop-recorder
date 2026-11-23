@@ -74,12 +74,12 @@ fn a_missing_folder_is_an_error_naming_it() {
 
 #[test]
 fn step_numbers_past_ninety_nine_still_parse() {
-    assert_eq!(step_number_from_filename("step_100.png"), Some(100));
-    assert_eq!(step_number_from_filename("step_01.png"), Some(1));
-    assert_eq!(step_number_from_filename("step_1.png"), Some(1));
-    assert_eq!(step_number_from_filename("step_01.json"), None);
-    assert_eq!(step_number_from_filename("step_.png"), None);
-    assert_eq!(step_number_from_filename("recording.wav"), None);
+    assert_eq!(step_meta::step_number("step_100.png", ".png"), Some(100));
+    assert_eq!(step_meta::step_number("step_01.png", ".png"), Some(1));
+    assert_eq!(step_meta::step_number("step_1.png", ".png"), Some(1));
+    assert_eq!(step_meta::step_number("step_01.json", ".png"), None);
+    assert_eq!(step_meta::step_number("step_.png", ".png"), None);
+    assert_eq!(step_meta::step_number("recording.wav", ".png"), None);
 }
 
 fn png(dir: &Path, step: u32, w: u32, h: u32) -> PathBuf {

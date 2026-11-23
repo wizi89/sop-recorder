@@ -128,14 +128,23 @@ pub fn delete_sidecar(output_dir: &Path, order: u32) -> Result<(), std::io::Erro
     Ok(())
 }
 
-/// The step number a sidecar filename encodes, or `None` if it is not one of
-/// ours. Mirrors the screenshot parser in `commands::generate`.
-fn order_from_filename(name: &str) -> Option<u32> {
-    let digits = name.strip_prefix("step_")?.strip_suffix(".json")?;
+/// The step number a step filename (`step_` + ASCII digits + `ext`) encodes,
+/// or `None` if it is not one of ours. The one parser for screenshots and
+/// sidecars alike: `str::parse` alone would also read `step_+3`.
+///
+/// Parsed rather than pattern-matched on a fixed width: the writer formats with
+/// `{:02}`, so step 100 is `step_100.png`, and a width-two assumption would
+/// drop every step past 99 on a long recording.
+pub fn step_number(name: &str, ext: &str) -> Option<u32> {
+    let digits = name.strip_prefix("step_")?.strip_suffix(ext)?;
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
     digits.parse().ok()
+}
+
+fn order_from_filename(name: &str) -> Option<u32> {
+    step_number(name, ".json")
 }
 
 /// The step number of every sidecar file in the folder, parsed or not. Used to
