@@ -2,7 +2,7 @@
 name: factory-review
 description: The Review Station of the Software Factory. Reviews an `agent:review` PR in fresh context against the issue and the repo's coding standards, fixes what it can, posts a verdict and marks the PR ready for the owner's merge. Use when the fire payload says `station=review`.
 ---
-<!-- vendored from Home @116a63d, do not edit here -->
+<!-- vendored from Home @4c1ffff, do not edit here -->
 
 # Factory: Review
 

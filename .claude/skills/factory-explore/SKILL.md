@@ -2,7 +2,7 @@
 name: factory-explore
 description: The Explore Station of the Software Factory. Claims every open `agent:explore` issue in one batch, triages each against the code, and gives each exactly one Verdict in a report comment. Use when the fire payload says `station=explore`.
 ---
-<!-- vendored from Home @116a63d, do not edit here -->
+<!-- vendored from Home @4c1ffff, do not edit here -->
 
 # Factory: Explore
 
