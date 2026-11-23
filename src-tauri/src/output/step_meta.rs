@@ -120,10 +120,24 @@ pub fn write_sidecar(output_dir: &Path, meta: &StepMeta) -> Result<(), std::io::
     fs::write(path, content)
 }
 
+/// Remove every sidecar of that step: `step_1.json` and `step_01.json` are
+/// both step 1, and `sidecar_orders` would report a survivor as a leftover.
 pub fn delete_sidecar(output_dir: &Path, order: u32) -> Result<(), std::io::Error> {
-    let path = sidecar_path(output_dir, order);
-    if path.exists() {
-        fs::remove_file(path)?;
+    let entries = match fs::read_dir(output_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    for entry in entries {
+        let entry = entry?;
+        if step_number(&entry.file_name().to_string_lossy(), ".json") != Some(order) {
+            continue;
+        }
+        match fs::remove_file(entry.path()) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
     }
     Ok(())
 }
@@ -143,10 +157,6 @@ pub fn step_number(name: &str, ext: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-fn order_from_filename(name: &str) -> Option<u32> {
-    step_number(name, ".json")
-}
-
 /// The step number of every sidecar file in the folder, parsed or not. Used to
 /// find a sidecar left without its screenshot by a delete that failed part way
 /// (review-redaction D2, D5).
@@ -156,7 +166,7 @@ pub fn sidecar_orders(output_dir: &Path) -> Vec<u32> {
     };
     let mut orders: Vec<u32> = entries
         .filter_map(|entry| entry.ok())
-        .filter_map(|entry| order_from_filename(&entry.file_name().to_string_lossy()))
+        .filter_map(|entry| step_number(&entry.file_name().to_string_lossy(), ".json"))
         .collect();
     orders.sort_unstable();
     orders
@@ -189,7 +199,7 @@ pub fn read_all(output_dir: &Path) -> Vec<StepMeta> {
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| {
             let path = entry.path();
-            let order = order_from_filename(&path.file_name()?.to_string_lossy())?;
+            let order = step_number(&path.file_name()?.to_string_lossy(), ".json")?;
             let content = fs::read_to_string(&path).ok()?;
             match serde_json::from_str::<StepMeta>(&content) {
                 Ok(meta) => Some((order, meta)),

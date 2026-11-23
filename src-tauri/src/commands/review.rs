@@ -241,16 +241,24 @@ mod tests {
     }
 
     /// `step_1.png` and `step_01.png` are both step 1; deleting the step
-    /// leaves neither in the upload (#59).
+    /// leaves neither, nor a sidecar of either name, in the folder (#59).
     #[tokio::test]
     async fn delete_removes_every_screenshot_of_that_step() {
         let dir = recording(&[1, 2]);
         let shots = dir.path().join("screenshots");
         std::fs::write(shots.join("step_1.png"), b"png").unwrap();
+        std::fs::write(shots.join("step_1.json"), b"{}").unwrap();
         delete_step(s(&dir), 1).await.unwrap();
         assert!(!shots.join("step_01.png").exists());
         assert!(!shots.join("step_1.png").exists());
+        assert!(!shots.join("step_1.json").exists());
         assert!(shots.join("step_02.png").exists());
+        assert!(shots.join("step_02.json").exists());
+        assert!(load_redactions(s(&dir))
+            .await
+            .unwrap()
+            .leftover_steps
+            .is_empty());
     }
 
     /// The screenshot cannot be removed: the delete fails and the step keeps
