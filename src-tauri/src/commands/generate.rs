@@ -15,20 +15,6 @@ pub use redact::REDACTION_REFUSAL;
 
 static GENERATING: AtomicBool = AtomicBool::new(false);
 
-/// The step number a screenshot filename encodes, or `None` if the name is not
-/// one of ours.
-///
-/// Parsed rather than pattern-matched on a fixed width: the writer formats with
-/// `{:02}`, so step 100 is `step_100.png`, and a width-two assumption would
-/// drop every step past 99 on a long recording.
-fn step_number_from_filename(name: &str) -> Option<u32> {
-    let digits = name.strip_prefix("step_")?.strip_suffix(".png")?;
-    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    digits.parse().ok()
-}
-
 /// Every screenshot in a recording folder, in ascending step order.
 ///
 /// Reads the directory rather than counting upward from 1. The count-and-stop
@@ -49,7 +35,7 @@ fn collect_step_screenshots(screenshots_dir: &Path) -> Result<Vec<(u32, PathBuf)
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| {
             let path = entry.path();
-            let step = step_number_from_filename(&path.file_name()?.to_string_lossy())?;
+            let step = step_meta::step_number(&path.file_name()?.to_string_lossy(), ".png")?;
             Some((step, path))
         })
         .collect();

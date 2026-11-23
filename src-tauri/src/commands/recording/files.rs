@@ -90,14 +90,8 @@ pub(crate) fn session_screenshots(output_dir: &str) -> Result<Vec<(u32, PathBuf)
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            // Parse "step_NN.png" -> NN
-            if let Some(stripped) = name
-                .strip_prefix("step_")
-                .and_then(|s| s.strip_suffix(".png"))
-            {
-                if let Ok(n) = stripped.parse::<u32>() {
-                    entries.push((n, path));
-                }
+            if let Some(n) = step_meta::step_number(name, ".png") {
+                entries.push((n, path));
             }
         }
     }

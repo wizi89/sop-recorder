@@ -102,11 +102,11 @@ fn delete(output_dir: &str, step: u32) -> Result<(), String> {
     // PNG first, entry last: a failure part way never leaves the PNG in the
     // upload without its boxes, and the leftover entry blocks the upload until
     // the delete is retried.
-    let png = super::recording::session_screenshots(output_dir)?
+    // Every PNG of that step: `step_1.png` and `step_01.png` are both step 1.
+    let pngs = super::recording::session_screenshots(output_dir)?
         .into_iter()
-        .find(|(n, _)| *n == step)
-        .map(|(_, p)| p);
-    if let Some(png) = png {
+        .filter(|(n, _)| *n == step);
+    for (_, png) in pngs {
         match std::fs::remove_file(&png) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -238,6 +238,46 @@ mod tests {
         let loaded = load_redactions(s(&dir)).await.unwrap();
         assert!(loaded.leftover_steps.is_empty());
         assert!(loaded.steps.is_empty());
+    }
+
+    /// `step_1.png` and `step_01.png` are both step 1; deleting the step
+    /// leaves neither, nor a sidecar of either name, in the folder (#59).
+    #[tokio::test]
+    async fn delete_removes_every_screenshot_of_that_step() {
+        let dir = recording(&[1, 2]);
+        let shots = dir.path().join("screenshots");
+        std::fs::write(shots.join("step_1.png"), b"png").unwrap();
+        std::fs::write(shots.join("step_1.json"), b"{}").unwrap();
+        delete_step(s(&dir), 1).await.unwrap();
+        assert!(!shots.join("step_01.png").exists());
+        assert!(!shots.join("step_1.png").exists());
+        assert!(!shots.join("step_1.json").exists());
+        assert!(shots.join("step_02.png").exists());
+        assert!(shots.join("step_02.json").exists());
+        assert!(load_redactions(s(&dir))
+            .await
+            .unwrap()
+            .leftover_steps
+            .is_empty());
+    }
+
+    /// The screenshot cannot be removed: the delete fails and the step keeps
+    /// its sidecar and boxes. A non-empty directory in place of the PNG makes
+    /// the removal fail on every OS, root included (#59).
+    #[tokio::test]
+    async fn a_screenshot_that_cannot_be_removed_keeps_the_step() {
+        let dir = recording(&[1]);
+        save_redactions(s(&dir), 2, vec![[0, 0, 1, 1]])
+            .await
+            .unwrap();
+        let shots = dir.path().join("screenshots");
+        std::fs::create_dir(shots.join("step_02.png")).unwrap();
+        std::fs::write(shots.join("step_02.png").join("keep"), b"x").unwrap();
+        std::fs::write(shots.join("step_02.json"), b"{}").unwrap();
+        assert!(delete_step(s(&dir), 2).await.is_err());
+        assert!(shots.join("step_02.json").exists());
+        let loaded = load_redactions(s(&dir)).await.unwrap();
+        assert_eq!(loaded.steps.keys().copied().collect::<Vec<_>>(), vec![2]);
     }
 
     #[tokio::test]

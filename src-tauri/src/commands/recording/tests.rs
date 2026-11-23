@@ -144,6 +144,19 @@ async fn screenshots_are_listed_with_the_step_from_their_file_name() {
     assert!(listed[1].path.ends_with("step_03.png"));
 }
 
+/// Only "step_" + ASCII digits + ".png" is a step: `str::parse` would also
+/// read `step_+3.png` as step 3 (#59).
+#[test]
+fn a_signed_step_number_is_not_a_screenshot() {
+    let dir = tempfile::tempdir().unwrap();
+    let shots = dir.path().join("screenshots");
+    std::fs::create_dir(&shots).unwrap();
+    std::fs::write(shots.join("step_+3.png"), b"png").unwrap();
+    std::fs::write(shots.join("step_02.png"), b"png").unwrap();
+    let listed = session_screenshots(&dir.path().to_string_lossy()).unwrap();
+    assert_eq!(listed.iter().map(|(n, _)| *n).collect::<Vec<_>>(), vec![2]);
+}
+
 /// The path the 2026-09-03 recordings took silently: a capture fails, the
 /// step number has already advanced, and nothing counts the loss.
 #[test]

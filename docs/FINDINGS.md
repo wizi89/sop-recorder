@@ -96,6 +96,23 @@ Graduated: the `actionlint` job in `.github/workflows/ci.yml`.
 
 ---
 
+## 2026-11-23 Saving boxes over a read-only `redactions.json` fails on Windows, works on macOS
+
+**Symptom:** with `redactions.json` set read-only, saving a step's boxes in the review screen
+fails with "redactions.json konnte nicht geschrieben werden" on Windows. The same test on macOS
+saves without an error and the file holds the new boxes.
+
+**Cause:** the write is a temp file renamed over the target (`tempfile.persist` in
+`src-tauri/src/output/redactions.rs`). On Windows the rename (`MoveFileEx` with replace) refuses
+to replace a read-only file. On macOS (POSIX `rename`) what counts is write permission on the
+folder, not on the file, so the read-only flag on the old file does not stop it.
+
+**Rule:** a "read-only file blocks the write" test or manual check holds only on Windows. On
+macOS and Linux, make the write fail another way (a read-only folder, or a directory in the
+file's place).
+
+---
+
 ## 2026-11-19 `security-events: read` does not let `GITHUB_TOKEN` list Dependabot alerts
 
 **Symptom:** a workflow that calls `repos/{repo}/dependabot/alerts` with

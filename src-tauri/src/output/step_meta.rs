@@ -120,18 +120,37 @@ pub fn write_sidecar(output_dir: &Path, meta: &StepMeta) -> Result<(), std::io::
     fs::write(path, content)
 }
 
+/// Remove every sidecar of that step: `step_1.json` and `step_01.json` are
+/// both step 1, and `sidecar_orders` would report a survivor as a leftover.
 pub fn delete_sidecar(output_dir: &Path, order: u32) -> Result<(), std::io::Error> {
-    let path = sidecar_path(output_dir, order);
-    if path.exists() {
-        fs::remove_file(path)?;
+    let entries = match fs::read_dir(output_dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    for entry in entries {
+        let entry = entry?;
+        if step_number(&entry.file_name().to_string_lossy(), ".json") != Some(order) {
+            continue;
+        }
+        match fs::remove_file(entry.path()) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
     }
     Ok(())
 }
 
-/// The step number a sidecar filename encodes, or `None` if it is not one of
-/// ours. Mirrors the screenshot parser in `commands::generate`.
-fn order_from_filename(name: &str) -> Option<u32> {
-    let digits = name.strip_prefix("step_")?.strip_suffix(".json")?;
+/// The step number a step filename (`step_` + ASCII digits + `ext`) encodes,
+/// or `None` if it is not one of ours. The one parser for screenshots and
+/// sidecars alike: `str::parse` alone would also read `step_+3`.
+///
+/// Parsed rather than pattern-matched on a fixed width: the writer formats with
+/// `{:02}`, so step 100 is `step_100.png`, and a width-two assumption would
+/// drop every step past 99 on a long recording.
+pub fn step_number(name: &str, ext: &str) -> Option<u32> {
+    let digits = name.strip_prefix("step_")?.strip_suffix(ext)?;
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
@@ -147,7 +166,7 @@ pub fn sidecar_orders(output_dir: &Path) -> Vec<u32> {
     };
     let mut orders: Vec<u32> = entries
         .filter_map(|entry| entry.ok())
-        .filter_map(|entry| order_from_filename(&entry.file_name().to_string_lossy()))
+        .filter_map(|entry| step_number(&entry.file_name().to_string_lossy(), ".json"))
         .collect();
     orders.sort_unstable();
     orders
@@ -180,7 +199,7 @@ pub fn read_all(output_dir: &Path) -> Vec<StepMeta> {
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| {
             let path = entry.path();
-            let order = order_from_filename(&path.file_name()?.to_string_lossy())?;
+            let order = step_number(&path.file_name()?.to_string_lossy(), ".json")?;
             let content = fs::read_to_string(&path).ok()?;
             match serde_json::from_str::<StepMeta>(&content) {
                 Ok(meta) => Some((order, meta)),
