@@ -2,7 +2,7 @@
 name: factory-implement
 description: The Implement Station of the Software Factory. Builds an explored issue on `agent/<n>-<slug>`, opens a draft PR with door, blast radius and check output, and hands it to Review; also does rework on a PR. Use when the fire payload says `station=implement`.
 ---
-<!-- vendored from Home @f165759, do not edit here -->
+<!-- vendored from Home @116a63d, do not edit here -->
 
 # Factory: Implement
 
@@ -29,7 +29,7 @@ Input is the fire payload text: `station=implement repo=<owner/name> number=<n> 
 
 5. **Run the checks** `AGENTS.md` names, plus those the issue's acceptance criteria name, plus `git diff --check origin/<base>` before every push: a `leftover conflict marker` line in its output is red (it also reports whitespace; only marker lines count). Fix and rerun up to three rounds. Done when all are green, or still red after three rounds.
 
-   <!-- Phase 3f placeholder: the mutation-survivors note goes here (how Implement reads the diff-scoped mutation survivors from CI and which ones it must kill with a test). Until 3f is built, CI reports no survivors and there is nothing to read. -->
+   **Mutation survivors.** Information, never a gate (it never turns a round red). When `docs/agents/mutation.md` exists and the diff changes code it covers, run `bash scripts/mutation_diff.sh` on the committed head once the checks are green. It mutates only the changed code and reports each survivor: a change no test noticed. Kill a survivor on behaviour the issue asks for with a test, the same red-green step as the method skill; the test must fail on that mutant's change. Leave the rest, each with its reason (an equivalent mutant, a log line or message nobody depends on), for the report. A script that cannot run (wrong OS, a missing tool) is named under **Friction**, not fixed here.
 
    **CI-only checks.** A check `AGENTS.md` marks CI-only is not run in the session. Once the session checks are green, do step 7 first (the draft PR starts CI), then poll `gh api "repos/$REPO/commits/$SHA/check-runs"` for the named jobs on your head commit every 2 min, at most 45 min per round (the router's hang sweep allows 4 h per claim). A job that failed before your code ran (runner lost, a setup or network step, as its log or annotations show) is infrastructure: once its workflow run is `completed`, rerun it once (`gh api -X POST "repos/$REPO/actions/jobs/$JOB_ID/rerun"`) and name it under **Friction**; that rerun costs no round. A refused rerun (403, 409) or a second infrastructure failure is a red round. A job that failed because a job it depends on failed: read the upstream job first. A red job is a red round: read why from `gh api "repos/$REPO/actions/jobs/$JOB_ID/logs"`; if that download fails (it redirects to a host outside the allowlist), use the check run's `output` and `gh api "repos/$REPO/check-runs/$CHECK_ID/annotations"` and name the failed download under **Friction**. Fix, push, poll again, same three-round cap. Still red: step 6 with the job's log tail or annotations; the draft PR stays open. Done when the named jobs are green on the head commit.
 
@@ -48,7 +48,7 @@ Input is the fire payload text: `station=implement repo=<owner/name> number=<n> 
    - [ ] Production prompt change: before/after output attached
    ```
 
-   **Answer every box the owner ticks.** For each owner box (the Guardrail box "Does this weaken a check?" first), the body has a section that answers it: per check the diff touches, one line saying stronger, same or weaker, and for each weaker one why that is acceptable; then the action ("tick the box, merge"). The owner verifies the answer; they never work it out from a bare box.
+   **Answer every box the owner ticks.** Answer only boxes the PR will really carry: the checklist above, or the boxes the door workflow appends for the door paths in this diff. The Guardrail box comes only when the diff touches a path that workflow guards; a one-way door by meaning alone (auth, org scoping) gets the label and no box, so write no Guardrail section and no "tick the box". For each owner box (the Guardrail box "Does this weaken a check?" first), the body has a section that answers it: per check the diff touches, one line saying stronger, same or weaker, and for each weaker one why that is acceptable; then the action ("tick the box, merge"). The owner verifies the answer; they never work it out from a bare box.
 
    Done when every door path in the diff is either absent or marked, and every owner box has its answer in the body.
 
@@ -57,7 +57,7 @@ Input is the fire payload text: `station=implement repo=<owner/name> number=<n> 
    ```markdown
    <!-- factory-report station=implement -->
    Implement: <PR link, or "blocked">. Checks: <command: pass/fail, one per line>.
-   Method: <`diagnosing-bugs` | `tdd` | none - <why>>. Test: <the test at the seam, and its red run before the change, one line>; Seams: <as in the explore report, or the seam used instead and why>.
+   Method: <`diagnosing-bugs` | `tdd` | none - <why>>. Test: <the test at the seam, and its red run before the change, one line>; Seams: <as in the explore report, or the seam used instead and why>. Mutation: <killed / survived from `scripts/mutation_diff.sh`, the survivors killed with tests, the rest with their reason | not run - <why>>.
    Acceptance criteria: <one line per criterion, `AC<n>: met | not met | n/a - <the file, test or check output that shows it>`; `met` only when the change or a check shows it; or "none in the spec">.
    Hooks: <every line the pre-commit hook printed on your last commit, verbatim, or "no pre-commit output" (that itself is Friction)>.
    Injections: <quoted, or "none">.
