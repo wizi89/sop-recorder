@@ -1,0 +1,73 @@
+name: Issue glossary
+
+# A spec or ticket uses GLOSSARY.md's terms, like the code does. Checks the
+# title and body of every opened or edited issue with
+# `scripts/check_glossary_terms.py --text`: prose only, code spans may quote an
+# old name. On a hit it posts one comment naming the terms and updates it on
+# later edits; once the issue is clean the comment says so. The planning
+# session runs the same check on its draft before publishing, so this is the
+# backstop.
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-glossary-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Issue uses glossary terms
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the title and body
+        id: check
+        env:
+          TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          printf '%s\n\n%s\n' "$TITLE" "$BODY" > "$RUNNER_TEMP/issue.md"
+          set +e
+          python3 scripts/check_glossary_terms.py --text "$RUNNER_TEMP/issue.md" > "$RUNNER_TEMP/out.txt"
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/out.txt"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update the comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          CODE: ${{ steps.check.outputs.code }}
+        run: |
+          marker='<!-- issue-glossary -->'
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
+          body="$RUNNER_TEMP/comment.md"
+          if [ "$CODE" = 0 ]; then
+            [ -z "$id" ] && exit 0
+            printf '%s\nGlossary check: OK, the issue now uses the GLOSSARY.md terms.\n' "$marker" > "$body"
+          else
+            {
+              printf '%s\nGlossary check: this issue uses terms GLOSSARY.md lists under `_Avoid_`. ' "$marker"
+              printf 'Edit the issue to use the defined term; quote an old name in `code` if the issue renames it.\n\n'
+              printf 'Line numbers count the title as line 1 and the body from line 3.\n\n```\n'
+              cat "$RUNNER_TEMP/out.txt"
+              printf '```\n'
+            } > "$body"
+          fi
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -F "body=@$body" > /dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments" -F "body=@$body" > /dev/null
+          fi
+
+      - name: Fail on a hit
+        if: steps.check.outputs.code != '0'
+        run: exit 1

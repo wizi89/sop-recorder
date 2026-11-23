@@ -25,6 +25,17 @@
 - Plan by size. A tiny diff with no open question is done in one shot. Anything else starts
   with `/grill-with-docs`, which settles the open questions with the owner and records terms and
   ADRs as it goes. `/wayfinder` only when the effort is too foggy for one grilling session.
+- Before publishing an issue (a spec, a ticket), write the draft (title, blank line, body) to a
+  file and run `python3 scripts/check_glossary_terms.py --text <file>`; fix every hit. Prose
+  only: `code spans` may quote an old name. The `Issue glossary` workflow runs the same check on
+  every opened or edited issue and comments on a hit.
+- **Renames land before `/to-spec`.** A glossary change and the code renames it causes merge to
+  `main` in their own PR first, so the spec and its tickets use only the new names.
+- **A dense ADR gets a second pass** before its PR leaves draft. Dense means it settles more than
+  one decision, or its decision is a one-way door. A fresh-context subagent gets only the ADR,
+  `GLOSSARY.md` and the code the ADR names, and lists contradictions, alternatives it doesn't
+  reject, consequences it leaves out, and terms the glossary lacks. Fix or answer each point; the
+  PR body says `Second ADR pass: N points, all fixed or answered`.
 - A station has no owner to grill: an open question becomes `needs-owner`.
 
 ## Agents never merge
