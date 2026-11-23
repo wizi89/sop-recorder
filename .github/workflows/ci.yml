@@ -124,7 +124,15 @@ jobs:
 
       - name: Clippy
         working-directory: src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        shell: bash
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          echo "clippy: checked $(git ls-files 'src/*.rs' | wc -l) Rust files"
+
+      # The lint table catches an #[allow] without a reason (FL-02b).
+      - name: Clippy lints, proven on their fixture
+        if: runner.os == 'Linux'
+        run: bash scripts/clippy_selftest.sh
 
       - name: TypeScript check
         run: npx tsc --noEmit
@@ -143,6 +151,18 @@ jobs:
       - name: One-way Door gate, proven on its fixtures
         shell: bash
         run: bash scripts/check_door_workflow.sh src-tauri/src/network/upload.rs
+
+      # mutation_diff.sh on a throwaway repo: weak tests must let a mutant
+      # through in Rust and TypeScript (docs/agents/mutation.md).
+      - name: Install cargo-mutants
+        if: runner.os == 'Linux'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+
+      - name: Mutation testing, proven on its fixture
+        if: runner.os == 'Linux'
+        run: bash scripts/mutation_selftest.sh
 
   # Mutation testing on the code this PR changed (FL-06a/b,
   # docs/agents/mutation.md): cargo-mutants on the changed Rust lines, Stryker
@@ -417,6 +437,28 @@ jobs:
       - name: Custom rules, proven on their fixtures
         run: python3 scripts/check_semgrep.py
 
+  # actionlint on .github/workflows/, with shellcheck (preinstalled on the
+  # runner) on every `run:` block. Runs on every change, like glossary. A
+  # broken `if:` or context can skip a check and stay green, and cloud
+  # sessions cannot count on installing actionlint (FINDINGS 2026-11-23).
+  # Dependabot does not bump this pin; raise it by hand. vulnerability-alerts
+  # is a real scope actionlint does not know yet (FINDINGS 2026-11-19).
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      # Without shellcheck on PATH, actionlint skips the run: blocks and passes.
+      - name: Shellcheck is on the runner
+        run: shellcheck --version
+
+      - name: Lint the workflows
+        run: ~/go/bin/actionlint -ignore 'unknown permission scope "vulnerability-alerts"'
+
   # CI is the only hard gate, so every PR job has to block the merge when it
   # fails (FL-03e). The script reads the required checks from branch
   # protection and says what counts as covered; it runs on every change,
@@ -443,7 +485,7 @@ jobs:
   # would leave a docs-only PR pending forever; this gate passes when every
   # job succeeded or was skipped, and fails on any failure or cancellation.
   ci:
-    needs: [changes, glossary, semgrep, required-checks, test, e2e, build]
+    needs: [changes, glossary, semgrep, actionlint, required-checks, test, e2e, build]
     if: always()
     runs-on: ubuntu-latest
 

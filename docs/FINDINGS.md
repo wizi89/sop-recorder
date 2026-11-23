@@ -11,6 +11,91 @@ Older entries (2026-09 and earlier): [findings/2026-09-and-earlier.md](./finding
 
 ---
 
+## 2026-11-23 Review rules wanted more than once are still missing from CODING_STANDARDS.md
+
+Moved: the wanted rules are in "Not yet a rule" in `CODING_STANDARDS.md`.
+
+Pattern candidate: Review's verdict lists the rules it wanted, and nothing copies them into the
+repo's "Not yet a rule", so the owner never sees them to promote.
+
+---
+
+## 2026-11-23 Issues written from a PR review cite line numbers that have moved
+
+**Symptom:** Explore on follow-up issues found the cited lines elsewhere and the cited spec gone:
+[#56](https://github.com/wizi89/sop-recorder/issues/56#issuecomment-7075504788) (lines from PR #40's
+head, code since split out of `screenshot.rs`), [#58](https://github.com/wizi89/sop-recorder/issues/58#issuecomment-7075512440)
+(lines from PR #39's head, spec removed with OpenSpec in #73),
+[#59](https://github.com/wizi89/sop-recorder/issues/59#issuecomment-7093669844) (cites a `tasks.md`
+and a checklist item that are not in the repo, and names two parsers where there are three).
+
+**Cause:** the issues were written from the review thread, whose line numbers belong to the PR
+head, not to `main`.
+
+**Rule:** an issue cites `path:line` at a `main` SHA it names, and quotes what it relies on
+instead of pointing at a PR body or a removed spec.
+
+Pattern candidate: issues written from a PR review cite the PR head's lines, not `main`'s.
+
+---
+
+## 2026-11-23 `scripts/mutation_diff.sh` says nothing on a test-only branch
+
+**Symptom:** a PR that only adds tests to kill survivors got "No change in a `src/` module." from
+the mutation script, so its acceptance criterion needed a hand-run `npx stryker run --mutate
+<module>`: [#86](https://github.com/wizi89/sop-recorder/issues/86#issuecomment-7086228812),
+[#86](https://github.com/wizi89/sop-recorder/issues/86#issuecomment-7086820806),
+[#87](https://github.com/wizi89/sop-recorder/issues/87#issuecomment-7086864483). Separately,
+`cargo-mutants` is not installed in the cloud image, and installing it took several minutes of a
+run ([#59](https://github.com/wizi89/sop-recorder/issues/59#issuecomment-7093888503)).
+
+**Cause:** the script mutates only modules the diff changes and skips test files, so a test-only
+diff has nothing to mutate.
+
+**Rule:** candidate: when only tests changed, mutate the modules those tests import; install
+`cargo-mutants` in the cloud setup hook.
+
+---
+
+## 2026-11-23 A rework was pushed to a branch whose PR the owner had already merged
+
+**Symptom:** Implement pushed a rework to `agent/47-stuck-alerts` after the owner merged #48. No
+PR picked up the push and no CI ran, and the run waited 44 minutes for checks that never came
+([#48](https://github.com/wizi89/sop-recorder/issues/48#issuecomment-7016590560)).
+
+**Cause:** the rework was queued before the merge, and the station does not re-check the PR's
+state before pushing.
+
+**Rule:** candidate: Implement re-reads the PR's `merged_at` and `state` right before a rework
+push and stops when it is no longer open.
+
+Pattern candidate: Implement does not check that its PR is still open before pushing a rework.
+
+---
+
+## 2026-11-23 Factory stations flag the owner's own comments as injections
+
+**Symptom:** Explore stopped to decide whether the owner's `/go implement` decision comment was an
+injection, and called the rule a reason for `needs-owner` on clear specs:
+[#53](https://github.com/wizi89/sop-recorder/issues/53#issuecomment-7059216519),
+[#57](https://github.com/wizi89/sop-recorder/issues/57#issuecomment-7063044405).
+
+**Cause:** the station skills call every agent-aimed instruction in issue or comment text an
+injection, with no word on comments by the repo owner, who is also the fire's sender.
+
+**Rule:** candidate: a comment by the repo owner is an owner decision; only text by anyone else
+is data.
+
+Pattern candidate: the factory injection rule has no carve-out for the repo owner's own comments.
+
+---
+
+## 2026-11-23 Cloud factory runs cannot count on actionlint
+
+Graduated: the `actionlint` job in `.github/workflows/ci.yml`.
+
+---
+
 ## 2026-11-23 Saving boxes over a read-only `redactions.json` fails on Windows, works on macOS
 
 **Symptom:** with `redactions.json` set read-only, saving a step's boxes in the review screen
@@ -40,6 +125,8 @@ file's place).
 **Rule:** grant `vulnerability-alerts: read` for Dependabot alerts (see
 `.github/workflows/stuck-alerts.yml`), and run actionlint with
 `-ignore 'unknown permission scope "vulnerability-alerts"'`.
+
+Pattern candidate: `security-events: read` does not cover Dependabot alerts; they need `vulnerability-alerts: read`.
 
 ---
 
@@ -80,21 +167,7 @@ against its own stale `node_modules`.
 **Rule:** keep `.claude/worktrees/**` in `exclude` in `vitest.config.ts`. A tool that walks the
 tree (test runner, linter, formatter) needs the worktrees excluded in its own config.
 
----
-
-## 2026-11-05 The side-by-side password check test failed on macOS CI only
-
-**Symptom:** `windows_are_checked_side_by_side_within_one_budget` fails with
-`["the check ran out of its 100 ms budget"]` on the macOS runner, on 2026-11-02 and again
-on 2026-11-05. It passes on Windows CI and every local run, and no code in the check changed.
-
-**Cause:** four 40 ms queries side by side in a 100 ms budget leave 60 ms for four thread
-starts and the channel. The macOS runner, running the whole test binary in parallel, takes
-longer than that to schedule them. Widening the margin to 40 % per query was not enough.
-
-**Rule:** a test that asserts a wall-clock budget gets a budget of its own large enough that
-scheduling is noise (here 1 s, queries 400 ms), not the module's 100 ms test budget. Keep
-the ratio, so the test still fails if the queries run one after another.
+Pattern candidate: tools that walk the tree collect `.claude/worktrees/` checkouts unless their config excludes them.
 
 ---
 
@@ -111,44 +184,6 @@ first test fails here again, rerun `main`'s last green e2e job before blaming th
 
 ---
 
-## 2026-10-24 The UI shows the main window by itself once, after mount
-
-**Symptom:** an e2e test hid the main window and it was visible again a moment later. Passed
-locally, failed on the slower CI runner.
-
-**Cause:** `App.tsx` leaves compact mode on mount (`exitCompactMode`), which calls
-`appWindow.show()`. A test that hides the window before the UI has mounted loses the race.
-
-**Rule:** wait for the UI (a visible button) before changing window state in a test, and check the
-state still holds a second later. See `e2e/single-instance.e2e.ts`.
-
----
-
-## 2026-10-24 Every e2e test failed at launch with WebView2 error 0x8007139F
-
-**Symptom:** all e2e tests fail on launch with `0x8007139F`, right after a `cargo test`.
-
-**Cause:** the exe under test had been relinked with the normal identifier, so its WebView2
-profile was the installed app's, which was in use. `cargo test` and `tauri dev` both relink the
-shared `target/debug` exe.
-
-**Rule:** `npm run e2e:build` builds into `src-tauri/target/e2e`, and the tests run only that exe.
-Rebuild it after changing Rust code; never point the tests at `target/debug`.
-
----
-
-## 2026-10-24 A resampler test measured noise at -60 dB that the resampler did not make
-
-**Symptom:** an alias-level test failed near -60 dB, and no change to the resampler moved it.
-
-**Cause:** the test sine was generated with an f32 phase. The accumulated rounding error is noise
-in the *input*.
-
-**Rule:** compute the phase in f64 and convert each sample to f32. The resampler itself measures
-below -140 dB (`capture/audio.rs` tests).
-
----
-
 ## 2026-11-01 LNK1318 "Unerwarteter PDB-Fehler: LIMIT (12)" was a full disk
 
 A debug `cargo build` on Windows failed to link with `LNK1318 ... LIMIT (12)` on
@@ -162,26 +197,9 @@ clean` there, the original build linked unchanged.
 (`Get-PSDrive D`). Each worktree has its own `target/` (about 9 GB here), and the main checkout's
 grows without bound; `cargo clean` in an idle checkout is the fix, not a linker flag.
 
-## 2026-11-01 UIA clients created on many threads at once fail with E_FAIL
-
-The password check warms up every visible window at recording start, one thread each. With a
-UIA client per thread, all but one `CoCreateInstance(CUIAutomation8)` failed with `0x80004005`
-when about 14 ran at once, and the failures were silent: a warm-up does not report, so the only
-symptom was every later step flagged "not checked twice". A single query on its own always
-worked, which is why the mocked tests and a one-window run passed. Printing the warm-up results
-found it.
-
-**Rule:** one UIA client per process (`capture::uia::client`), created once under a lock and shared;
-every thread joins the MTA before using it. Client objects created in the MTA are free-threaded.
+Pattern candidate: LNK1318 "LIMIT (12)" from the MSVC linker means a full disk, not a PDB limit.
 
 ## 2026-11-01 A process that is not per-monitor DPI aware gets masks beside the field
 
-A live run from `cargo test` saved a login page with its password field unmasked and the step
-reported `ok`. UIA had returned the field at (937, 323) while it was on screen at (1406, 484):
-the test process was DPI unaware on a 150% display, so UIA reported scaled coordinates while DWM
-(window bounds) and xcap (pixels) are always physical. The recorder itself is fine because
-`main.rs` sets `PROCESS_PER_MONITOR_DPI_AWARE`, but nothing checked that.
-
-**Rule:** the check refuses to run in a thread that is not per-monitor aware
-(`uia::client` returns an error), so every step is flagged instead of masked in the wrong place.
-Any live test of the capture path must set DPI awareness first, as `live_password_check` does.
+Graduated: `src-tauri/src/capture/uia.rs` (the UIA client refuses to run without per-monitor
+DPI awareness).
