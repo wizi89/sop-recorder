@@ -2,7 +2,7 @@
   "docs/adr/0003-redactions-are-applied-at-upload.md": {
     "blur": 2
   },
-  "src-tauri/src/network/auth.rs": {
+  "src-tauri/src/network/auth/tests.rs": {
     "desktop login": 2
   },
   "src/test/setup.ts": {
