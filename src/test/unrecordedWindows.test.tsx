@@ -50,8 +50,45 @@ describe("limbos", () => {
     ]);
   });
 
-  it("drops a visit shorter than a second", () => {
+  it("drops a visit shorter than a second and keeps one of a second", () => {
     expect(limbos(steps, [visit(app("Setup"), 11, 11.5)])).toEqual([]);
+    expect(limbos(steps, [visit(app("Setup"), 11, 12)])).toEqual([
+      { after: 1, windows: [app("Setup")] },
+    ]);
+  });
+
+  it("puts a visit that starts with a step after that step", () => {
+    expect(limbos(steps, [visit(app("Setup"), 20, 25)])).toEqual([
+      { after: 2, windows: [app("Setup")] },
+    ]);
+  });
+
+  it("names the security prompt and an unknown app once each", () => {
+    expect(
+      limbos(steps, [
+        visit({ kind: "security_prompt" }, 11, 13),
+        visit({ kind: "unknown_app" }, 13, 15),
+        visit({ kind: "security_prompt" }, 15, 17),
+        visit({ kind: "unknown_app" }, 17, 19),
+      ]),
+    ).toEqual([
+      {
+        after: 1,
+        windows: [{ kind: "security_prompt" }, { kind: "unknown_app" }],
+      },
+    ]);
+  });
+
+  it("orders steps and visits by time, whatever order they come in", () => {
+    expect(
+      limbos([...steps].reverse(), [
+        visit(app("B"), 35, 40),
+        visit(app("A"), 12, 14),
+      ]),
+    ).toEqual([
+      { after: 1, windows: [app("A")] },
+      { after: 3, windows: [app("B")] },
+    ]);
   });
 
   it("merges the rows around a deleted step", () => {
@@ -123,11 +160,28 @@ describe("review screen limbo rows", () => {
       "step-2",
     ]);
     expect(row).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Es wurden keine Schritte aufgenommen/),
+    ).not.toBeInTheDocument();
     // Informational: no tick, Generate stays open.
     const generate = screen.getByRole("button", { name: "Generieren" });
     expect(generate).toBeEnabled();
     await userEvent.setup().click(generate);
     expect(onConfirm).toHaveBeenCalled();
+  });
+
+  it("shows a limbo before the first step", async () => {
+    visits = [visit(app("Setup Tool X"), 2, 8)];
+    renderReview();
+    await screen.findByText("Nicht aufgenommen: Setup Tool X");
+    const items = [
+      ...document.querySelectorAll("[data-strip-item]"),
+    ] as HTMLElement[];
+    expect(items.map((el) => el.dataset.stripItem)).toEqual([
+      "limbo-0",
+      "step-1",
+      "step-2",
+    ]);
   });
 
   it("shows nothing when there were no unrecorded windows", async () => {
@@ -160,6 +214,8 @@ describe("review screen limbo rows", () => {
         "Es wurden keine Schritte aufgenommen. Alle Klicks waren in Fenstern, die mit Administratorrechten laufen: Setup Tool X, unbekanntes Programm.",
       ),
     ).toBeInTheDocument();
+    // The message replaces the row; the empty strip shows none.
+    expect(document.querySelectorAll("[data-strip-item]")).toHaveLength(0);
   });
 });
 
@@ -195,5 +251,28 @@ describe("recording bar hint", () => {
       handlers["recording:unrecorded_window"]?.({ payload: false });
     });
     expect(screen.queryByTitle(hint)).not.toBeInTheDocument();
+  });
+
+  it("clears the hint when the next recording starts", async () => {
+    const handlers: Record<string, (e: { payload: unknown }) => void> = {};
+    vi.mocked(listen).mockImplementation((async (
+      event: string,
+      handler: unknown,
+    ) => {
+      handlers[event] = handler as (e: { payload: unknown }) => void;
+      return () => {};
+    }) as unknown as typeof listen);
+    render(<RecordingBar />);
+    await waitFor(() =>
+      expect(handlers["recording:unrecorded_window"]).toBeDefined(),
+    );
+    await act(async () => {
+      handlers["recording:unrecorded_window"]?.({ payload: true });
+    });
+    expect(screen.getByText("Nicht aufgenommen")).toBeInTheDocument();
+    await act(async () => {
+      handlers["recording:started"]?.({ payload: null });
+    });
+    expect(screen.queryByText("Nicht aufgenommen")).not.toBeInTheDocument();
   });
 });
