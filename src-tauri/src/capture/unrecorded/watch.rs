@@ -76,54 +76,59 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
 
+/// The bytes `VerQueryValueW` finds under `key` in the version block `data`,
+/// `unit` bytes per counted element. Taken as a range of `data`, never by
+/// dereferencing the returned pointer, so a pointer outside the block reads
+/// as nothing.
+fn version_value<'a>(data: &'a [u8], key: &str, unit: usize) -> Option<&'a [u8]> {
+    let key = wide(key);
+    let mut ptr = std::ptr::null_mut();
+    let mut len = 0;
+    let found = unsafe {
+        VerQueryValueW(
+            data.as_ptr() as *const _,
+            windows::core::PCWSTR(key.as_ptr()),
+            &mut ptr,
+            &mut len,
+        )
+    };
+    if !found.as_bool() {
+        return None;
+    }
+    let offset = (ptr as usize).checked_sub(data.as_ptr() as usize)?;
+    let bytes = (len as usize).checked_mul(unit)?;
+    data.get(offset..offset.checked_add(bytes)?)
+}
+
 /// The file description of an executable ("Registry Editor"), if it has one.
 fn file_description(path: &[u16]) -> Option<String> {
-    unsafe {
-        let file = windows::core::PCWSTR(path.as_ptr());
-        let size = GetFileVersionInfoSizeW(file, None);
-        if size == 0 {
-            return None;
-        }
-        let mut data = vec![0u8; size as usize];
-        GetFileVersionInfoW(file, 0, size, data.as_mut_ptr() as *mut _).ok()?;
-        let mut ptr = std::ptr::null_mut();
-        let mut len = 0;
-        let key = wide("\\VarFileInfo\\Translation");
-        if !VerQueryValueW(
-            data.as_ptr() as *const _,
-            windows::core::PCWSTR(key.as_ptr()),
-            &mut ptr,
-            &mut len,
-        )
-        .as_bool()
-            || ptr.is_null()
-            || len < 4
-        {
-            return None;
-        }
-        // Language and code page, two u16s; read unaligned, as the block is
-        // a byte buffer.
-        let [lang, codepage] = std::ptr::read_unaligned(ptr as *const [u16; 2]);
-        let key = wide(&format!(
-            "\\StringFileInfo\\{lang:04x}{codepage:04x}\\FileDescription"
-        ));
-        if !VerQueryValueW(
-            data.as_ptr() as *const _,
-            windows::core::PCWSTR(key.as_ptr()),
-            &mut ptr,
-            &mut len,
-        )
-        .as_bool()
-            || ptr.is_null()
-            || len == 0
-        {
-            return None;
-        }
-        let text = std::slice::from_raw_parts(ptr as *const u16, len as usize);
-        let text = String::from_utf16_lossy(text);
-        let text = text.trim_end_matches('\0').trim();
-        (!text.is_empty()).then(|| text.to_string())
+    let file = windows::core::PCWSTR(path.as_ptr());
+    let size = unsafe { GetFileVersionInfoSizeW(file, None) };
+    if size == 0 {
+        return None;
     }
+    let mut data = vec![0u8; size as usize];
+    unsafe { GetFileVersionInfoW(file, 0, size, data.as_mut_ptr() as *mut _) }.ok()?;
+    // Language and code page, two little-endian u16s; the length is in bytes.
+    let pair = version_value(&data, r"\VarFileInfo\Translation", 1)?;
+    let [l0, l1, c0, c1, ..] = *pair else {
+        return None;
+    };
+    let lang = u16::from_le_bytes([l0, l1]);
+    let codepage = u16::from_le_bytes([c0, c1]);
+    // A string value's length counts UTF-16 units.
+    let raw = version_value(
+        &data,
+        &format!(r"\StringFileInfo\{lang:04x}{codepage:04x}\FileDescription"),
+        2,
+    )?;
+    let units: Vec<u16> = raw
+        .chunks_exact(2)
+        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+        .collect();
+    let text = String::from_utf16_lossy(&units);
+    let text = text.trim_end_matches('\0').trim();
+    (!text.is_empty()).then(|| text.to_string())
 }
 
 /// The app's name: its file description, else its file name without `.exe`.
