@@ -224,7 +224,7 @@ async fn complete_returns_the_tokens_on_the_happy_path() {
 async fn complete_persists_nothing() {
     // The property the cancel path depends on: the command writes the
     // keyring after the select!, never complete() itself.
-    let source = include_str!("../auth.rs");
+    let source = include_str!("../auth.rs").replace("\r\n", "\n");
     let body = source
         .split("async fn complete_within(")
         .nth(1)
