@@ -314,6 +314,16 @@ mod tests {
         assert!(error.contains("os error"), "{error}");
     }
 
+    #[tokio::test]
+    async fn a_job_still_processing_after_every_attempt_says_so() {
+        let processing = r#"{"status":"processing"}"#;
+        let url = serve(vec![Reply::Ok(processing), Reply::Ok(processing)]);
+
+        let error = poll(&url, 2).await.expect_err("the job never finishes");
+
+        assert!(error.ends_with("(last: job still processing)"), "{error}");
+    }
+
     #[test]
     fn backoff_doubles_from_three_seconds_and_stops_at_thirty() {
         let secs: Vec<u64> = (0..7).map(|a| backoff_delay(a).as_secs()).collect();
