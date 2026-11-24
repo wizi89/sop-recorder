@@ -6,4 +6,5 @@ pub mod permits;
 pub mod screenshot;
 #[cfg(windows)]
 pub mod uia;
+pub mod unrecorded;
 pub mod window_area;

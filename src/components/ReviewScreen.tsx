@@ -5,6 +5,7 @@ import {
   listCaptureRecords,
   listSessionScreenshots,
   loadRedactions,
+  loadUnrecorded,
   readScreenshotBytes,
   resetRedactions,
   saveRedactions,
@@ -13,6 +14,8 @@ import {
 } from "../lib/tauri";
 import { StepEditor, boxKey, hasBox, type Thumb } from "./StepEditor";
 import { ReviewThumb } from "./ReviewThumb";
+import { LimboCard, limboApps } from "./Limbo";
+import { limbos, type UnrecordedVisit } from "../lib/limbos";
 import { formatElapsed } from "../hooks/useElapsedTime";
 import { PipelineSelector } from "./PipelineSelector";
 
@@ -85,6 +88,9 @@ export function ReviewScreen({
   const [reviewed, setReviewed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** When each step was taken, to place the limbos between them. */
+  const [times, setTimes] = useState<Record<number, number>>({});
+  const [visits, setVisits] = useState<UnrecordedVisit[]>([]);
 
   const [stored, setStored] = useState<BoxesByStep>({});
   const [desired, setDesired] = useState<BoxesByStep>({});
@@ -132,6 +138,10 @@ export function ReviewScreen({
           shots = await listSessionScreenshots(outputDir);
         }
         const loaded = await loadRedactions(outputDir);
+        // Informational only: a file that cannot be read shows no limbos
+        // rather than keeping the user from their steps.
+        const unrecorded =
+          (await loadUnrecorded(outputDir).catch(() => [])) ?? [];
         // Read each file's bytes and wrap in a Blob URL for display.
         const entries = await Promise.all(
           shots.map(async ({ step, path, record }) => {
@@ -149,6 +159,12 @@ export function ReviewScreen({
         const boxes = toBoxesByStep(loaded.steps);
         setThumbs(entries);
         setOpenedWith(entries.length);
+        setTimes(
+          Object.fromEntries(
+            shots.map((x) => [x.step, x.record?.timestamp_seconds ?? 0]),
+          ),
+        );
+        setVisits(unrecorded);
         setStored(boxes);
         setDesired(boxes);
         setLeftovers(loaded.leftover_steps ?? []);
@@ -289,6 +305,17 @@ export function ReviewScreen({
     unreadable !== null;
   const count = loading ? captureCount : thumbs.length;
   const open = thumbs.find((x) => x.step === openStep) ?? null;
+  const rows = limbos(
+    thumbs.map((x) => ({
+      step: x.step,
+      timestamp_seconds: times[x.step] ?? 0,
+    })),
+    visits,
+  );
+  const limboAfter = (after: number | null) =>
+    rows
+      .filter((r) => r.after === after)
+      .map((r) => <LimboCard key={`limbo-${after}`} limbo={r} />);
 
   return (
     <div className="relative flex flex-col h-full bg-surface">
@@ -314,6 +341,16 @@ export function ReviewScreen({
             {deletedCount > 0 &&
               ` (${t("review.deleted_steps", { count: deletedCount })})`}
           </p>
+          {!loading && thumbs.length === 0 && rows.length > 0 && (
+            <p
+              className="mt-2 text-xs"
+              style={{ color: "rgba(255, 190, 80, 0.9)" }}
+            >
+              {t("review.no_steps_unrecorded", {
+                apps: limboApps(t, rows[0].windows),
+              })}
+            </p>
+          )}
           {failedCaptures > 0 && (
             <p
               className="mt-2 rounded px-2 py-1.5 leading-snug"
@@ -433,7 +470,8 @@ export function ReviewScreen({
                 className="flex gap-2 overflow-x-auto pb-2"
                 style={{ scrollbarWidth: "thin" }}
               >
-                {thumbs.map((thumb) => (
+                {thumbs.length > 0 && limboAfter(null)}
+                {thumbs.flatMap((thumb) => [
                   <ReviewThumb
                     key={thumb.path}
                     thumb={thumb}
@@ -448,8 +486,9 @@ export function ReviewScreen({
                     onNatural={(size) =>
                       setNatural((n) => ({ ...n, [thumb.step]: size }))
                     }
-                  />
-                ))}
+                  />,
+                  ...limboAfter(thumb.step),
+                ])}
               </div>
             </>
           )}

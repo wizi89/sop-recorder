@@ -1,3 +1,4 @@
+import type { UnrecordedVisit } from "./limbos";
 import { invoke } from "@tauri-apps/api/core";
 import type { Phase } from "./errorPhase";
 
@@ -134,6 +135,8 @@ export interface StepCaptureRecord {
   password_check: "ok" | "flagged" | "off" | "unknown";
   /** The window list behind the step was partial; marks it with masking on or off. */
   window_list_partial: boolean;
+  /** Seconds into the recording the step was taken; places the limbos. */
+  timestamp_seconds: number;
 }
 
 /** How each screenshot was captured; a missing sidecar reads as `unknown`. */
@@ -141,6 +144,13 @@ export async function listCaptureRecords(
   outputDir: string,
 ): Promise<StepCaptureRecord[]> {
   return invoke("list_capture_records", { outputDir });
+}
+
+/** The recording's visits to unrecorded windows; empty when there were none. */
+export async function loadUnrecorded(
+  outputDir: string,
+): Promise<UnrecordedVisit[]> {
+  return invoke("load_unrecorded", { outputDir });
 }
 
 /** `[x, y, width, height]` in saved-image pixels. */

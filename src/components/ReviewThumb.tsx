@@ -26,6 +26,7 @@ export function ReviewThumb({
   return (
     <button
       type="button"
+      data-strip-item={`step-${thumb.step}`}
       onClick={onOpen}
       className="flex-shrink-0 rounded border text-left"
       style={{
