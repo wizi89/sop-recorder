@@ -96,12 +96,14 @@ fn file_description(path: &[u16]) -> Option<String> {
             &mut len,
         )
         .as_bool()
+            || ptr.is_null()
             || len < 4
         {
             return None;
         }
-        let lang = *(ptr as *const u16);
-        let codepage = *(ptr as *const u16).add(1);
+        // Language and code page, two u16s; read unaligned, as the block is
+        // a byte buffer.
+        let [lang, codepage] = std::ptr::read_unaligned(ptr as *const [u16; 2]);
         let key = wide(&format!(
             "\\StringFileInfo\\{lang:04x}{codepage:04x}\\FileDescription"
         ));
@@ -112,6 +114,7 @@ fn file_description(path: &[u16]) -> Option<String> {
             &mut len,
         )
         .as_bool()
+            || ptr.is_null()
             || len == 0
         {
             return None;
