@@ -25,6 +25,8 @@
 - Plan by size. A tiny diff with no open question is done in one shot. Anything else starts
   with `/grill-with-docs`, which settles the open questions with the owner and records terms and
   ADRs as it goes. `/wayfinder` only when the effort is too foggy for one grilling session.
+  A multi-PR effort continues with `/to-spec`, then `/to-tickets`; labels, blocking edges and how
+  tickets ship: `docs/agents/issue-tracker.md`.
 - Before publishing an issue (a spec, a ticket), write the draft (title, blank line, body) to a
   file and run `python3 scripts/check_glossary_terms.py --text <file>`; fix every hit. Prose
   only: `code spans` may quote an old name. The `Issue glossary` workflow runs the same check on
