@@ -76,6 +76,18 @@ The part of the monitor a step's screenshot keeps.
 What a step's screenshot actually shows: the active window, the monitor by choice, the monitor
 because no usable window was found (monitor fallback), or unknown.
 
+**Unrecorded window**:
+A window in which the recorder cannot see clicks or the Return key, because its app runs with more
+rights than the recorder (an app run as administrator, an installer, the Windows security prompt).
+Steps there are not recorded; the user is told so.
+_Avoid_: administrator window, elevated window (in user-facing text)
+
+**Limbo**:
+The time between two steps in which the user worked in one or more unrecorded windows. It names
+the apps, takes no step number and leaves no gap in the step numbers. The review screen shows it as
+"Nicht aufgenommen".
+_Avoid_: gap (for this), stretch
+
 ### Privacy
 
 **Masking**:
