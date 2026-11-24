@@ -253,7 +253,7 @@ describe("recording bar hint", () => {
     expect(screen.queryByTitle(hint)).not.toBeInTheDocument();
   });
 
-  it("clears the hint when the next recording starts", async () => {
+  it("keeps the hint for a window in front at start, clears it on stop", async () => {
     const handlers: Record<string, (e: { payload: unknown }) => void> = {};
     vi.mocked(listen).mockImplementation((async (
       event: string,
@@ -266,12 +266,16 @@ describe("recording bar hint", () => {
     await waitFor(() =>
       expect(handlers["recording:unrecorded_window"]).toBeDefined(),
     );
+    // start_recording: the watch reports the window in front, then "started".
     await act(async () => {
       handlers["recording:unrecorded_window"]?.({ payload: true });
     });
-    expect(screen.getByText("Nicht aufgenommen")).toBeInTheDocument();
     await act(async () => {
       handlers["recording:started"]?.({ payload: null });
+    });
+    expect(screen.getByText("Nicht aufgenommen")).toBeInTheDocument();
+    await act(async () => {
+      handlers["recording:stopped"]?.({ payload: null });
     });
     expect(screen.queryByText("Nicht aufgenommen")).not.toBeInTheDocument();
   });

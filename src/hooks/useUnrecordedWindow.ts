@@ -4,14 +4,15 @@ import { safeUnlisten } from "../lib/safeUnlisten";
 
 /**
  * True while an unrecorded window is in the foreground, as the Rust side
- * reports it. Cleared at every session boundary, so it never carries into the
- * next recording.
+ * reports it. Cleared when a recording stops, so it never carries into the
+ * next one. Not cleared on start: the Rust side reports the window already in
+ * front before it sends `recording:started`.
  */
 export function useUnrecordedWindow(recording: boolean): boolean {
   const [inFront, setInFront] = useState(false);
 
   useEffect(() => {
-    setInFront(false);
+    if (!recording) setInFront(false);
   }, [recording]);
 
   useEffect(() => {
