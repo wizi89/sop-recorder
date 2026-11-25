@@ -71,6 +71,8 @@ pub(super) async fn stop_recording_inner(
         // Stops the warm-ups. Steps still in their check finish on their
         // own: each holds the checker, not the watch.
         session.password_watch.take();
+        // Ends a visit to an unrecorded window still open and writes it.
+        session.unrecorded_watch.take();
 
         (
             session.in_flight.take(),

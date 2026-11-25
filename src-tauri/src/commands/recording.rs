@@ -204,6 +204,22 @@ pub async fn start_recording(
     let (checker, password_watch): (Option<Arc<Checker>>, Option<password_check::Watch>) =
         (None, None);
 
+    // Unrecorded windows (#65): outside the masking choice, since their steps
+    // are lost either way. The bar hears when one comes to the front.
+    #[cfg(windows)]
+    let unrecorded_watch = {
+        let app = app.clone();
+        Some(crate::capture::unrecorded::Watch::start(
+            &output_dir,
+            recording_start,
+            move |in_front| {
+                let _ = app.emit("recording:unrecorded_window", in_front);
+            },
+        ))
+    };
+    #[cfg(not(windows))]
+    let unrecorded_watch: Option<crate::capture::unrecorded::Watch> = None;
+
     // Clone the shared stop flag for the input-hook thread.
     let stop_flag = state.capture_stop_flag.clone();
 
@@ -342,6 +358,7 @@ pub async fn start_recording(
         step_counter: Some(step_counter),
         failed_captures: Some(failed_captures),
         password_watch,
+        unrecorded_watch,
     };
 
     *state

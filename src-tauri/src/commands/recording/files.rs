@@ -109,6 +109,8 @@ pub struct StepCaptureRecord {
     pub capture_scope: step_meta::CaptureScope,
     pub password_check: step_meta::PasswordCheck,
     pub window_list_partial: bool,
+    /// When the step was taken, for placing the limbos between steps.
+    pub timestamp_seconds: f64,
 }
 
 /// The capture record of every screenshot in the folder, in the order of
@@ -129,8 +131,18 @@ pub async fn list_capture_records(output_dir: String) -> Result<Vec<StepCaptureR
             capture_scope: meta.capture_scope,
             password_check: meta.password_check,
             window_list_partial: meta.window_list_partial,
+            timestamp_seconds: meta.timestamp_seconds,
         })
         .collect())
+}
+
+/// The recording's visits to unrecorded windows, for the review screen's
+/// limbos (#65). Read from the folder, so a reopened recording has them too.
+#[tauri::command]
+pub async fn load_unrecorded(
+    output_dir: String,
+) -> Result<Vec<crate::capture::unrecorded::Visit>, String> {
+    crate::capture::unrecorded::read(&PathBuf::from(output_dir))
 }
 
 /// Delete the most recently captured screenshot from the active session.

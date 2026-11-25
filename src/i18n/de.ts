@@ -49,6 +49,9 @@ const de = {
     "Dieser Ordner enthält keine Aufnahme. Bitte einen Ordner mit einer Aufzeichnung (recording.wav und screenshots/) wählen.",
   "status.undo_last": "Letzten Schritt entfernen",
   "status.stopping": "Aufnahmen werden verarbeitet...",
+  "status.unrecorded_window": "Nicht aufgenommen",
+  "status.unrecorded_window_hint":
+    "Klicks in diesem Fenster werden nicht aufgenommen – das Programm läuft mit Administratorrechten.",
 
   // Review screen (post-stop, pre-generate)
   "review.marked_badge": "Prüfen",
@@ -98,6 +101,11 @@ const de = {
   "review.reset_failed":
     "Schwärzungen konnten nicht zurückgesetzt werden: {error}",
   "review.upload_refused": "Nicht hochgeladen: {error}",
+  "review.limbo": "Nicht aufgenommen: {apps}",
+  "review.limbo_security_prompt": "Windows-Sicherheitsabfrage",
+  "review.limbo_unknown_app": "unbekanntes Programm",
+  "review.no_steps_unrecorded":
+    "Es wurden keine Schritte aufgenommen. Alle Klicks waren in Fenstern, die mit Administratorrechten laufen: {apps}.",
 
   // Microphone permission
   "mic.permission_denied":

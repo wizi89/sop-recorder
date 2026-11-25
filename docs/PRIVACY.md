@@ -43,8 +43,7 @@ Bedienelementen, andere Maustasten und das Scrollen.
 
 - **Passwortfelder auf Windows**, wenn das Schwärzen eingeschaltet ist.
   - Lässt sich ein Schritt nicht sicher prüfen, markiert der Prüfbildschirm ihn mit „Prüfen“:
-    zum Beispiel ein Programm, das als Administrator läuft, oder eine Prüfung, die zu lange
-    dauert.
+    zum Beispiel eine Prüfung, die zu lange dauert.
   - Ebenso markiert werden Schritte, bei denen statt des aktiven Fensters der ganze Bildschirm
     aufgenommen wurde, Schritte, bei denen die Liste der offenen Fenster unvollständig war
     (dann ist eine Benachrichtigung über dem Fenster vielleicht nicht geschwärzt; mit und ohne
@@ -65,6 +64,14 @@ Bedienelementen, andere Maustasten und das Scrollen.
   gemacht wurde, ist kein Passwortfeld mehr und wird nicht geschwärzt.
 - **„Ganzer Bildschirm“:** Fenster anderer Programme werden nicht geschwärzt, nur Passwortfelder.
 - **macOS:** Dort wird nichts automatisch geschwärzt.
+
+**Nicht aufgenommen:** Klicks und die Eingabetaste in Programmen, die mit Administratorrechten
+laufen, werden nicht aufgenommen, auch nicht in Installationsprogrammen und in der
+Windows-Sicherheitsabfrage. Von dort gelangt nichts in die Aufnahme. Solange ein solches Fenster
+vorne ist, sagt es die Aufnahmeleiste. Der Prüfbildschirm zeigt an der Stelle, an der es
+geschah, „Nicht aufgenommen“ mit den Namen der Programme (nicht den Fenstertiteln). Diese Angabe
+bleibt auf Ihrem PC und wird nicht hochgeladen; was Sie in dieser Zeit sagen, wird wie bisher
+mit dem Ton gesendet.
 
 ## Schwärzen und Löschen auf dem Prüfbildschirm
 

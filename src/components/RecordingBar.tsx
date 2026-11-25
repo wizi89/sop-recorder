@@ -6,6 +6,7 @@ import { useElapsedTime, formatElapsed } from "../hooks/useElapsedTime";
 import { useAudioLevel } from "../hooks/useAudioLevel";
 import { useAudioSilent } from "../hooks/useAudioSilent";
 import { useRecordingActive } from "../hooks/useRecordingActive";
+import { useUnrecordedWindow } from "../hooks/useUnrecordedWindow";
 
 /**
  * The compact recording bar, which lives in a window of its own.
@@ -33,6 +34,7 @@ export function RecordingBar() {
   const elapsedSec = useElapsedTime(recording);
   const audioLevel = useAudioLevel();
   const audioSilent = useAudioSilent(recording);
+  const unrecorded = useUnrecordedWindow(recording);
 
   const handleCancel = async () => {
     const confirmed = await ask(t("status.cancel_message"), {
@@ -109,8 +111,24 @@ export function RecordingBar() {
           {`${captureCount} · ${formatElapsed(elapsedSec)}`}
         </span>
         {/* Without sound the meter says nothing, so the warning takes its
-            line and the counter stays: the steps are still being recorded. */}
-        {audioSilent ? (
+            line and the counter stays: the steps are still being recorded.
+            An unrecorded window in front takes it first: it is about the
+            click the user is about to make. */}
+        {unrecorded ? (
+          <span
+            title={t("status.unrecorded_window_hint")}
+            aria-label={t("status.unrecorded_window_hint")}
+            style={{
+              fontSize: "0.5rem",
+              fontWeight: 600,
+              lineHeight: 1.1,
+              marginTop: "1px",
+              color: "#FBBF24",
+            }}
+          >
+            {t("status.unrecorded_window")}
+          </span>
+        ) : audioSilent ? (
           <span
             style={{
               fontSize: "0.5rem",

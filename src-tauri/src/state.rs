@@ -35,6 +35,9 @@ pub struct ActiveRecording {
     /// The password check's warm-up triggers (privacy-capture D5); dropped
     /// when the recording stops. `None` with masking off and off Windows.
     pub password_watch: Option<crate::capture::password_check::Watch>,
+    /// Notes the unrecorded windows in front (#65), with masking on or off;
+    /// dropped when the recording stops. `None` off Windows.
+    pub unrecorded_watch: Option<crate::capture::unrecorded::Watch>,
 }
 
 pub struct AppState {
