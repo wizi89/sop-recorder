@@ -4,10 +4,7 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-use super::{
-    active_reports_dir, context, mode, write_report, ErrorReport, Phase, ReportKind, ReportMode,
-    Scrubber,
-};
+use super::{context, mode, ErrorReport, Phase, Queue, ReportKind, ReportMode, Scrubber};
 
 // -- The ring buffer (D4) --
 
@@ -132,9 +129,9 @@ pub fn create(
     if mode() == ReportMode::Never {
         return None;
     }
-    let dir = active_reports_dir()?;
+    let queue = Queue::active()?;
     let mut report = report(kind, phase, message, None);
     report.job_id = job_id;
-    write_report(&dir, &report).ok()?;
+    queue.write(&report).ok()?;
     Some(report)
 }

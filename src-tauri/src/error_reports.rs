@@ -35,14 +35,11 @@ mod state;
 pub(crate) use collect::{clear_ring, push_ring_line};
 pub use collect::{create, ring_log_target, RING_CAPACITY};
 pub use panic_hook::{install_panic_hook, TRAIL_FILE};
-pub use queue::{
-    decide, delete_report, list_reports, read_report, reports_dir, sweep_stale, write_report,
-    MAX_REPORT_AGE_DAYS, REPORT_CREATED_EVENT,
-};
+pub use queue::{reports_dir, Queue, Sent, MAX_REPORT_AGE_DAYS, REPORT_CREATED_EVENT};
 pub use scrub::Scrubber;
 pub use state::{
-    active_reports_dir, context, mode, phase, resolve_mode, set_active_reports_dir, set_app_handle,
-    set_context, set_mode, set_phase, ReportContext, ReportMode,
+    context, mode, phase, resolve_mode, set_active_reports_dir, set_app_handle, set_context,
+    set_mode, set_phase, ReportContext, ReportMode,
 };
 
 /// Bumped only when a field changes meaning. The server pins this value.
@@ -194,10 +191,6 @@ impl ErrorReport {
     /// searched by. The server derives the same value from the same id.
     pub fn number(&self) -> String {
         self.report_id.replace('-', "").chars().take(8).collect()
-    }
-
-    pub fn file_name(&self) -> String {
-        format!("{}.json", self.report_id)
     }
 }
 

@@ -1,7 +1,7 @@
 use super::*;
 use tempfile::tempdir;
 
-/// Every path that puts a report on disk goes through `write_report`, which is
+/// Every path that puts a report on disk goes through `Queue::write`, which is
 /// what makes the dialog appear no matter which window raised the failure.
 ///
 /// Asserted rather than trusted: the announcement used to sit in the panic
@@ -21,7 +21,7 @@ mod single_writer {
     ];
 
     #[test]
-    fn only_write_report_writes_a_report_file() {
+    fn only_queue_write_writes_a_report_file() {
         // Assembled at runtime so the needle is not itself a match.
         let needle = format!("std::fs::{}(", "write");
         let writes: Vec<(&str, usize)> = PRODUCTION
@@ -33,7 +33,7 @@ mod single_writer {
             writes,
             vec![("queue.rs", 1)],
             "a report file is written somewhere other than `persist`; every \
-             creation must go through `write_report`, which announces it, or \
+             creation must go through `Queue::write`, which announces it, or \
              no dialog will open"
         );
     }
@@ -147,6 +147,10 @@ mod breadcrumb_isolation {
     }
 }
 
+fn queue(dir: &tempfile::TempDir) -> Queue {
+    Queue::at(dir.path().to_path_buf())
+}
+
 fn sample() -> ErrorReport {
     let mut report = ErrorReport::new(
         ReportKind::Panic,
@@ -171,9 +175,10 @@ fn sample() -> ErrorReport {
 fn report_round_trips_through_disk() {
     let dir = tempdir().unwrap();
     let report = sample();
-    let path = write_report(dir.path(), &report).unwrap();
+    let path = queue(&dir).write(&report).unwrap();
+    assert_eq!(path, queue(&dir).path_of(&report.report_id));
 
-    let read_back = read_report(&path).unwrap();
+    let read_back = queue(&dir).get(&report.report_id).unwrap();
     assert_eq!(read_back, report);
     assert_eq!(read_back.schema_version, REPORT_SCHEMA_VERSION);
 }
@@ -195,23 +200,61 @@ fn listing_skips_an_unreadable_file_and_orders_by_time() {
     let mut newer = sample();
     newer.report_id = uuid::Uuid::new_v4().to_string();
     newer.occurred_at = "2026-09-02T10:00:00+00:00".to_string();
-    write_report(dir.path(), &older).unwrap();
-    write_report(dir.path(), &newer).unwrap();
+    queue(&dir).write(&older).unwrap();
+    queue(&dir).write(&newer).unwrap();
     std::fs::write(dir.path().join("broken.json"), "{ not json").unwrap();
 
-    let listed = list_reports(dir.path());
+    let listed = queue(&dir).list();
     assert_eq!(listed.len(), 2);
     assert_eq!(listed[0].report_id, older.report_id);
     assert_eq!(listed[1].report_id, newer.report_id);
 }
 
-#[test]
-fn delete_removes_the_file() {
+#[tokio::test]
+async fn only_granted_reports_are_handed_to_the_sender() {
     let dir = tempdir().unwrap();
-    let report = sample();
-    write_report(dir.path(), &report).unwrap();
-    delete_report(dir.path(), &report.report_id);
-    assert!(list_reports(dir.path()).is_empty());
+    let pending = sample();
+    let mut granted = sample();
+    granted.report_id = uuid::Uuid::new_v4().to_string();
+    granted.consent = Consent::Granted;
+    queue(&dir).write(&pending).unwrap();
+    queue(&dir).write(&granted).unwrap();
+
+    let mut handed = Vec::new();
+    let sent = queue(&dir)
+        .send_granted(|r| {
+            handed.push(r.report_id.clone());
+            async { Ok::<_, String>("a1b2c3d4".to_string()) }
+        })
+        .await;
+
+    assert_eq!(handed, vec![granted.report_id.clone()]);
+    assert_eq!(
+        sent,
+        vec![Sent {
+            report_id: granted.report_id,
+            number: "a1b2c3d4".to_string()
+        }]
+    );
+    // The sent one is gone; the pending one waits for its decision.
+    let left = queue(&dir).list();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].report_id, pending.report_id);
+}
+
+#[tokio::test]
+async fn a_refused_send_keeps_the_report_for_the_next_try() {
+    let dir = tempdir().unwrap();
+    let mut report = sample();
+    report.consent = Consent::Granted;
+    queue(&dir).write(&report).unwrap();
+
+    let sent = queue(&dir)
+        .send_granted(|_| async { Err::<String, _>("Server hat mit 503 geantwortet") })
+        .await;
+
+    assert!(sent.is_empty());
+    assert_eq!(queue(&dir).list(), vec![report]);
 }
 
 #[test]
@@ -302,7 +345,8 @@ fn a_panic_on_another_thread_leaves_a_report_with_its_location() {
     // process-global while it is installed, so an assertion failure in a
     // test running on another thread would also land a report here. That
     // would turn one failing test into two.
-    let reports: Vec<_> = list_reports(dir.path())
+    let reports: Vec<_> = queue(&dir)
+        .list()
         .into_iter()
         .filter(|r| r.message.contains("Bildschirmfoto"))
         .collect();
@@ -343,7 +387,8 @@ fn the_hook_is_not_installed_when_reports_are_off() {
     set_mode(ReportMode::Ask);
 
     assert!(
-        !list_reports(dir.path())
+        !queue(&dir)
+            .list()
             .iter()
             .any(|r| r.message.contains("nichts davon wird gemeldet")),
         "mode never must not write a report for a panic it saw",
@@ -356,10 +401,10 @@ fn the_hook_is_not_installed_when_reports_are_off() {
 fn a_decline_removes_the_file() {
     let dir = tempdir().unwrap();
     let report = sample();
-    write_report(dir.path(), &report).unwrap();
+    queue(&dir).write(&report).unwrap();
 
-    assert!(decide(dir.path(), &report.report_id, false, None).is_none());
-    assert!(list_reports(dir.path()).is_empty());
+    assert!(queue(&dir).decide(&report.report_id, false, None).is_none());
+    assert!(queue(&dir).list().is_empty());
 }
 
 #[test]
@@ -367,22 +412,22 @@ fn a_grant_records_the_comment_and_keeps_the_file() {
     let dir = tempdir().unwrap();
     let mut report = sample();
     report.comment = None;
-    write_report(dir.path(), &report).unwrap();
+    queue(&dir).write(&report).unwrap();
 
-    let granted = decide(
-        dir.path(),
-        &report.report_id,
-        true,
-        Some("  Ich wollte die Aufnahme stoppen  ".to_string()),
-    )
-    .unwrap();
+    let granted = queue(&dir)
+        .decide(
+            &report.report_id,
+            true,
+            Some("  Ich wollte die Aufnahme stoppen  ".to_string()),
+        )
+        .unwrap();
     assert_eq!(granted.consent, Consent::Granted);
     assert_eq!(
         granted.comment.as_deref(),
         Some("Ich wollte die Aufnahme stoppen")
     );
 
-    let on_disk = &list_reports(dir.path())[0];
+    let on_disk = &queue(&dir).list()[0];
     assert_eq!(on_disk.consent, Consent::Granted);
     assert_eq!(on_disk.comment, granted.comment);
 }
@@ -392,9 +437,11 @@ fn a_grant_without_a_comment_carries_none() {
     let dir = tempdir().unwrap();
     let mut report = sample();
     report.comment = None;
-    write_report(dir.path(), &report).unwrap();
+    queue(&dir).write(&report).unwrap();
 
-    let granted = decide(dir.path(), &report.report_id, true, Some("   ".to_string())).unwrap();
+    let granted = queue(&dir)
+        .decide(&report.report_id, true, Some("   ".to_string()))
+        .unwrap();
     assert_eq!(granted.comment, None);
 }
 
@@ -408,11 +455,11 @@ fn the_sweep_removes_a_report_older_than_thirty_days() {
     let mut fresh = sample();
     fresh.report_id = uuid::Uuid::new_v4().to_string();
     fresh.occurred_at = (now - chrono::Duration::days(29)).to_rfc3339();
-    write_report(dir.path(), &stale).unwrap();
-    write_report(dir.path(), &fresh).unwrap();
+    queue(&dir).write(&stale).unwrap();
+    queue(&dir).write(&fresh).unwrap();
 
-    assert_eq!(sweep_stale(dir.path(), now), 1);
-    let remaining = list_reports(dir.path());
+    assert_eq!(queue(&dir).sweep_stale(now), 1);
+    let remaining = queue(&dir).list();
     assert_eq!(remaining.len(), 1);
     assert_eq!(remaining[0].report_id, fresh.report_id);
 }
@@ -425,7 +472,7 @@ fn nothing_is_written_when_reports_are_off() {
     set_mode(ReportMode::Never);
 
     assert!(create(ReportKind::CommandError, Phase::Idle, "Upload failed", None).is_none());
-    assert!(list_reports(dir.path()).is_empty());
+    assert!(queue(&dir).list().is_empty());
     set_mode(ReportMode::Ask);
 }
 
@@ -462,5 +509,5 @@ fn a_created_report_carries_the_scrubbed_ring_and_the_job_id() {
     assert_eq!(report.log_tail.len(), 1);
     assert!(!report.log_tail[0].contains("Urlaub 2026"));
     assert!(report.log_tail[0].contains("<Anleitungsverzeichnis>/<Aufnahme>"));
-    assert_eq!(list_reports(dir.path()).len(), 1);
+    assert_eq!(queue(&dir).list().len(), 1);
 }

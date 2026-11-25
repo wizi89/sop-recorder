@@ -1,8 +1,7 @@
 //! The panic hook (D5): a writer and nothing else.
 
-use super::{
-    active_reports_dir, collect, mode, os_version, phase, write_report, ReportKind, ReportMode,
-};
+use super::state::active_reports_dir;
+use super::{collect, mode, os_version, phase, Queue, ReportKind, ReportMode};
 
 /// The lock-free record of what the panic hook managed to do. Not a report:
 /// it carries no user content, only stage names and timestamps.
@@ -87,7 +86,7 @@ fn write_panic_report(info: &std::panic::PanicHookInfo<'_>) {
         breadcrumb("stopped: mode is never");
         return;
     }
-    let Some(dir) = active_reports_dir() else {
+    let Some(queue) = Queue::active() else {
         breadcrumb("stopped: no reports directory");
         return;
     };
@@ -108,9 +107,9 @@ fn write_panic_report(info: &std::panic::PanicHookInfo<'_>) {
     let report = collect::report(ReportKind::Panic, phase(), &payload, location);
 
     breadcrumb("collected, about to write");
-    // `write_report` announces it; see the note there on why that is not done
+    // `Queue::write` announces it; see the note there on why that is not done
     // separately any more.
-    match write_report(&dir, &report) {
+    match queue.write(&report) {
         Ok(_) => breadcrumb(&format!("wrote report {}", report.report_id)),
         Err(e) => breadcrumb(&format!("stopped: write failed: {}", e)),
     }
