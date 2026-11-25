@@ -37,6 +37,30 @@ mod single_writer {
              no dialog will open"
         );
     }
+
+    /// A new module file left out of `PRODUCTION` would escape the scan above.
+    #[test]
+    fn production_lists_every_shipping_file() {
+        fn shipping(dir: &std::path::Path, found: &mut Vec<String>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    shipping(&path, found);
+                } else if path.file_name().is_some_and(|n| n != "tests.rs")
+                    && path.extension().is_some_and(|e| e == "rs")
+                {
+                    found.push(path.file_name().unwrap().to_string_lossy().into_owned());
+                }
+            }
+        }
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/error_reports");
+        let mut found = vec!["error_reports.rs".to_string()];
+        shipping(&dir, &mut found);
+        found.sort();
+        let mut listed: Vec<String> = PRODUCTION.iter().map(|(n, _)| n.to_string()).collect();
+        listed.sort();
+        assert_eq!(found, listed, "add the new file to `PRODUCTION`");
+    }
 }
 
 /// The dev triggers have to differ in the way that matters.
