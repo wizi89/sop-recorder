@@ -24,7 +24,7 @@ A Tauri v2 app: Rust does capture, audio, input hooks, sign-in and networking; a
 | `network/*` | HTTP: `auth` (sign-in, refresh, keyring), `loopback` (browser sign-in callback), `upload`, `sse`, `jobs` (result polling), `quota`, `pipelines`, `reports` |
 | `output/*` | `guide.md`, `pending.json`, per-step metadata, `redactions.json` (the review screen's boxes, `output/redactions.rs`) |
 | `commands/review.rs` | What the review screen changes before upload: saves the boxes per step, deletes a step |
-| `error_reports.rs` | Consent-first error reports with a log scrubber |
+| `error_reports.rs` + `error_reports/` | Consent-first error reports: collection, log scrubber, panic hook, on-disk queue |
 | `config.rs`, `runtime_config.rs` | Backend URLs; override via `--local/--staging/--production`, env vars, or `%APPDATA%\CogniClone\config.toml` |
 | `src/App.tsx` | Picks the screen: login, permissions, recorder, review |
 | `src/hooks/useRecorder.ts` | Frontend state machine: idle, recording, review, processing, done, error, pii_blocked, rate_limited |
