@@ -239,7 +239,7 @@ fn ring_keeps_the_last_three_hundred_lines_in_order() {
         push_ring_line(&format!("line {i}"));
     }
 
-    let lines = ring_lines();
+    let lines = ring_tail();
     assert_eq!(lines.len(), RING_CAPACITY);
     assert_eq!(lines.first().unwrap(), "line 50");
     assert_eq!(lines.last().unwrap(), "line 349");
@@ -250,7 +250,13 @@ fn ring_holds_fewer_lines_than_its_capacity_without_padding() {
     let _guard = global_state_guard();
     clear_ring();
     push_ring_line("nur eine Zeile");
-    assert_eq!(ring_lines(), vec!["nur eine Zeile".to_string()]);
+    assert_eq!(ring_tail(), vec!["nur eine Zeile".to_string()]);
+}
+
+/// The ring as a report carries it. Read through the building step because
+/// that is the only reader the ring has.
+fn ring_tail() -> Vec<String> {
+    super::collect::report(ReportKind::UiError, Phase::Idle, "", None).log_tail
 }
 
 // -- Mode and the panic hook (D1, D5) --
@@ -276,6 +282,12 @@ fn a_panic_on_another_thread_leaves_a_report_with_its_location() {
     set_active_reports_dir(dir.path().to_path_buf());
     set_mode(ReportMode::Ask);
     set_phase(Phase::Recording);
+    set_context(ReportContext {
+        settings: ReportSettings::default(),
+        output_dir: Some("/Users/anna/Documents/cogniclone Workflows".to_string()),
+    });
+    clear_ring();
+    push_ring_line("Recording started: /Users/anna/Documents/cogniclone Workflows/Urlaub 2026");
 
     let previous = std::panic::take_hook();
     install_panic_hook();
@@ -300,6 +312,12 @@ fn a_panic_on_another_thread_leaves_a_report_with_its_location() {
     assert_eq!(report.phase, Phase::Recording);
     assert_eq!(report.consent, Consent::Pending);
     assert!(report.message.contains("Bildschirmfoto"));
+    // The panic path scrubs the ring like every other path does.
+    assert!(report
+        .log_tail
+        .iter()
+        .any(|l| l.contains("<Anleitungsverzeichnis>/<Aufnahme>")));
+    assert!(!report.log_tail.iter().any(|l| l.contains("Urlaub 2026")));
     let location = report.location.as_deref().expect("panic location");
     // The panic! above is in this file, wherever the test module lives.
     assert!(

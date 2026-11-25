@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-use super::{reports_dir, Phase, ReportSettings, Scrubber};
+use super::{reports_dir, Phase, ReportSettings};
 
 /// The three values of the `error_reports` setting (D1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,10 +125,6 @@ pub fn set_context(context: ReportContext) {
 /// on the way out of the process.
 pub fn context() -> Option<ReportContext> {
     SNAPSHOT.try_lock().ok().and_then(|slot| slot.clone())
-}
-
-pub fn scrubber() -> Scrubber {
-    Scrubber::new(dirs_next::home_dir(), context().and_then(|c| c.output_dir))
 }
 
 /// Where reports are written. Set once at startup from `reports_dir()`; the

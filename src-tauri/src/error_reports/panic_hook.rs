@@ -1,8 +1,7 @@
 //! The panic hook (D5): a writer and nothing else.
 
 use super::{
-    active_reports_dir, context, mode, os_version, phase, ring_lines, scrubber, write_report,
-    ErrorReport, ReportKind, ReportMode,
+    active_reports_dir, collect, mode, os_version, phase, write_report, ReportKind, ReportMode,
 };
 
 /// The lock-free record of what the panic hook managed to do. Not a report:
@@ -106,15 +105,7 @@ fn write_panic_report(info: &std::panic::PanicHookInfo<'_>) {
     // The message and the location, not a stack trace: release binaries ship
     // stripped, deliberately, and a backtrace from one is a list of addresses
     // nothing can symbolicate (D8).
-    let scrubber = scrubber();
-    let mut report = ErrorReport::new(
-        ReportKind::Panic,
-        phase(),
-        scrubber.scrub(&payload),
-        location,
-        scrubber.scrub_all(&ring_lines()),
-    );
-    report.settings = context().map(|c| c.settings);
+    let report = collect::report(ReportKind::Panic, phase(), &payload, location);
 
     breadcrumb("collected, about to write");
     // `write_report` announces it; see the note there on why that is not done

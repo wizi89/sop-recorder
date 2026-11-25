@@ -33,7 +33,7 @@ mod state;
 
 #[cfg(test)]
 pub(crate) use collect::{clear_ring, push_ring_line};
-pub use collect::{create, ring_lines, ring_log_target, RingTarget, RING_CAPACITY};
+pub use collect::{create, ring_log_target, RING_CAPACITY};
 pub use panic_hook::{install_panic_hook, TRAIL_FILE};
 pub use queue::{
     decide, delete_report, list_reports, read_report, reports_dir, sweep_stale, write_report,
@@ -41,8 +41,8 @@ pub use queue::{
 };
 pub use scrub::Scrubber;
 pub use state::{
-    active_reports_dir, context, mode, phase, resolve_mode, scrubber, set_active_reports_dir,
-    set_app_handle, set_context, set_mode, set_phase, ReportContext, ReportMode,
+    active_reports_dir, context, mode, phase, resolve_mode, set_active_reports_dir, set_app_handle,
+    set_context, set_mode, set_phase, ReportContext, ReportMode,
 };
 
 /// Bumped only when a field changes meaning. The server pins this value.

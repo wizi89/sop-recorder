@@ -5,8 +5,8 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use super::{
-    active_reports_dir, context, mode, scrubber, write_report, ErrorReport, Phase, ReportKind,
-    ReportMode,
+    active_reports_dir, context, mode, write_report, ErrorReport, Phase, ReportKind, ReportMode,
+    Scrubber,
 };
 
 // -- The ring buffer (D4) --
@@ -30,7 +30,7 @@ static RING: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
 /// The record reaching `log` has already been through the plugin's root
 /// formatter, so `record.args()` is the finished line, timestamp and level
 /// included -- the same text the log file gets.
-pub struct RingTarget;
+struct RingTarget;
 
 impl log::Log for RingTarget {
     fn enabled(&self, _metadata: &log::Metadata) -> bool {
@@ -65,9 +65,9 @@ pub fn ring_log_target() -> tauri_plugin_log::Target {
     ))
 }
 
-/// The lines currently in the ring, oldest first. Unscrubbed -- every caller
-/// runs them through a `Scrubber` before they reach a report.
-pub fn ring_lines() -> Vec<String> {
+/// The lines currently in the ring, oldest first. Unscrubbed, so private:
+/// the only reader is `report`, which scrubs them before they are in one.
+fn ring_lines() -> Vec<String> {
     RING.lock()
         .map(|ring| ring.iter().cloned().collect())
         .unwrap_or_default()
@@ -91,6 +91,34 @@ pub(crate) fn clear_ring() {
     }
 }
 
+/// The one way a report is built, for every kind (D3).
+///
+/// The message and every ring line go through the scrubber here, before they
+/// are in a report, so no caller can forget it: the unscrubbed ring is not
+/// reachable from outside this file. The settings subset comes from the
+/// snapshot, never from the store, because the panic hook calls this too (D5).
+pub(super) fn report(
+    kind: ReportKind,
+    phase: Phase,
+    message: &str,
+    location: Option<String>,
+) -> ErrorReport {
+    let snapshot = context();
+    let scrubber = Scrubber::new(
+        dirs_next::home_dir(),
+        snapshot.as_ref().and_then(|c| c.output_dir.clone()),
+    );
+    let mut report = ErrorReport::new(
+        kind,
+        phase,
+        scrubber.scrub(message),
+        location,
+        scrubber.scrub_all(&ring_lines()),
+    );
+    report.settings = snapshot.map(|c| c.settings);
+    report
+}
+
 /// Build a report for a failure the webview saw: a command that returned an
 /// error it could not explain, or an unhandled error in the webview itself.
 /// The Rust side attaches the log tail and the platform facts, so those are
@@ -105,15 +133,7 @@ pub fn create(
         return None;
     }
     let dir = active_reports_dir()?;
-    let scrubber = scrubber();
-    let mut report = ErrorReport::new(
-        kind,
-        phase,
-        scrubber.scrub(message),
-        None,
-        scrubber.scrub_all(&ring_lines()),
-    );
-    report.settings = context().map(|c| c.settings);
+    let mut report = report(kind, phase, message, None);
     report.job_id = job_id;
     write_report(&dir, &report).ok()?;
     Some(report)
