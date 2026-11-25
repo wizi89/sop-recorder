@@ -11,6 +11,21 @@ Older entries (2026-09 and earlier): [findings/2026-09-and-earlier.md](./finding
 
 ---
 
+## 2026-11-25 Out-of-context foreground events can arrive after a later switch
+
+**Symptom:** Alt+Tab to an app run as administrator: the watch logs it in front, then ends the
+visit about 1.5 ms later while the window stays in front for seconds, so no bar hint and no limbo
+row ([#108](https://github.com/wizi89/sop-recorder/issues/108)).
+
+**Cause:** `EVENT_SYSTEM_FOREGROUND` hooked with `WINEVENT_OUTOFCONTEXT` is delivered
+asynchronously. The event for the Alt+Tab switcher can land after the one for the window that
+replaced it, and the watch classified the event's `hwnd`.
+
+**Rule:** a foreground event decides from `GetForegroundWindow()`, the event's `hwnd` only when
+nothing is in front (`deciding_window` in `capture/unrecorded.rs`).
+
+---
+
 ## 2026-11-23 Review rules wanted more than once are still missing from CODING_STANDARDS.md
 
 Moved: the wanted rules are in "Not yet a rule" in `CODING_STANDARDS.md`.
