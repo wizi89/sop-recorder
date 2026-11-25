@@ -86,3 +86,27 @@ fn an_unreadable_file_is_an_error() {
     fs::write(dir.path().join(FILE), "not json").unwrap();
     assert!(read(dir.path()).is_err());
 }
+
+/// A stub of `watch.rs`'s `classify`: "regedit" runs as administrator,
+/// "switcher" (the Alt+Tab switcher) at the recorder's level.
+fn classify_stub(window: &str) -> Option<UnrecordedWindow> {
+    (window == "regedit").then(|| app("regedit"))
+}
+
+#[test]
+fn a_late_event_for_a_normal_window_keeps_the_visit_open_while_an_unrecorded_one_is_in_front() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut log = Log::new(dir.path());
+    let event = deciding_window("regedit", Some("regedit"));
+    assert!(log.foreground(3.6676, classify_stub(event)));
+    // The switcher's event arrives after regedit's, while regedit is in front.
+    let event = deciding_window("switcher", Some("regedit"));
+    assert!(log.foreground(3.6691, classify_stub(event)));
+    assert_eq!(read(dir.path()).unwrap(), vec![]);
+}
+
+#[test]
+fn with_nothing_in_front_the_event_window_decides() {
+    assert_eq!(deciding_window("regedit", None), "regedit");
+    assert_eq!(deciding_window("switcher", None), "switcher");
+}

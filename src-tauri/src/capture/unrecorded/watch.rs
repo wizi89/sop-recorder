@@ -22,7 +22,7 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use super::{is_unrecorded, Log, UnrecordedWindow, MEDIUM_LEVEL, SYSTEM_LEVEL};
+use super::{deciding_window, is_unrecorded, Log, UnrecordedWindow, MEDIUM_LEVEL, SYSTEM_LEVEL};
 
 /// What the event callback, a plain function, works on.
 struct Target {
@@ -249,7 +249,10 @@ unsafe extern "system" fn on_event(
     if target.on_secure_desktop || hwnd.0.is_null() {
         return;
     }
-    let window = classify(hwnd, target.recorder);
+    // The event can arrive after a later switch: what is in front decides.
+    let front = GetForegroundWindow();
+    let front = (!front.0.is_null()).then_some(front);
+    let window = classify(deciding_window(hwnd, front), target.recorder);
     update(target, window);
 }
 
