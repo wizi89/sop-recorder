@@ -95,7 +95,10 @@ pub async fn decide_error_report(
 /// resolved on the Rust side and differs per platform.
 #[tauri::command]
 pub async fn error_report_path(report_id: String) -> Result<String, String> {
-    Ok(queue()?.path_of(&report_id).to_string_lossy().to_string())
+    let path = queue()?
+        .path_of(&report_id)
+        .ok_or_else(|| format!("Keine Bericht-ID: {}", report_id))?;
+    Ok(path.to_string_lossy().to_string())
 }
 
 /// Send every granted report the current session can carry (D7). Called after
