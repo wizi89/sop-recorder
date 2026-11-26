@@ -111,6 +111,10 @@ Source: `src-tauri/src/network/sse.rs:88-149` (`consume_sse_stream`). Events are
 
 A stream that ends without `result` is an error.
 
+`pdf_url` is a path relative to the API base, `/guides/{guide_id}/export/guide.pdf`, served by
+`GET /guides/{guide_id}/export/{file}` below. It needs the bearer token and does not expire, so the
+same value works from a job result polled later. It is no longer a pre-signed storage URL.
+
 ### `GET /generate/{job_id}/result`
 
 Source: `src-tauri/src/network/jobs.rs:20` (`poll_job_result`). Auth: bearer. 15 s timeout, polled
@@ -121,6 +125,18 @@ with backoff (3 s doubling, capped at 30 s).
   - `processing`: keep polling.
   - `failed` or `partial`: `error` (string) is the message.
 - Status codes: 401 refreshes the token and retries; other non-2xx are retried on the next attempt.
+
+### `GET /guides/{guide_id}/export/{file}`
+
+Fetched with the `pdf_url` of a `result` (`src-tauri/src/commands/generate.rs`, `download_pdf`).
+Auth: bearer.
+
+- `file` is `guide.pdf`, `guide.md` or `guide.json`; the optional query `revision_id` pins a
+  revision, without it the guide's current revision is served.
+- Response: the file's bytes with `Content-Type` `application/pdf`, `text/markdown; charset=utf-8`
+  or `application/json`, and `Content-Disposition: attachment; filename="<file>"`.
+- Status codes: 401 refreshes the token and retries once; 404 for a guide the account cannot see
+  or a file that does not exist.
 
 ### `GET /pipelines`
 
