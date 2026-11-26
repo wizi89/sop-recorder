@@ -107,6 +107,12 @@ describe("capture privacy settings", () => {
       expect(
         screen.getByText(/so wie sie auf dem Prüfbildschirm zu sehen sind/),
       ).toBeInTheDocument();
+      expect(
+        screen.getByText(/bis Sie die Anleitung löschen/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Inhalte der KI-Aufrufe werden nicht gespeichert/),
+      ).toBeInTheDocument();
       await userEvent
         .setup()
         .click(screen.getByText("Mehr zum Datenschutz bei der Aufnahme"));

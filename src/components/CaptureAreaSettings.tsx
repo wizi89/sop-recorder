@@ -92,7 +92,7 @@ export function CaptureAreaSettings({
         className="text-on-surface-variant leading-snug"
         style={{ fontSize: "0.625rem", marginTop: "-0.75rem" }}
       >
-        {t("settings.privacy_summary")}{" "}
+        {t("settings.privacy_summary")} {t("settings.privacy_retention")}{" "}
         <button
           type="button"
           onClick={() => void openUrl(PRIVACY_URL)}

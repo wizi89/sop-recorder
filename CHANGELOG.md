@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The privacy note under "Einstellungen" and the privacy text now say how long the server keeps screenshots, transcripts and guides (until you delete the guide), and that the content of AI calls is not stored unless your company switches that on. Confirming "Schritt löschen" now says that what the step opened can still show in the next step's screenshot, so black it out there.
 - On Windows, a screenshot now shows only the window you clicked in, together with its dialogs and menus, instead of the whole screen. The taskbar and other windows are no longer captured. Where a notification, the notification center, quick settings or another app's window lies over the captured one, that part is blacked out; overlays that let clicks through, such as a dictation bar, stay visible.
 - To go back to the old behaviour, open "Einstellungen", set "Aufnahmebereich" to "Ganzer Bildschirm". Switch off "Passwortfelder schwärzen" to stop blacking out password fields; parts of other windows lying over the captured one are blacked out either way.
 - On macOS nothing changes yet: the whole screen is captured and passwords are not blacked out.
