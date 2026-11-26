@@ -20,6 +20,7 @@ A Tauri v2 app: Rust does capture, audio, input hooks, sign-in and networking; a
 | `capture/uia.rs` | Windows only: UI Automation query for `IsPassword` fields, and the focus/show/restore events that warm the check up |
 | `capture/audio.rs` | Microphone to 16 kHz mono WAV via `cpal`, level meter, "no sound" warning |
 | `capture/permits.rs` | Buffer slots (2 to 6 by monitor size, about 100 MB in total) and capture permits that serialise pixel reads |
+| `recording_bar.rs` | The recording bar's window: built at startup, shown in the work area's corner with its click region reported to the input hook, hidden from captures, follows clicks to another monitor on Windows |
 | `commands/*` | Tauri commands: recording, generate, auth, settings, pipelines, quota, permissions, window, updater, error_reports |
 | `network/*` | HTTP: `auth` (sign-in, refresh, keyring), `loopback` (browser sign-in callback), `upload`, `sse`, `jobs` (result polling), `quota`, `pipelines`, `reports` |
 | `output/*` | `guide.md`, `pending.json`, per-step metadata, `redactions.json` (the review screen's boxes, `output/redactions.rs`) |

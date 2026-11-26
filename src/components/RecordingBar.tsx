@@ -15,8 +15,8 @@ import { useUnrecordedWindow } from "../hooks/useUnrecordedWindow";
  * whether a window may appear inside another app's fullscreen Space is fixed
  * when the window is created, from the app's activation policy at that moment.
  * The main window is a normal document window and can never gain that; the bar
- * is built under a momentary accessory policy and can. See `BAR_LABEL` in
- * `commands/window.rs` for the measurements.
+ * is built under a momentary accessory policy and can. See `LABEL` in
+ * `src-tauri/src/recording_bar.rs` for the measurements.
  *
  * It owns no recording state. Telemetry arrives as events the Rust side already
  * broadcasts to every window, and the three controls emit events that the main
