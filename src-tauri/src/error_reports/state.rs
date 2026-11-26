@@ -7,8 +7,10 @@ use std::sync::{Mutex, OnceLock};
 
 use super::{reports_dir, Phase, ReportSettings};
 
-/// The three values of the `error_reports` setting (D1).
+/// The three values of the `error_reports` setting (D1). `#[repr(u8)]` for the
+/// same reason as `Phase`: the discriminant is what the atomic holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum ReportMode {
     Ask,
     Always,
@@ -16,6 +18,8 @@ pub enum ReportMode {
 }
 
 impl ReportMode {
+    const ALL: [ReportMode; 3] = [ReportMode::Ask, ReportMode::Always, ReportMode::Never];
+
     pub fn as_str(self) -> &'static str {
         match self {
             ReportMode::Ask => "ask",
@@ -33,73 +37,40 @@ pub fn resolve_mode(setting: Option<&str>, forced_off: bool) -> ReportMode {
     if forced_off {
         return ReportMode::Never;
     }
-    match setting {
-        Some("always") => ReportMode::Always,
-        Some("never") => ReportMode::Never,
-        _ => ReportMode::Ask,
-    }
+    ReportMode::ALL
+        .into_iter()
+        .find(|mode| Some(mode.as_str()) == setting)
+        .unwrap_or(ReportMode::Ask)
 }
 
-const MODE_ASK: u8 = 0;
-const MODE_ALWAYS: u8 = 1;
-const MODE_NEVER: u8 = 2;
-
-static MODE: AtomicU8 = AtomicU8::new(MODE_ASK);
+static MODE: AtomicU8 = AtomicU8::new(ReportMode::Ask as u8);
 
 /// Atomics rather than a lock, throughout this section: every value here is
 /// read by the panic hook, which runs on the panicking thread and may be
 /// holding, or racing, any lock in the process (D5).
 pub fn set_mode(mode: ReportMode) {
-    MODE.store(
-        match mode {
-            ReportMode::Ask => MODE_ASK,
-            ReportMode::Always => MODE_ALWAYS,
-            ReportMode::Never => MODE_NEVER,
-        },
-        Ordering::Relaxed,
-    );
+    MODE.store(mode as u8, Ordering::Relaxed);
 }
 
 pub fn mode() -> ReportMode {
-    match MODE.load(Ordering::Relaxed) {
-        MODE_ALWAYS => ReportMode::Always,
-        MODE_NEVER => ReportMode::Never,
-        _ => ReportMode::Ask,
-    }
+    let stored = MODE.load(Ordering::Relaxed) as usize;
+    ReportMode::ALL
+        .get(stored)
+        .copied()
+        .unwrap_or(ReportMode::Ask)
 }
 
-static PHASE: AtomicU8 = AtomicU8::new(0);
+static PHASE: AtomicU8 = AtomicU8::new(Phase::Startup as u8);
 
 /// What the app is doing now, for a report the UI cannot annotate itself --
 /// which means a panic. Reports the webview creates carry the phase the
 /// webview knows, which is finer.
 pub fn set_phase(phase: Phase) {
-    PHASE.store(
-        match phase {
-            Phase::Startup => 0,
-            Phase::Login => 1,
-            Phase::Idle => 2,
-            Phase::Recording => 3,
-            Phase::Review => 4,
-            Phase::Processing => 5,
-            Phase::Settings => 6,
-            Phase::Unknown => 7,
-        },
-        Ordering::Relaxed,
-    );
+    PHASE.store(phase as u8, Ordering::Relaxed);
 }
 
 pub fn phase() -> Phase {
-    match PHASE.load(Ordering::Relaxed) {
-        0 => Phase::Startup,
-        1 => Phase::Login,
-        2 => Phase::Idle,
-        3 => Phase::Recording,
-        4 => Phase::Review,
-        5 => Phase::Processing,
-        6 => Phase::Settings,
-        _ => Phase::Unknown,
-    }
+    Phase::from_u8(PHASE.load(Ordering::Relaxed))
 }
 
 /// The settings subset and the scrubbing inputs, kept as a snapshot so a
@@ -153,3 +124,6 @@ pub(super) static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 pub fn set_app_handle(handle: tauri::AppHandle) {
     let _ = APP_HANDLE.set(handle);
 }
+
+#[cfg(test)]
+mod tests;

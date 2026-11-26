@@ -71,8 +71,12 @@ impl ReportKind {
 
 /// What the app was doing when it failed. D3 fixes the vocabulary; the server
 /// tags the event with it and groups command and UI errors by it (D9).
+///
+/// `#[repr(u8)]` because the panic hook reads the current phase from an atomic
+/// (D5): the discriminant is what is stored, and `Phase::ALL` turns it back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[repr(u8)]
 pub enum Phase {
     Startup,
     Login,
@@ -81,10 +85,24 @@ pub enum Phase {
     Review,
     Processing,
     Settings,
+    /// Stays last: `ALL` is checked against its discriminant.
     Unknown,
 }
 
 impl Phase {
+    /// Every phase, in discriminant order.
+    pub const ALL: [Phase; 8] = [
+        Phase::Startup,
+        Phase::Login,
+        Phase::Idle,
+        Phase::Recording,
+        Phase::Review,
+        Phase::Processing,
+        Phase::Settings,
+        Phase::Unknown,
+    ];
+
+    /// The one table of phase names; parsing reads it backwards.
     pub fn as_str(self) -> &'static str {
         match self {
             Phase::Startup => "startup",
@@ -99,16 +117,15 @@ impl Phase {
     }
 
     pub fn from_str_or_unknown(value: &str) -> Self {
-        match value {
-            "startup" => Phase::Startup,
-            "login" => Phase::Login,
-            "idle" => Phase::Idle,
-            "recording" => Phase::Recording,
-            "review" => Phase::Review,
-            "processing" => Phase::Processing,
-            "settings" => Phase::Settings,
-            _ => Phase::Unknown,
-        }
+        Self::ALL
+            .into_iter()
+            .find(|phase| phase.as_str() == value)
+            .unwrap_or(Phase::Unknown)
+    }
+
+    /// The phase whose discriminant is `n`, or `Unknown`.
+    fn from_u8(n: u8) -> Self {
+        Self::ALL.get(n as usize).copied().unwrap_or(Phase::Unknown)
     }
 }
 
