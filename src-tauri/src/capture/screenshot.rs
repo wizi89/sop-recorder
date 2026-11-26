@@ -2,13 +2,15 @@ use image::{DynamicImage, RgbaImage};
 use std::path::Path;
 use xcap::Monitor;
 
-use super::window_area::{self, Area, Geometry, Rect};
+use super::window_area::{self, Geometry, Rect, Snapshot};
 use crate::output::step_meta::CaptureScope;
 
 mod draw;
+mod frame;
 
 use draw::MASK;
 pub use draw::{apply_boxes, render_click_overlay, MarkerBox, PixelBox};
+pub use frame::frame_step;
 
 /// The desktop a capture was composited against.
 ///
@@ -84,20 +86,36 @@ pub type MonitorBounds = (i32, i32, u32, u32);
 /// unexpected screen is worth more than no step.
 ///
 /// Pure, and separate from `Monitor::all()`, so the choice can be tested
-/// against real display layouts without a display.
-pub fn monitor_for_click(
+/// against real display layouts without a display. The `Fallback` says why
+/// the primary was chosen, which is worth saying in the log, because a step
+/// captured on the wrong display looks like nothing else.
+pub fn choose_monitor(
     point: Option<(i32, i32)>,
     bounds: &[MonitorBounds],
     primary: usize,
-) -> usize {
-    monitor_containing(point, bounds).unwrap_or(primary)
+) -> (usize, Option<Fallback>) {
+    match (monitor_containing(point, bounds), point) {
+        (Some(i), _) => (i, None),
+        (None, None) => (primary, Some(Fallback::NoPosition)),
+        (None, Some(_)) => (primary, Some(Fallback::OffScreen)),
+    }
+}
+
+/// Why `choose_monitor` fell back to the primary display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fallback {
+    /// Neither a click position nor the cursor position was available.
+    NoPosition,
+    /// The point falls on none of the monitors.
+    OffScreen,
 }
 
 /// The monitor a point falls on, or `None` when there is no point or it falls
-/// on none of them. Split out from `monitor_for_click` so a caller can tell a
-/// deliberate choice from a fallback -- which is worth saying in the log,
-/// because a step captured on the wrong display looks like nothing else.
-pub fn monitor_containing(point: Option<(i32, i32)>, bounds: &[MonitorBounds]) -> Option<usize> {
+/// on none of them.
+pub(crate) fn monitor_containing(
+    point: Option<(i32, i32)>,
+    bounds: &[MonitorBounds],
+) -> Option<usize> {
     let (px, py) = point?;
     bounds
         .iter()
@@ -107,7 +125,7 @@ pub fn monitor_containing(point: Option<(i32, i32)>, bounds: &[MonitorBounds]) -
 /// Capture one monitor, and the geometry to place a click on it.
 ///
 /// `index` addresses `Monitor::all()`'s ordering, which is also what
-/// `monitor_for_click` indexes into; the two read the list once, together, in
+/// `choose_monitor` indexes into; the two read the list once, together, in
 /// `capture_and_save`.
 ///
 /// The returned `VirtualScreen` has this monitor's own origin, so a click in
@@ -144,7 +162,7 @@ fn capture_one_monitor(monitor: &Monitor) -> Result<(RgbaImage, VirtualScreen), 
 
 /// Capture the monitor the action happened on.
 ///
-/// Reads `Monitor::all()` once, so the index `monitor_for_click` returns and
+/// Reads `Monitor::all()` once, so the index `choose_monitor` returns and
 /// the monitor that gets captured come from the same list -- asking twice
 /// invites a different answer if a display is unplugged between the calls.
 ///
@@ -179,18 +197,17 @@ fn capture_active_monitor(
     }
 
     let point = click_position.or_else(super::input_hooks::get_cursor_position);
-    let containing = monitor_containing(point, &bounds);
-    let chosen = containing.unwrap_or(primary);
+    let (chosen, fallback) = choose_monitor(point, &bounds, primary);
 
     // Logged for a single display too, not only for several. "Which screen did
     // this step come from" is the first question when a guide shows the wrong
     // one, and a line that appears only on multi-monitor machines is missing
     // from exactly the recordings that need it. One line per step, beside the
     // one the save already writes.
-    let why = match (containing, point) {
-        (Some(_), _) => "",
-        (None, None) => " (no position available; fell back to the primary display)",
-        (None, Some(_)) => " (point is on no display; fell back to the primary display)",
+    let why = match fallback {
+        None => "",
+        Some(Fallback::NoPosition) => " (no position available; fell back to the primary display)",
+        Some(Fallback::OffScreen) => " (point is on no display; fell back to the primary display)",
     };
     log::info!(
         "Capturing monitor {} of {} at {:?} for point {:?}{}",
@@ -294,13 +311,26 @@ pub fn largest_monitor_pixels() -> Option<u64> {
         .max()
 }
 
-/// Phase A: geometry snapshot, pixel read, second snapshot, crop (D2, D3).
+/// Phase A's OS reads: the window geometry before and after the pixels, and
+/// the pixels of the monitor the action happened on. `frame_step` decides
+/// what of it the step keeps.
+pub struct PixelRead {
+    img: RgbaImage,
+    screen: VirtualScreen,
+    /// `None` off Windows.
+    before: Option<Snapshot>,
+    after: Option<Snapshot>,
+    /// Just before the pixel read (amendment A2).
+    pixels_at: std::time::Instant,
+}
+
+/// Phase A's reads: geometry snapshot, pixel read, second snapshot (D2, D3).
 /// No UIA work, so it is as quick as the pixel read.
 pub fn capture_step(
     step_number: u32,
     click_position: Option<(i32, i32)>,
     monitor_mode: bool,
-) -> Result<HeldStep, String> {
+) -> Result<PixelRead, String> {
     let started = std::time::Instant::now();
     let before = super::geometry::snapshot(click_position);
     // In the active window mode a key press reads the foreground window's
@@ -317,82 +347,17 @@ pub fn capture_step(
     let pixels_at = std::time::Instant::now();
     let (img, screen) = capture_active_monitor(point)?;
     let after = super::geometry::snapshot(click_position);
-    let geometry = before
-        .as_ref()
-        .zip(after.as_ref())
-        .map(|(b, a)| window_area::merge(b, a));
-
-    let monitor = monitor_rect(&screen, &img);
-    let area = (!monitor_mode).then(|| match &before {
-        Some(snapshot) => window_area::capture_area(snapshot, click_position, monitor),
-        None => Area::Fallback("no window geometry on this platform"),
-    });
-
-    // One line per step saying what it kept (task 3.6): the first question
-    // when a guide shows too little or too much.
-    let (img, screen, keep, foreign, scope) = match area {
-        None => {
-            log::info!("Step {step_number}: capture monitor {monitor:?}");
-            (img, screen, Vec::new(), Vec::new(), CaptureScope::Monitor)
-        }
-        Some(Area::Fallback(reason)) => {
-            log::warn!(
-                "Step {step_number}: capture active_window fell back to monitor {monitor:?}: {reason}"
-            );
-            (
-                img,
-                screen,
-                Vec::new(),
-                Vec::new(),
-                CaptureScope::MonitorFallback,
-            )
-        }
-        Some(Area::Window {
-            crop,
-            keep,
-            windows,
-        }) => match crop_to(&img, screen, &crop) {
-            // Cropped at once, so what phase B holds is the area, not the monitor.
-            Some((cropped, cropped_screen)) => {
-                // Both snapshots: a toast may appear or grow during the read.
-                let snapshots: Vec<_> = before.iter().chain(after.iter()).collect();
-                let foreign = window_area::foreign_rects(&snapshots, &windows);
-                log::info!(
-                    "Step {step_number}: capture active_window, area {crop:?} from {} window rectangle(s), \
-                     {} foreign window area(s) masked",
-                    keep.len(),
-                    foreign.len()
-                );
-                (cropped, cropped_screen, keep, foreign, CaptureScope::Window)
-            }
-            None => {
-                log::warn!(
-                    "Step {step_number}: capture active_window fell back to monitor {monitor:?}: \
-                     area {crop:?} is not in the captured pixels"
-                );
-                (
-                    img,
-                    screen,
-                    Vec::new(),
-                    Vec::new(),
-                    CaptureScope::MonitorFallback,
-                )
-            }
-        },
-    };
     log::info!(
-        "Step {step_number}: pixels held in {} ms ({}x{})",
+        "Step {step_number}: pixels read in {} ms ({}x{})",
         started.elapsed().as_millis(),
         img.width(),
         img.height()
     );
-    Ok(HeldStep {
+    Ok(PixelRead {
         img,
         screen,
-        keep,
-        foreign,
-        scope,
-        geometry,
+        before,
+        after,
         pixels_at,
     })
 }

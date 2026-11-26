@@ -304,7 +304,12 @@ fn live_password_check() {
         println!("cache {hwnd:#x}: {completions} completion(s), fields {fields:?}");
     }
 
-    let held = screenshot::capture_step(1, None, true).unwrap();
+    let held = screenshot::frame_step(
+        screenshot::capture_step(1, None, true).unwrap(),
+        1,
+        None,
+        true,
+    );
     let geometry = held.geometry.as_ref().unwrap();
     let windows = window_area::visible_windows(geometry, &held.shown());
     for (hwnd, parts) in &windows {
