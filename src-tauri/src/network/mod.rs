@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod export;
 // The deep-link swap point: this module is deleted when the cogniclone:// URL
 // scheme lands (browser-login, task 8.2). Nothing else in network/ changes.
 pub mod jobs;

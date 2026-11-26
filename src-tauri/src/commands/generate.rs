@@ -4,7 +4,7 @@ use tauri::{Emitter, State};
 use tauri_plugin_store::StoreExt;
 
 use crate::commands::auth::SessionCache;
-use crate::network::{auth as net_auth, jobs, sse, upload};
+use crate::network::{auth as net_auth, export, jobs, sse, upload};
 use crate::output::{markdown, pending, step_meta};
 use crate::state::{AppState, RecordingStatus};
 
@@ -399,11 +399,22 @@ async fn run_generation_inner(
     );
 
     match result.pdf_url.as_deref() {
-        Some(pdf_url) => match download_pdf(pdf_url, &output_path).await {
-            Ok(()) => log::info!(
+        Some(pdf_url) => match export::download_pdf(
+            &access_token,
+            pdf_url,
+            api_url.as_deref(),
+            api_base,
+            &output_path,
+        )
+        .await
+        {
+            Ok(export::PdfOutcome::Saved) => log::info!(
                 "Server PDF downloaded to {}",
                 output_path.join("guide.pdf").display()
             ),
+            Ok(export::PdfOutcome::NotFound) => {
+                log::warn!("Server has no PDF for this guide (404); no PDF saved")
+            }
             Err(e) => log::warn!("Server PDF download failed ({}); no PDF saved", e),
         },
         None => log::warn!("No pdf_url in result; no PDF saved"),
@@ -416,33 +427,6 @@ async fn run_generation_inner(
         .recording_status
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = RecordingStatus::Done;
-
-    Ok(())
-}
-
-/// Download a PDF from a signed URL and save it to the output directory.
-async fn download_pdf(url: &str, output_dir: &Path) -> Result<(), String> {
-    let client = reqwest::Client::new();
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| format!("PDF download request failed: {}", e))?;
-
-    if !response.status().is_success() {
-        return Err(format!(
-            "PDF download returned status {}",
-            response.status()
-        ));
-    }
-
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| format!("Failed to read PDF response body: {}", e))?;
-
-    let pdf_path = output_dir.join("guide.pdf");
-    std::fs::write(&pdf_path, &bytes).map_err(|e| format!("Failed to write PDF file: {}", e))?;
 
     Ok(())
 }
