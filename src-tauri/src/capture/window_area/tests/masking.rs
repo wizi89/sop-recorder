@@ -216,7 +216,7 @@ fn a_window_below_the_step_window_is_not_masked() {
 
 #[test]
 fn the_steps_own_menus_dropdowns_and_owned_windows_are_not_masked() {
-    let menu = window(MENU, Rect::new(850, 600, 1100, 950), "#32768", 99);
+    let menu = window(MENU, Rect::new(850, 600, 1100, 950), "#32768", 10);
     let mut dropdown = window(DIALOG, Rect::new(200, 200, 400, 400), "Drop", 10);
     dropdown.popup = true;
     let mut palette = window(9, Rect::new(500, 150, 700, 300), "Palette", 11);
@@ -288,4 +288,48 @@ fn subtract_leaves_the_frame_around_a_hole() {
     assert!(pieces
         .iter()
         .all(|p| p.intersect(&Rect::new(3, 3, 6, 6)).is_none()));
+}
+
+/// The toast host is `WS_EX_NOREDIRECTIONBITMAP` without `WS_EX_LAYERED`
+/// and draws a transparent margin around the toast, so it hides nothing.
+#[test]
+fn a_field_behind_a_window_without_a_redirection_bitmap_is_masked() {
+    const TOPMOST: u32 = 0x0000_0008;
+    const NO_REDIRECTION_BITMAP: u32 = 0x0020_0000;
+    const LAYERED: u32 = 0x0008_0000;
+    assert!(see_through(TOPMOST | NO_REDIRECTION_BITMAP));
+    assert!(see_through(LAYERED));
+    assert!(!see_through(TOPMOST));
+    let mut host = cover();
+    host.layered = see_through(TOPMOST | NO_REDIRECTION_BITMAP);
+    assert_eq!(field_behind(host), vec![Rect::new(300, 300, 500, 330)]);
+}
+
+/// Any app's context menu is `#32768`; only the step window's own is its menu.
+#[test]
+fn a_menu_of_another_process_is_masked() {
+    let theirs = window(MENU, Rect::new(850, 600, 1100, 950), "#32768", 99);
+    assert_eq!(
+        foreign_rects(&[&with_on_top(theirs)], &[EDITOR]),
+        vec![Rect::new(850, 600, 900, 700)]
+    );
+    let ours = window(MENU, Rect::new(850, 600, 1100, 950), "#32768", 10);
+    assert!(foreign_rects(&[&with_on_top(ours)], &[EDITOR]).is_empty());
+}
+
+/// explorer.exe runs both the file window and the taskbar's live previews of
+/// other apps: a preview or a shell surface is no dropdown of the window.
+#[test]
+fn a_same_process_thumbnail_or_shell_popup_over_explorer_is_masked() {
+    let explorer = window(EDITOR, EDITOR_RECT, "CabinetWClass", 30);
+    for class in ["TaskListThumbnailWnd", "Windows.UI.Core.CoreWindow"] {
+        let mut popup = window(MENU, Rect::new(700, 500, 1000, 800), class, 30);
+        popup.popup = true;
+        let s = snapshot(EDITOR, Some(EDITOR), vec![popup, explorer.clone()]);
+        assert_eq!(
+            foreign_rects(&[&s], &[EDITOR]),
+            vec![Rect::new(700, 500, 900, 700)],
+            "{class}"
+        );
+    }
 }

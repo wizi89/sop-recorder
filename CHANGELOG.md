@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On Windows, more of what other apps show over the captured window is blacked out: another program's context menu, the taskbar's live previews over an Explorer window, and the transparent edge of a notification, under which a password field is now checked too. When the list of open windows may have missed one, the step is marked for review.
 - After generating, the guide's PDF is saved next to the guide again. With the current server, no `guide.pdf` was saved.
 - In a folder opened with "Aus Ordner generieren", a file such as `step_+3.png` is no longer taken for a step, and deleting a step also removes a second screenshot of the same number (`step_1.png` next to `step_01.png`), so it is not uploaded, and its step data with it, so no leftover blocks the upload.
 - On Windows with more than one monitor, the recording bar now moves to the monitor you click on, so it stays in sight while you work on another monitor.
