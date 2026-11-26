@@ -101,6 +101,7 @@ The `test` job in `.github/workflows/ci.yml`, grouped by what changed:
   fixes it).
 - Always, in its own CI job `semgrep`: `python scripts/check_semgrep.py`, the custom Semgrep rules
   in `.semgrep/` (needs `semgrep` or `uvx`). It also proves each rule still flags its bad fixture.
+  One of them is the module boundary: no HTTP client outside `src-tauri/src/network/` (R6).
 - Always, in its own CI job `glossary`: `python3 scripts/check_glossary_terms.py` (a second; run
   it before pushing, a miss costs a CI round).
 - Always, in its own CI job `actionlint`: actionlint with shellcheck on `.github/workflows/`. Don't

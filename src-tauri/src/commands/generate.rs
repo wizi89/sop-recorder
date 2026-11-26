@@ -422,6 +422,8 @@ async fn run_generation_inner(
 
 /// Download a PDF from a signed URL and save it to the output directory.
 async fn download_pdf(url: &str, output_dir: &Path) -> Result<(), String> {
+    // Outside network/ until #116 moves this download there and drops the marker.
+    // nosemgrep: http-outside-network
     let client = reqwest::Client::new();
     let response = client
         .get(url)

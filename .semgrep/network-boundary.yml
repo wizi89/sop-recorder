@@ -1,0 +1,21 @@
+# Module boundary (CODING_STANDARDS.md R6): only src-tauri/src/network/ talks
+# HTTP. What leaves the machine (docs/ARCHITECTURE.md) is then one directory
+# to read, and a review of a privacy change knows where to look. An HTTP
+# client crate named outside network/ is a finding: a `use`, a path such as
+# reqwest::Client::new() or reqwest::get(..), or a type such as
+# reqwest::Response. One regex, not a Rust pattern: it sees use lines, paths
+# and types alike. Log targets like "reqwest::connect" are strings, so they
+# do not match.
+# Fixtures: .semgrep/fixtures/network-boundary-{ok,bad}.rs; CI asserts both.
+rules:
+  - id: http-outside-network
+    languages: [rust]
+    severity: ERROR
+    message: >-
+      An HTTP client is used outside src-tauri/src/network/. Every request
+      that leaves the machine goes through a function in network/; add one
+      there and call it.
+    paths:
+      exclude:
+        - src-tauri/src/network/
+    pattern-regex: (?<!["\w])(reqwest|reqwest_eventsource)::\w

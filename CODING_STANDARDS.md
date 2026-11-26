@@ -73,6 +73,7 @@ Skip these in review; CI fails on them.
 |---|---|
 | F1 TypeScript strict flags | `src/test/tsconfig.test.ts`; `npx tsc --noEmit` |
 | F3 direct unlisten call | `.semgrep/unlisten.yml`, run by `python scripts/check_semgrep.py` (CI job `semgrep`) |
+| R6 module boundary: only `src-tauri/src/network/` talks HTTP (`reqwest`, `reqwest_eventsource`), so what leaves the machine is one directory to read | `.semgrep/network-boundary.yml`, same script and job; prints `boundaries: checked N files` |
 | G6 LF line endings | `.gitattributes` |
 | G7 no committed secrets (the `secrets.*` half stays a rule) | `.gitignore`; GitHub secret scanning with push protection |
 | R1 `cargo fmt` | CI `cargo fmt --check` |
