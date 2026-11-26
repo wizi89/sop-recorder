@@ -53,6 +53,13 @@ pub fn is_unrecorded(level: Option<u32>, recorder: u32) -> bool {
     level.is_none_or(|level| level > recorder)
 }
 
+/// The window a foreground event decides from: the one actually in front,
+/// the event's own only when nothing is in front. Out-of-context events arrive
+/// late, so an event can name a window that is no longer in front (#108).
+pub fn deciding_window<H>(event: H, front: Option<H>) -> H {
+    front.unwrap_or(event)
+}
+
 /// One recording's visits, written to the folder each time one ends, so a
 /// crash keeps the ones before it.
 pub struct Log {
