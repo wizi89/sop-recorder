@@ -8,7 +8,7 @@ import { createErrorReport, errorReportPhase } from "./lib/tauri";
 import "./styles.css";
 
 // Two windows share this bundle. The recording bar is a window of its own for
-// a macOS reason documented at `BAR_LABEL` in commands/window.rs, and the label
+// a macOS reason documented at `LABEL` in src-tauri/src/recording_bar.rs, and the label
 // is what tells the two apart.
 const isBar = getCurrentWindow().label === "bar";
 

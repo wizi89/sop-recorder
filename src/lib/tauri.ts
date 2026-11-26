@@ -338,29 +338,18 @@ export async function setSelectedPipeline(pipelineId: string): Promise<void> {
   return invoke("set_selected_pipeline", { pipelineId });
 }
 
-export interface WorkArea {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export async function getWorkArea(): Promise<WorkArea> {
-  return invoke("get_work_area");
-}
-
 /**
- * Tell the capture side where the compact recording bar is, as
- * [x, y, width, height] in logical points from the top-left of the primary
- * display, or `null` when it is not on screen.
- *
- * Clicks inside it are the user driving the recorder -- pressing Stop -- and
- * must not become steps of the process being recorded.
+ * Show the compact recording bar in the corner of the work area, and tell the
+ * capture side where it landed, so a click on Stop is not captured as a step.
+ * Rejects only when the bar's window is missing.
  */
-export async function setRecorderRegion(
-  region: [number, number, number, number] | null,
-): Promise<void> {
-  return invoke("set_recorder_region", { region });
+export async function showRecordingBar(): Promise<void> {
+  return invoke("show_recording_bar");
+}
+
+/** Hide the recording bar and stop excluding its region from capture. */
+export async function hideRecordingBar(): Promise<void> {
+  return invoke("hide_recording_bar");
 }
 
 /**

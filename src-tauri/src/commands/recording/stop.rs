@@ -84,7 +84,7 @@ pub(super) async fn stop_recording_inner(
     }; // MutexGuard dropped here
 
     // Restore window visibility
-    let _ = crate::commands::window::set_display_affinity(app.clone(), false);
+    let _ = crate::recording_bar::hide_from_capture(&app, false);
 
     // Stop audio immediately
     if let Some(audio) = audio {

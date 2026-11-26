@@ -4,6 +4,7 @@ pub mod config;
 pub mod error_reports;
 pub mod network;
 pub mod output;
+pub mod recording_bar;
 pub mod runtime_config;
 pub mod state;
 use commands::{
@@ -160,7 +161,7 @@ pub fn run() {
             // Built here, not on demand: the bar can only join another app's
             // fullscreen Space if it is created under an accessory activation
             // policy, and that is a property of the window from birth.
-            if let Err(e) = commands::window::create_recording_bar(app.handle()) {
+            if let Err(e) = recording_bar::create(app.handle()) {
                 log::error!("Could not build the recording bar: {}", e);
             }
             Ok(())
@@ -214,10 +215,9 @@ pub fn run() {
             permissions::get_accessibility_permission_state,
             permissions::open_privacy_settings,
             permissions::request_permission,
-            window::set_display_affinity,
-            window::set_recorder_region,
             window::restart_app,
-            window::get_work_area,
+            recording_bar::show_recording_bar,
+            recording_bar::hide_recording_bar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

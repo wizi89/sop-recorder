@@ -4,8 +4,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-#[cfg(windows)]
-use tauri::Manager;
 use tauri::{Emitter, State};
 use tauri_plugin_store::StoreExt;
 
@@ -82,7 +80,7 @@ pub async fn start_recording(
     let capture_settings = recording_capture_settings(read_capture_settings(|key| {
         store.as_ref().and_then(|store| store.get(key))
     }));
-    if let Err(e) = crate::commands::window::set_display_affinity(app.clone(), hide) {
+    if let Err(e) = crate::recording_bar::hide_from_capture(&app, hide) {
         log::warn!("Failed to set display affinity: {}", e);
     }
 
@@ -229,14 +227,7 @@ pub async fn start_recording(
     // recording runs, so it is the window the user's Stop click lands on. This
     // read "main" until the bar became a window of its own, and pointing it at
     // the wrong window silently turns every press of Stop into a captured step.
-    #[cfg(windows)]
-    let exclude_hwnd = app
-        .get_webview_window(crate::commands::window::BAR_LABEL)
-        .and_then(|w| w.hwnd().ok())
-        .map(|h| h.0 as isize);
-
-    #[cfg(not(windows))]
-    let exclude_hwnd = None;
+    let exclude_hwnd = crate::recording_bar::hwnd(&app);
 
     // Start input hooks -- screenshots are captured immediately in the callback
     let counter_clone = step_counter.clone();
@@ -306,7 +297,7 @@ pub async fn start_recording(
                     if let Some(click) =
                         click_pos.filter(|_| hide && latest.load(Ordering::SeqCst) == step_num)
                     {
-                        crate::commands::window::follow_click(&app, click);
+                        crate::recording_bar::follow_click(&app, click);
                     }
                     let held = held?;
                     let capture_scope = held.scope;
