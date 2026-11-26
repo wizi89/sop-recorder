@@ -204,7 +204,8 @@ async fn a_pdf_url_that_is_not_a_path_makes_no_request() {
         "guides/g-1/export/guide.pdf".into(),
     ] {
         let outcome = download_pdf_with("tok", &pdf_url, Some(&base), dir.path(), no_refresh).await;
-        assert!(outcome.is_err(), "{pdf_url}: {outcome:?}");
+        let error = outcome.expect_err(&pdf_url);
+        assert!(error.contains("not an API path"), "{pdf_url}: {error}");
     }
 
     assert!(seen.lock().unwrap_or_else(|e| e.into_inner()).is_empty());
