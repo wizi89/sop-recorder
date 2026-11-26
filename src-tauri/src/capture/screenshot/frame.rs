@@ -84,6 +84,11 @@ pub fn frame_step(
             }
         },
     };
+    log::info!(
+        "Step {step_number}: pixels held ({}x{})",
+        img.width(),
+        img.height()
+    );
     HeldStep {
         img,
         screen,
