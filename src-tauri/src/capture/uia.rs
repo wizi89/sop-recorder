@@ -2,6 +2,7 @@
 //! D5, amendment A1): the query, and the warm-up triggers of a recording.
 
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
+use std::time::Duration;
 
 use windows::core::{implement, Interface, Result, VARIANT};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, LPARAM, RECT, WPARAM};
@@ -191,6 +192,13 @@ impl UiaQuery {
     }
 }
 
+/// Smallest width and height, in pixels, of a window an event warms up.
+const MIN_WARM_UP_SIZE: i32 = 40;
+
+/// How often the foreground window is warmed up without an event (#66): a
+/// page loaded in the same tab fires no foreground or show event.
+const FOREGROUND_REFRESH: Duration = Duration::from_secs(1);
+
 /// The checker the window-event callback warms up. A callback is a plain
 /// function, so it reaches the recording's checker through this.
 static TARGET: Mutex<Option<Arc<Checker>>> = Mutex::new(None);
@@ -211,10 +219,14 @@ unsafe extern "system" fn on_window_event(
     {
         return;
     }
-    // Tooltips and other small popups fire show events constantly and hold
-    // no password field.
+    // Tooltips and other tiny popups fire show events constantly and hold no
+    // password field. Tab hover cards and short menus pass (#66): a step on
+    // one is checked, so it must be warmed up too.
     let mut r = RECT::default();
-    if GetWindowRect(hwnd, &mut r).is_err() || r.right - r.left < 100 || r.bottom - r.top < 100 {
+    if GetWindowRect(hwnd, &mut r).is_err()
+        || r.right - r.left < MIN_WARM_UP_SIZE
+        || r.bottom - r.top < MIN_WARM_UP_SIZE
+    {
         return;
     }
     let target = TARGET.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -253,11 +265,12 @@ impl IUIAutomationFocusChangedEventHandler_Impl for FocusWatch_Impl {
 }
 
 /// The warm-up triggers of one recording (D5): every visible window at the
-/// start, foreground and show events, and focus on a password field. Dropping
-/// it stops them.
+/// start, foreground and show events, the foreground window once a second,
+/// and focus on a password field. Dropping it stops them.
 pub struct Watch {
     hook_thread: u32,
     focus_stop: Option<mpsc::Sender<()>>,
+    refresh_stop: Option<mpsc::Sender<()>>,
 }
 
 impl Watch {
@@ -321,6 +334,20 @@ impl Watch {
         });
         let hook_thread = ready_rx.recv().unwrap_or(0);
 
+        // Dropping the sender ends the loop.
+        let (refresh_tx, refresh_rx) = mpsc::channel::<()>();
+        let refreshed = checker.clone();
+        std::thread::spawn(move || {
+            while let Err(mpsc::RecvTimeoutError::Timeout) =
+                refresh_rx.recv_timeout(FOREGROUND_REFRESH)
+            {
+                let window = unsafe { GetAncestor(GetForegroundWindow(), GA_ROOT) };
+                if !window.0.is_null() {
+                    refreshed.warm_up(window.0 as isize);
+                }
+            }
+        });
+
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         std::thread::spawn(move || {
             let uia = match client(timeout_ms) {
@@ -345,6 +372,7 @@ impl Watch {
         Watch {
             hook_thread,
             focus_stop: Some(stop_tx),
+            refresh_stop: Some(refresh_tx),
         }
     }
 }
@@ -355,6 +383,7 @@ impl Drop for Watch {
             let _ = PostThreadMessageW(self.hook_thread, WM_QUIT, WPARAM(0), LPARAM(0));
         }
         self.focus_stop.take();
+        self.refresh_stop.take();
         *TARGET.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }

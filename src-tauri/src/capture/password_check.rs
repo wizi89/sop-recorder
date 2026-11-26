@@ -365,6 +365,13 @@ impl Checker {
             }
             masks.extend(visible_fields(&fields, visible));
         }
+        // Read every window again after the step (#66): a click navigates,
+        // switches a tab or opens a menu, and the next step's cache must
+        // describe that page, not the one this step saw. The step's own
+        // masks above are already settled from what was known at its read.
+        for (hwnd, _) in windows {
+            self.warm_up(*hwnd);
+        }
         CheckOutcome { masks, flags }
     }
 
