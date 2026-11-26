@@ -14,6 +14,7 @@ use super::{reports_dir, Phase, ReportSettings};
 pub enum ReportMode {
     Ask,
     Always,
+    /// Stays last: the test checks `ALL` has one entry per discriminant, in order.
     Never,
 }
 

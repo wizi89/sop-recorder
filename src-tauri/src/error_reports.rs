@@ -85,7 +85,7 @@ pub enum Phase {
     Review,
     Processing,
     Settings,
-    /// Stays last: `ALL` is checked against its discriminant.
+    /// Stays last: the test checks `ALL` has one entry per discriminant, in order.
     Unknown,
 }
 

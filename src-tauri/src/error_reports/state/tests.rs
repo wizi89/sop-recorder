@@ -22,7 +22,9 @@ fn every_phase_survives_the_atomic_and_its_name() {
 #[test]
 fn every_mode_survives_the_atomic_and_its_name() {
     let _guard = global_state_guard();
-    for mode in ReportMode::ALL {
+    assert_eq!(ReportMode::ALL.len(), ReportMode::Never as usize + 1);
+    for (i, mode) in ReportMode::ALL.into_iter().enumerate() {
+        assert_eq!(mode as usize, i);
         assert_eq!(resolve_mode(Some(mode.as_str()), false), mode);
         set_mode(mode);
         assert_eq!(super::mode(), mode);
