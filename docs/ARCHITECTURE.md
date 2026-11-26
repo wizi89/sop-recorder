@@ -50,6 +50,7 @@ Browser sign-in with PKCE: a loopback listener on `127.0.0.1:<random port>`, the
 | Generate | The WAV, every screenshot PNG not deleted on the review screen (cropped and masked as captured, with the review screen's boxes burned in), title, pipeline choice and generation model, per-step timestamp, click position, trigger type, marker box, capture scope (`capture_scope`) and password check outcome (`password_check`), whether the step's window list was partial (`window_list_partial`, only when it was), per-recording counts of capture scopes (`capture_scopes`) and password check outcomes (`password_checks`), and how many steps came from a partial window list (`partial_window_lists`) | `POST /generate` |
 | Sign-in, refresh | Auth code / refresh token | `/auth/*` |
 | App start, review screen | Nothing but the session token | `/quota`, `/pipelines` |
+| After generating | Nothing but the session token | `GET /guides/{guide_id}/export/guide.pdf` (the result's `pdf_url`) |
 | Error report, only with consent | Scrubbed log tail (emails, secrets, paths removed), a subset of settings | `/client-reports` |
 | Update check | Nothing personal | GitHub Releases `latest.json` |
 
