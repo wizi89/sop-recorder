@@ -4,7 +4,8 @@ Three assertions, each a failure on its own:
   1. The bad fixture is red: every line marked `// <n>` is flagged, and
      nothing else.
   2. The good fixture is green: no finding.
-  3. src/ is green.
+  3. src/ and src-tauri/src/ are green. The Rust scan is the module
+     boundary check (CODING_STANDARDS.md R6) and prints its own count line.
 Every scan must also have scanned at least one file: a check that scanned
 nothing proves nothing.
 
@@ -92,6 +93,13 @@ def main():
 
     found, scanned = scan("src")
     print(f"src: scanned {scanned} file(s), {len(found)} finding(s)")
+    for path, line in found:
+        print(f"  {path}:{line}")
+    if found:
+        failed = True
+
+    found, scanned = scan(os.path.join("src-tauri", "src"))
+    print(f"boundaries: checked {scanned} files, {len(found)} finding(s)")
     for path, line in found:
         print(f"  {path}:{line}")
     if found:
