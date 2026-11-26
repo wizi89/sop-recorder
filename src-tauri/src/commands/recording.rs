@@ -289,7 +289,11 @@ pub async fn start_recording(
             let saved = permits::two_phase(
                 &permits,
                 &readers,
-                || screenshot::capture_step(step_num, click_pos, capture_settings.monitor_mode),
+                || {
+                    let mode = capture_settings.monitor_mode;
+                    screenshot::capture_step(step_num, click_pos, mode)
+                        .map(|read| screenshot::frame_step(read, step_num, click_pos, mode))
+                },
                 |held| {
                     // The bar follows the click only once the pixels are read,
                     // so moving it (a call into the UI thread) never delays the

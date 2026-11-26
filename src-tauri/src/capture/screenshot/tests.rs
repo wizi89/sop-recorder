@@ -47,43 +47,67 @@ fn shown_leaves_out_the_foreign_windows() {
 
 #[test]
 fn a_click_picks_the_monitor_it_landed_on() {
-    assert_eq!(monitor_for_click(Some((10, 10)), &LAPTOP_PLUS_4K, 0), 0);
-    assert_eq!(monitor_for_click(Some((2000, 900)), &LAPTOP_PLUS_4K, 0), 1);
+    assert_eq!(
+        choose_monitor(Some((10, 10)), &LAPTOP_PLUS_4K, 0),
+        (0, None)
+    );
+    assert_eq!(
+        choose_monitor(Some((2000, 900)), &LAPTOP_PLUS_4K, 0),
+        (1, None)
+    );
 }
 
 #[test]
 fn a_monitor_left_of_the_primary_is_found_at_negative_coordinates() {
     assert_eq!(
-        monitor_for_click(Some((-1000, 500)), &LEFT_OF_PRIMARY, 1),
-        0
+        choose_monitor(Some((-1000, 500)), &LEFT_OF_PRIMARY, 1),
+        (0, None)
     );
-    assert_eq!(monitor_for_click(Some((-1, 0)), &LEFT_OF_PRIMARY, 1), 0);
-    assert_eq!(monitor_for_click(Some((0, 0)), &LEFT_OF_PRIMARY, 1), 1);
+    assert_eq!(
+        choose_monitor(Some((-1, 0)), &LEFT_OF_PRIMARY, 1),
+        (0, None)
+    );
+    assert_eq!(choose_monitor(Some((0, 0)), &LEFT_OF_PRIMARY, 1), (1, None));
 }
 
 /// Boundaries are half-open, so the pixel column where two displays meet
 /// belongs to exactly one of them and no click can match both.
 #[test]
 fn monitor_edges_do_not_overlap() {
-    assert_eq!(monitor_for_click(Some((1511, 0)), &LAPTOP_PLUS_4K, 0), 0);
-    assert_eq!(monitor_for_click(Some((1512, 0)), &LAPTOP_PLUS_4K, 0), 1);
-    assert_eq!(monitor_for_click(Some((1512, 981)), &LAPTOP_PLUS_4K, 0), 1);
+    assert_eq!(
+        choose_monitor(Some((1511, 0)), &LAPTOP_PLUS_4K, 0),
+        (0, None)
+    );
+    assert_eq!(
+        choose_monitor(Some((1512, 0)), &LAPTOP_PLUS_4K, 0),
+        (1, None)
+    );
+    assert_eq!(
+        choose_monitor(Some((1512, 981)), &LAPTOP_PLUS_4K, 0),
+        (1, None)
+    );
 }
 
 /// A step on an unexpected display beats no step at all, so neither an
-/// absent position nor an off-screen one is an error.
+/// absent position nor an off-screen one is an error; the log says which
+/// fallback it was.
 #[test]
 fn no_position_and_an_off_screen_position_both_fall_back_to_primary() {
-    assert_eq!(monitor_for_click(None, &LAPTOP_PLUS_4K, 1), 1);
     assert_eq!(
-        monitor_for_click(Some((99_999, 99_999)), &LAPTOP_PLUS_4K, 1),
-        1
+        choose_monitor(None, &LAPTOP_PLUS_4K, 1),
+        (1, Some(Fallback::NoPosition))
     );
-    assert_eq!(monitor_for_click(Some((0, -5)), &LAPTOP_PLUS_4K, 0), 0);
+    assert_eq!(
+        choose_monitor(Some((99_999, 99_999)), &LAPTOP_PLUS_4K, 1),
+        (1, Some(Fallback::OffScreen))
+    );
+    assert_eq!(
+        choose_monitor(Some((0, -5)), &LAPTOP_PLUS_4K, 0),
+        (0, Some(Fallback::OffScreen))
+    );
 }
 
-/// The caller distinguishes a real containment from a fallback so the log
-/// can say which happened; `monitor_for_click` collapses the two.
+/// `follow_click` needs only the containment, without the fallback.
 #[test]
 fn containment_is_reported_separately_from_the_fallback() {
     assert_eq!(
@@ -97,9 +121,15 @@ fn containment_is_reported_separately_from_the_fallback() {
 #[test]
 fn a_single_monitor_desktop_always_answers_zero() {
     let one = [(0, 0, 1512, 982)];
-    assert_eq!(monitor_for_click(Some((100, 100)), &one, 0), 0);
-    assert_eq!(monitor_for_click(None, &one, 0), 0);
-    assert_eq!(monitor_for_click(Some((5000, 5000)), &one, 0), 0);
+    assert_eq!(choose_monitor(Some((100, 100)), &one, 0), (0, None));
+    assert_eq!(
+        choose_monitor(None, &one, 0),
+        (0, Some(Fallback::NoPosition))
+    );
+    assert_eq!(
+        choose_monitor(Some((5000, 5000)), &one, 0),
+        (0, Some(Fallback::OffScreen))
+    );
 }
 
 /// The measurement from the finding, as a regression.
@@ -412,10 +442,12 @@ fn a_crop_on_a_monitor_left_of_the_primary_keeps_the_desktop_origin() {
 fn live_two_phase() {
     let dir = std::path::PathBuf::from(std::env::var("SPIKE_OUT").expect("SPIKE_OUT"));
     for (step, monitor_mode) in [(1, false), (2, true)] {
-        let held = capture_step(step, None, monitor_mode).unwrap();
+        let read = capture_step(step, None, monitor_mode).unwrap();
+        let held = frame_step(read, step, None, monitor_mode);
         println!("step {step}: scope {:?}", held.scope);
         finish_and_save(held, &dir, step, None, &[]).unwrap();
     }
 }
 
 mod drawing;
+mod frame;
