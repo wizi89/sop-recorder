@@ -17,7 +17,7 @@ The log holds the input-suppression audit trail (design D4), so a question about
 
 ## Error reports
 
-`src-tauri/src/error_reports.rs`. A panic, a failed command or a UI error becomes a JSON report in a queue on disk:
+`src-tauri/src/error_reports.rs` and `src-tauri/src/error_reports/`. A panic, a failed command or a UI error becomes a JSON report in a queue on disk:
 
 - **Windows:** `%LOCALAPPDATA%\com.cogniclone.recorder\error-reports\`
 - **macOS:** `~/Library/Application Support/com.cogniclone.recorder/error-reports/`

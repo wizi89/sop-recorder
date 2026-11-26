@@ -67,7 +67,7 @@ jobs:
               .github/workflows/release.yml|src-tauri/tauri.conf.json|src-tauri/tauri.macos.conf.json|src-tauri/tauri.signing.conf.json|src-tauri/Info.plist) release=1 ;;
               src-tauri/Entitlements.plist|src-tauri/capabilities/*) perms=1 ;;
               docs/server-contract.md) contract=1 ;;
-              src-tauri/src/network/upload.rs|src-tauri/src/network/reports.rs|src-tauri/src/network/auth.rs|src-tauri/src/error_reports.rs|src-tauri/src/commands/error_reports.rs) privacy=1 ;;
+              src-tauri/src/network/upload.rs|src-tauri/src/network/reports.rs|src-tauri/src/network/auth.rs|src-tauri/src/error_reports.rs|src-tauri/src/error_reports/*|src-tauri/src/commands/error_reports.rs) privacy=1 ;;
               src-tauri/src/commands/generate/redact.rs|src-tauri/src/output/redactions.rs) privacy=1 ;;
               src-tauri/src/capture/password_check.rs|src-tauri/src/capture/password_check/*|src-tauri/src/capture/window_area.rs|src-tauri/src/capture/window_area/*) privacy=1 ;;
               .github/workflows/dependabot-lane.yml|.github/workflows/dependabot-red.yml) lane=1 ;;

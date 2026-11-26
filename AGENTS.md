@@ -70,7 +70,7 @@ workflow's in step.
 - Permissions: `src-tauri/Entitlements.plist`, `src-tauri/capabilities/`.
 - Contract: `docs/server-contract.md`.
 - What leaves the machine: `src-tauri/src/network/upload.rs`, `src-tauri/src/network/reports.rs`,
-  `src-tauri/src/network/auth.rs`, `src-tauri/src/error_reports.rs`,
+  `src-tauri/src/network/auth.rs`, `src-tauri/src/error_reports.rs` and `error_reports/`,
   `src-tauri/src/commands/error_reports.rs`, `src-tauri/src/commands/generate/redact.rs`,
   `src-tauri/src/output/redactions.rs`, `src-tauri/src/capture/password_check.rs` and
   `password_check/`, `src-tauri/src/capture/window_area.rs` and `window_area/`.

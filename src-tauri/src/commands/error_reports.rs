@@ -2,18 +2,17 @@
 //!
 //! Thin by design: every decision lives in `crate::error_reports`, which is a
 //! plain module with tests, and these wrappers only supply the things a
-//! command has that a module function does not -- the app handle, the reports
-//! directory, and the session token.
+//! command has that a module function does not -- the app handle and the
+//! session token.
 
 use tauri::State;
 
 use crate::commands::auth::{get_api_base, SessionCache};
-use crate::error_reports::{self, ErrorReport, Phase, ReportKind, ReportMode};
+use crate::error_reports::{self, ErrorReport, Phase, Queue, ReportKind, ReportMode, Sent};
 use crate::network::reports as net_reports;
 
-fn dir() -> Result<std::path::PathBuf, String> {
-    error_reports::active_reports_dir()
-        .ok_or_else(|| "Kein Verzeichnis für Fehlerberichte gefunden".to_string())
+fn queue() -> Result<Queue, String> {
+    Queue::active().ok_or_else(|| "Kein Verzeichnis für Fehlerberichte gefunden".to_string())
 }
 
 /// Every report still waiting on disk, oldest first, with its consent state.
@@ -25,7 +24,7 @@ pub async fn list_error_reports() -> Result<Vec<ErrorReport>, String> {
     if error_reports::mode() == ReportMode::Never {
         return Ok(Vec::new());
     }
-    let reports = error_reports::list_reports(&dir()?);
+    let reports = queue()?.list();
     if !reports.is_empty() {
         // The queue depth, so a dialog that "came back" can be told apart from
         // the next report in a backlog.
@@ -42,8 +41,7 @@ pub async fn list_error_reports() -> Result<Vec<ErrorReport>, String> {
 /// what would be sent.
 #[tauri::command]
 pub async fn read_error_report(report_id: String) -> Result<Option<ErrorReport>, String> {
-    let path = dir()?.join(format!("{}.json", report_id));
-    Ok(error_reports::read_report(&path))
+    Ok(queue()?.get(&report_id))
 }
 
 /// Create a report for a failure the webview saw (D6): a command error the UI
@@ -77,7 +75,7 @@ pub async fn decide_error_report(
     grant: bool,
     comment: Option<String>,
 ) -> Result<Option<ErrorReport>, String> {
-    let outcome = error_reports::decide(&dir()?, &report_id, grant, comment);
+    let outcome = queue()?.decide(&report_id, grant, comment);
     // Logged because the log could not previously answer "did the user decline,
     // or was there simply another report behind it?" -- which is exactly the
     // question a reappearing dialog raises.
@@ -97,35 +95,19 @@ pub async fn decide_error_report(
 /// resolved on the Rust side and differs per platform.
 #[tauri::command]
 pub async fn error_report_path(report_id: String) -> Result<String, String> {
-    Ok(dir()?
-        .join(format!("{}.json", report_id))
-        .to_string_lossy()
-        .to_string())
+    Ok(queue()?.path_of(&report_id).to_string_lossy().to_string())
 }
 
-/// What one submission produced, for the notice the webview shows.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct SubmittedReport {
-    pub report_id: String,
-    pub number: String,
-}
-
-/// Send every granted report the current session can carry (D7).
-///
-/// The one mechanism serves both the signed-out case and the retry: a report
-/// created while signed out waits with its consent recorded, and a submission
-/// that failed is simply still granted the next time this runs. Called after
-/// a successful sign-in and after a grant.
-///
-/// A success deletes the file. A failure keeps it, so the same report id goes
-/// out next time and the number the user was shown does not change.
+/// Send every granted report the current session can carry (D7). Called after
+/// a successful sign-in and after a grant; `Queue::send_granted` decides what
+/// goes and what stays.
 #[tauri::command]
 pub async fn submit_error_reports(
     app: tauri::AppHandle,
     session: State<'_, SessionCache>,
-) -> Result<Vec<SubmittedReport>, String> {
-    let reports_dir = dir()?;
-    error_reports::sweep_stale(&reports_dir, chrono::Utc::now());
+) -> Result<Vec<Sent>, String> {
+    let queue = queue()?;
+    queue.sweep_stale(chrono::Utc::now());
 
     if error_reports::mode() == ReportMode::Never {
         return Ok(Vec::new());
@@ -144,28 +126,12 @@ pub async fn submit_error_reports(
     };
     let api_base = get_api_base(&app);
 
-    let mut sent = Vec::new();
-    for report in error_reports::list_reports(&reports_dir) {
-        if report.consent != error_reports::Consent::Granted {
-            continue;
-        }
-        match net_reports::submit_report(&report, api_base, &access_token).await {
-            Ok(number) => {
-                error_reports::delete_report(&reports_dir, &report.report_id);
-                log::info!("Fehlerbericht {} gesendet", number);
-                sent.push(SubmittedReport {
-                    report_id: report.report_id,
-                    number,
-                });
-            }
-            Err(err) => {
-                // Kept on disk deliberately: the next sign-in retries it with
-                // the same id, so the number the user copied still finds it.
-                log::warn!("Fehlerbericht {} bleibt liegen: {}", report.number(), err);
-            }
-        }
-    }
-    Ok(sent)
+    Ok(queue
+        .send_granted(|report| {
+            let access_token = access_token.clone();
+            async move { net_reports::submit_report(&report, api_base, &access_token).await }
+        })
+        .await)
 }
 
 /// Record what the user is doing, so a panic knows which screen it happened
