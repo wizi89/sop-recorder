@@ -200,7 +200,7 @@ fn report_round_trips_through_disk() {
     let dir = tempdir().unwrap();
     let report = sample();
     let path = queue(&dir).write(&report).unwrap();
-    assert_eq!(path, queue(&dir).path_of(&report.report_id));
+    assert_eq!(path, queue(&dir).path_of(&report.report_id).unwrap());
 
     let read_back = queue(&dir).get(&report.report_id).unwrap();
     assert_eq!(read_back, report);

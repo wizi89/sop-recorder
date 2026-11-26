@@ -28,13 +28,8 @@ nothing is in front (`deciding_window` in `capture/unrecorded.rs`).
 
 ## 2026-11-25 An error report id from the webview becomes a file path unchecked
 
-**Symptom:** none yet. Seen while moving the report queue into `error_reports/queue.rs`.
-**Cause:** `read_error_report`, `decide_error_report` and `error_report_path` take `report_id`
-from the webview, and `Queue::path_of` joins `<report_id>.json` onto the reports directory. An id
-such as `../x` would point outside it. The webview only sends ids it read from the queue, so this
-is a hardening gap and has never been a bug.
-**Rule:** `Queue::path_of` is now the one place that turns an id into a path. If a check is added,
-it goes there: accept only the UUID shape `ErrorReport::new` produces.
+Graduated: `Queue::path_of` in `src-tauri/src/error_reports/queue.rs` accepts only the canonical
+UUID `ErrorReport::new` produces; its test is in `error_reports/queue/tests.rs`.
 
 ---
 

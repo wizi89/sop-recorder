@@ -46,9 +46,16 @@ impl Queue {
         active_reports_dir().map(Self::at)
     }
 
-    /// Where a report's file is, whether or not it exists.
-    pub fn path_of(&self, report_id: &str) -> PathBuf {
-        self.dir.join(format!("{}.json", report_id))
+    /// Where a report's file is, whether or not it exists. `None` for an id
+    /// that is not the canonical UUID `ErrorReport::new` gives every report.
+    ///
+    /// Ids arrive from the webview, and this is the one place an id becomes a
+    /// path, so the check lives here: an id such as `../x` would otherwise
+    /// name a file outside the queue for `get`, `decide` or the path command.
+    pub fn path_of(&self, report_id: &str) -> Option<PathBuf> {
+        let canonical = uuid::Uuid::parse_str(report_id)
+            .is_ok_and(|id| id.hyphenated().to_string() == report_id);
+        canonical.then(|| self.dir.join(format!("{}.json", report_id)))
     }
 
     /// Write a report and announce it.
@@ -76,14 +83,16 @@ impl Queue {
     /// report and must not tell every window that a new one has arrived.
     fn persist(&self, report: &ErrorReport) -> Result<PathBuf, std::io::Error> {
         std::fs::create_dir_all(&self.dir)?;
-        let path = self.path_of(&report.report_id);
+        let path = self.path_of(&report.report_id).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a report id")
+        })?;
         let json = serde_json::to_string_pretty(report).map_err(std::io::Error::other)?;
         std::fs::write(&path, json)?;
         Ok(path)
     }
 
     pub fn get(&self, report_id: &str) -> Option<ErrorReport> {
-        read(&self.path_of(report_id))
+        read(&self.path_of(report_id)?)
     }
 
     /// Every report still on disk, oldest first. A file that does not parse is
@@ -104,7 +113,9 @@ impl Queue {
     }
 
     fn remove(&self, report_id: &str) {
-        let _ = std::fs::remove_file(self.path_of(report_id));
+        if let Some(path) = self.path_of(report_id) {
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     /// Record the user's decision (D7). Granting keeps the file with the
@@ -203,3 +214,6 @@ fn read(path: &std::path::Path) -> Option<ErrorReport> {
 /// A report waits at most this long for a session to send it with (D7), so a
 /// machine that never comes back online does not accumulate reports for ever.
 pub const MAX_REPORT_AGE_DAYS: i64 = 30;
+
+#[cfg(test)]
+mod tests;
