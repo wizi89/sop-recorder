@@ -201,6 +201,7 @@ async fn a_pdf_url_that_is_not_a_path_makes_no_request() {
 
     for pdf_url in [
         format!("{base}{PDF_PATH}"),
+        format!("//{}{PDF_PATH}", base.trim_start_matches("http://")),
         "guides/g-1/export/guide.pdf".into(),
     ] {
         let outcome = download_pdf_with("tok", &pdf_url, Some(&base), dir.path(), no_refresh).await;
