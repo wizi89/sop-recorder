@@ -111,8 +111,9 @@ pub struct Snapshot {
     pub under_click: Option<isize>,
     pub windows: Vec<WindowInfo>,
     /// The list came from `EnumWindows`, which leaves out shell windows such
-    /// as toasts: they are neither masked nor checked, so the step is marked
-    /// for review, with password masking on or off.
+    /// as toasts, or the walk missed a window `EnumWindows` found: such
+    /// windows are neither masked nor checked, so the step is marked for
+    /// review, with password masking on or off.
     pub partial: bool,
 }
 
@@ -140,6 +141,17 @@ pub fn merge(before: &Snapshot, after: &Snapshot) -> Geometry {
         foreground_changed: before.foreground != after.foreground,
         snapshots: [before.clone(), after.clone()],
     }
+}
+
+/// `WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP`. The toast host has the second
+/// without the first and a transparent margin around the toast. Plain values
+/// so the rule is tested on any platform.
+const SEE_THROUGH_EX_STYLES: u32 = 0x0008_0000 | 0x0020_0000;
+
+/// Whether a window's extended style lets what is below show through: the
+/// `layered` of `WindowInfo`.
+pub fn see_through(ex_style: u32) -> bool {
+    ex_style & SEE_THROUGH_EX_STYLES != 0
 }
 
 /// Whether a window certainly hides what is below it (D4). Anything that may
@@ -252,10 +264,16 @@ fn kind(w: &WindowInfo) -> Kind {
     }
 }
 
-/// A context menu, or a popup of the foreground window's process reaching past
+/// A context menu or a popup of the foreground window's process reaching past
 /// its edge (a dropdown): shown together with the window it belongs to.
+/// Shell surfaces and taskbar previews share explorer.exe with its file
+/// windows, so they never count. A UWP app's popups run in another process
+/// than its frame and are masked: too much black is safe, another app is not.
 fn belongs_to(popup: &WindowInfo, fg: &WindowInfo) -> bool {
-    popup.class == "#32768" || (popup.popup && popup.pid == fg.pid && popup.hwnd != fg.hwnd)
+    popup.pid == fg.pid
+        && popup.hwnd != fg.hwnd
+        && (popup.class == "#32768"
+            || (popup.popup && kind(popup) != Kind::Shell && popup.class != "TaskListThumbnailWnd"))
 }
 
 /// The area a step keeps in the active window mode (D2).

@@ -16,7 +16,7 @@ pub fn snapshot(_click: Option<(i32, i32)>) -> Option<Snapshot> {
 
 #[cfg(windows)]
 mod windows_impl {
-    use super::super::window_area::{Rect, Snapshot, WindowInfo};
+    use super::super::window_area::{see_through, Rect, Snapshot, WindowInfo};
     use std::ffi::c_void;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{
@@ -54,20 +54,37 @@ mod windows_impl {
     /// The walk breaks off when the window it continues from closes, so it is
     /// retried, and `EnumWindows` is the last resort; `true` marks that list
     /// as partial.
+    ///
+    /// A finished walk is not atomic either: a window that moves in the
+    /// z-order mid-walk can be skipped. So one `EnumWindows` follows it, and a
+    /// window it holds that the snapshot would keep but the walk lacks marks
+    /// the list partial. It cannot catch a skipped immersive shell window,
+    /// which `EnumWindows` leaves out too.
     unsafe fn top_level_windows() -> (Vec<HWND>, bool) {
         for _ in 0..3 {
             if let Some(list) = walk() {
-                return (list, false);
+                let missed = enum_windows()
+                    .into_iter()
+                    .filter(|h| !list.contains(h) && info(*h).is_some())
+                    .count();
+                if missed > 0 {
+                    log::warn!("Window walk missed {missed} window(s); list marked partial");
+                }
+                return (list, missed > 0);
             }
         }
         log::warn!("Window walk broke off three times; using EnumWindows");
+        (enum_windows(), true)
+    }
+
+    unsafe fn enum_windows() -> Vec<HWND> {
         let mut list: Vec<HWND> = Vec::new();
         // An empty list is flagged by the password check; the error is only
         // for the log.
         if let Err(e) = EnumWindows(Some(collect), LPARAM(&mut list as *mut _ as isize)) {
             log::warn!("EnumWindows failed: {e}");
         }
-        (list, true)
+        list
     }
 
     /// One `FindWindowExW` walk; `None` when it broke off before the end.
@@ -148,7 +165,7 @@ mod windows_impl {
             popup: style & WS_POPUP.0 != 0,
             root_owner: GetAncestor(hwnd, GA_ROOTOWNER).0 as isize,
             cloaked: cloaked != 0,
-            layered: ex_style & WS_EX_LAYERED.0 != 0,
+            layered: see_through(ex_style),
             transparent: unsure || click_through,
             click_through,
             excluded: affinity != WDA_NONE.0,

@@ -31,8 +31,8 @@ Bedienelementen, andere Maustasten und das Scrollen.
   Screenshot auf die Festplatte geschrieben wird. Es entsteht also keine ungeschwärzte Kopie
   eines gefundenen Feldes.
 - **Fenster anderer Programme**, die über dem aufgenommenen Fenster liegen, in der Einstellung
-  „Aktives Fenster“: Benachrichtigungen, Info-Center, Schnelleinstellungen und Fenster, die
-  immer im Vordergrund sind. Sie werden dort geschwärzt, wo sie das Fenster überdecken.
+  „Aktives Fenster“: Benachrichtigungen, Info-Center, Schnelleinstellungen, Fenster, die
+  immer im Vordergrund sind, Kontextmenüs anderer Programme und Vorschaubilder der Taskleiste. Sie werden dort geschwärzt, wo sie das Fenster überdecken.
   Einblendungen, durch die man hindurchklicken kann (etwa eine Diktierleiste), bleiben sichtbar.
 - **Lücken:** Liegt ein Dialog weit entfernt von seinem Hauptfenster, wird die Fläche zwischen
   beiden geschwärzt.
@@ -46,7 +46,7 @@ Bedienelementen, andere Maustasten und das Scrollen.
     zum Beispiel eine Prüfung, die zu lange dauert.
   - Ebenso markiert werden Schritte, bei denen statt des aktiven Fensters der ganze Bildschirm
     aufgenommen wurde, Schritte, bei denen die Liste der offenen Fenster unvollständig war
-    (dann ist eine Benachrichtigung über dem Fenster vielleicht nicht geschwärzt; mit und ohne
+    (dann ist eine Benachrichtigung oder ein anderes Fenster darüber vielleicht nicht geschwärzt; mit und ohne
     Schwärzen von Passwortfeldern), und Schritte ohne Aufzeichnung, wie sie aufgenommen wurden
     (Aufnahmen älterer Versionen).
   - „Erstellen“ geht erst, wenn „Ich habe die markierten Schritte geprüft“ angehakt ist.

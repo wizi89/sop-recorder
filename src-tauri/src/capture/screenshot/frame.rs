@@ -63,7 +63,7 @@ pub fn frame_step(
                 let foreign = window_area::foreign_rects(&snapshots, &windows);
                 log::info!(
                     "Step {step_number}: capture active_window, area {crop:?} from {} window rectangle(s), \
-                     {} foreign window area(s) masked",
+                     {} foreign window area(s) to mask",
                     keep.len(),
                     foreign.len()
                 );
