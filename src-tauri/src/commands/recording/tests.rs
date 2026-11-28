@@ -319,7 +319,12 @@ fn live_password_check() {
             .unwrap_or_default();
         println!("visible {hwnd:#x} {class} {} part(s)", parts.len());
     }
-    let outcome = checker.check(&windows, held.pixels_at, geometry.foreground_changed);
+    let outcome = checker.check(
+        &windows,
+        held.pixels_at,
+        held.pixels_at,
+        geometry.foreground_changed,
+    );
     println!(
         "flags {:#?}
 masks {:?}",

@@ -15,9 +15,9 @@ A Tauri v2 app: Rust does capture, audio, input hooks, sign-in and networking; a
 | `capture/screenshot.rs` | Captures a step in two phases: reads the clicked monitor and crops it to the capture area, then masks, draws a ring marker, scales to at most 1920x1080 and writes the PNG |
 | `capture/window_area.rs` | Pure geometry: the active window area (foreground window, its owner, popups under the click), which windows are visible in it |
 | `capture/geometry.rs` | Windows only: the window snapshot (`FindWindowExW` walk, DWM bounds) taken before and after each pixel read |
-| `capture/password_check.rs` | The password check: cached and fresh field queries per window within one budget, a warm-up of every checked window after each step, and every case that flags a step |
+| `capture/password_check.rs` | The password check: cached and fresh field queries per window within one budget (the cache as it was at the step's click or Return), a warm-up of every checked window right after each step and again 1.5 s after it, and every case that flags a step |
 | `capture/unrecorded.rs` | Unrecorded windows: on Windows, a foreground and desktop-switch watch notes when an app with more rights than the recorder (or the security prompt) is in front; the visits go to `unrecorded.json` for the review screen's limbos and are never uploaded |
-| `capture/uia.rs` | Windows only: UI Automation query for `IsPassword` fields, the focus/show/restore events that warm the check up, and a once-a-second warm-up of the foreground window |
+| `capture/uia.rs` | Windows only: UI Automation query for `IsPassword` fields, and the focus, foreground, show, restore and move/resize-end events that warm the check up |
 | `capture/audio.rs` | Microphone to 16 kHz mono WAV via `cpal`, level meter, "no sound" warning |
 | `capture/permits.rs` | Buffer slots (2 to 6 by monitor size, about 100 MB in total) and capture permits that serialise pixel reads |
 | `recording_bar.rs` | The recording bar's window: built at startup, shown in the work area's corner with its click region reported to the input hook, hidden from captures, follows clicks to another monitor on Windows |

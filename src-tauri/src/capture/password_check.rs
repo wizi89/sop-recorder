@@ -31,6 +31,9 @@ pub const WARM_UP_DEADLINE: Duration = Duration::from_secs(5);
 /// A window counts as checked after two completed queries this far apart
 /// (A2): Chromium's first query on a new window is complete but empty.
 pub const WARM_UP_GAP: Duration = Duration::from_millis(100);
+/// When the extra warm-up after a step runs, counted from its input (#66): a
+/// slow page has loaded by then, and the next step is checked against it.
+pub const LATE_WARM_UP: Duration = Duration::from_millis(1500);
 
 /// What one query of one window found.
 #[derive(Debug, Clone, PartialEq)]
@@ -103,10 +106,15 @@ impl Entry {
         }
     }
 
-    /// Every field that may be on pixels read at `t`: the last query before
-    /// `t`, every query after it (a field that showed up later is masked too;
-    /// masking too much is safe), and each focused field until two queries
-    /// after its focus, both before `t`, have found it gone.
+    /// Every field that may be on pixels taken after the input at `t`: the
+    /// last query before `t`, every query after it (a field that showed up
+    /// later is masked too; masking too much is safe), and each focused field
+    /// until two queries after its focus, both before `t`, have found it gone.
+    ///
+    /// Keyed on the input, not the pixel read (#66, ADR 0002): a page may
+    /// drop the field from its tree the moment Enter lands while the old
+    /// pixels are still on screen, so nothing completed after the input
+    /// removes a field.
     fn fields_at(&self, t: Instant) -> Vec<Rect> {
         let mut fields: Vec<Rect> = Vec::new();
         let mut add = |f: &Rect| {
@@ -252,16 +260,19 @@ impl Checker {
     }
 
     /// Check one step: `windows` are those visible in its saved area with
-    /// their visible parts (D4), `pixels_at` is when its pixels were read.
+    /// their visible parts (D4), `input_at` is when its click or key press
+    /// arrived, `pixels_at` is when its pixels were read.
     ///
     /// Masks the union of cached and fresh fields (D5) and flags every case
     /// where a field may have been missed.
     pub fn check(
         self: &Arc<Self>,
         windows: &[(isize, Vec<Rect>)],
+        input_at: Instant,
         pixels_at: Instant,
         foreground_changed: bool,
     ) -> CheckOutcome {
+        let input_at = input_at.min(pixels_at);
         let mut flags = Vec::new();
         // Every real area holds at least one window (the desktop covers each
         // monitor), so an empty list means the window list could not be read,
@@ -274,8 +285,8 @@ impl Checker {
         }
 
         // Taken before the fresh queries write to the cache. What it knew at
-        // `pixels_at` comes from `fields_at`, not from the newest result:
-        // queries keep completing between the read and this check.
+        // the input comes from `fields_at`, not from the newest result:
+        // queries keep completing between the input and this check.
         let cached: HashMap<isize, Entry> = {
             let cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
             windows
@@ -347,7 +358,7 @@ impl Checker {
 
         let mut masks = Vec::new();
         for (hwnd, visible) in windows {
-            let mut fields = cached[hwnd].fields_at(pixels_at);
+            let mut fields = cached[hwnd].fields_at(input_at);
             if let Some(found) = fresh.get(hwnd) {
                 let same = found.len() == fields.len() && found.iter().all(|f| fields.contains(f));
                 if !same {
@@ -369,9 +380,18 @@ impl Checker {
         // switches a tab or opens a menu, and the next step's cache must
         // describe that page, not the one this step saw. The step's own
         // masks above are already settled from what was known at its read.
-        for (hwnd, _) in windows {
+        // A slow page is read once more when it has loaded.
+        let hwnds: Vec<isize> = windows.iter().map(|(h, _)| *h).collect();
+        for hwnd in &hwnds {
             self.warm_up(*hwnd);
         }
+        let checker = self.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(LATE_WARM_UP.saturating_sub(input_at.elapsed()));
+            for hwnd in hwnds {
+                checker.warm_up(hwnd);
+            }
+        });
         CheckOutcome { masks, flags }
     }
 

@@ -2,7 +2,6 @@
 //! D5, amendment A1): the query, and the warm-up triggers of a recording.
 
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
-use std::time::Duration;
 
 use windows::core::{implement, Interface, Result, VARIANT};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, LPARAM, RECT, WPARAM};
@@ -195,10 +194,6 @@ impl UiaQuery {
 /// Smallest width and height, in pixels, of a window an event warms up.
 const MIN_WARM_UP_SIZE: i32 = 40;
 
-/// How often the foreground window is warmed up without an event (#66): a
-/// page loaded in the same tab fires no foreground or show event.
-const FOREGROUND_REFRESH: Duration = Duration::from_secs(1);
-
 /// The checker the window-event callback warms up. A callback is a plain
 /// function, so it reaches the recording's checker through this.
 static TARGET: Mutex<Option<Arc<Checker>>> = Mutex::new(None);
@@ -265,12 +260,11 @@ impl IUIAutomationFocusChangedEventHandler_Impl for FocusWatch_Impl {
 }
 
 /// The warm-up triggers of one recording (D5): every visible window at the
-/// start, foreground and show events, the foreground window once a second,
-/// and focus on a password field. Dropping it stops them.
+/// start, foreground, show, restore and move/resize-end events, and focus on
+/// a password field. Dropping it stops them.
 pub struct Watch {
     hook_thread: u32,
     focus_stop: Option<mpsc::Sender<()>>,
-    refresh_stop: Option<mpsc::Sender<()>>,
 }
 
 impl Watch {
@@ -320,6 +314,17 @@ impl Watch {
                 0,
                 WINEVENT_OUTOFCONTEXT,
             );
+            // A window moved or resized shows other parts of its page, and
+            // its fields move with it (#66).
+            let moved = SetWinEventHook(
+                EVENT_SYSTEM_MOVESIZEEND,
+                EVENT_SYSTEM_MOVESIZEEND,
+                None,
+                Some(on_window_event),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            );
             let mut msg = MSG::default();
             // Creates the queue before the thread id is handed out, so the
             // WM_QUIT `drop` posts cannot arrive before there is a queue.
@@ -331,22 +336,9 @@ impl Watch {
             let _ = UnhookWinEvent(foreground);
             let _ = UnhookWinEvent(show);
             let _ = UnhookWinEvent(restored);
+            let _ = UnhookWinEvent(moved);
         });
         let hook_thread = ready_rx.recv().unwrap_or(0);
-
-        // Dropping the sender ends the loop.
-        let (refresh_tx, refresh_rx) = mpsc::channel::<()>();
-        let refreshed = checker.clone();
-        std::thread::spawn(move || {
-            while let Err(mpsc::RecvTimeoutError::Timeout) =
-                refresh_rx.recv_timeout(FOREGROUND_REFRESH)
-            {
-                let window = unsafe { GetAncestor(GetForegroundWindow(), GA_ROOT) };
-                if !window.0.is_null() {
-                    refreshed.warm_up(window.0 as isize);
-                }
-            }
-        });
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         std::thread::spawn(move || {
@@ -372,7 +364,6 @@ impl Watch {
         Watch {
             hook_thread,
             focus_stop: Some(stop_tx),
-            refresh_stop: Some(refresh_tx),
         }
     }
 }
@@ -383,7 +374,6 @@ impl Drop for Watch {
             let _ = PostThreadMessageW(self.hook_thread, WM_QUIT, WPARAM(0), LPARAM(0));
         }
         self.focus_stop.take();
-        self.refresh_stop.take();
         *TARGET.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
