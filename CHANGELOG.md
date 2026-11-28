@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- On Windows, fewer steps are marked "Prüfen" after a click that opens a new page, switches a browser tab, opens a menu or moves a window, and the step after a login no longer shows a black bar where the password field used to be. The password field on the step where you submit the login stays blacked out, also when the page reacts before the screenshot is taken.
 - After generating, the guide's PDF is saved next to the guide again. With the current server, no `guide.pdf` was saved.
 - In a folder opened with "Aus Ordner generieren", a file such as `step_+3.png` is no longer taken for a step, and deleting a step also removes a second screenshot of the same number (`step_1.png` next to `step_01.png`), so it is not uploaded, and its step data with it, so no leftover blocks the upload.
 - On Windows with more than one monitor, the recording bar now moves to the monitor you click on, so it stays in sight while you work on another monitor.
