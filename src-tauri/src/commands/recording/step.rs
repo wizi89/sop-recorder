@@ -75,13 +75,13 @@ pub(super) fn check_step(
     checker: Option<&Arc<Checker>>,
     held: &screenshot::HeldStep,
     step_num: u32,
-    input_at: Instant,
+    trigger_at: Instant,
 ) -> (Vec<Rect>, step_meta::PasswordCheck, bool) {
     let partial = window_list_partial(held.geometry.as_ref());
     if partial {
         log::warn!("Step {step_num}: the window list left out shell windows such as notifications");
     }
-    let (masks, check) = password_check_step(checker, held, step_num, input_at);
+    let (masks, check) = password_check_step(checker, held, step_num, trigger_at);
     (masks, check, partial)
 }
 
@@ -95,7 +95,7 @@ fn password_check_step(
     checker: Option<&Arc<Checker>>,
     held: &screenshot::HeldStep,
     step_num: u32,
-    input_at: Instant,
+    trigger_at: Instant,
 ) -> (Vec<Rect>, step_meta::PasswordCheck) {
     let Some(checker) = checker else {
         return (Vec::new(), step_meta::PasswordCheck::Off);
@@ -111,7 +111,7 @@ fn password_check_step(
     let foreground_changed = geometry.foreground_changed
         && held.scope == step_meta::CaptureScope::Window
         && !window_area::shell_only(&geometry.snapshots[0], &held.shown());
-    let outcome = checker.check(&windows, input_at, held.pixels_at, foreground_changed);
+    let outcome = checker.check(&windows, trigger_at, held.pixels_at, foreground_changed);
     if outcome.flags.is_empty() {
         log::info!(
             "Step {step_num}: password check ok, {} window(s), {} field area(s) masked, {} ms",

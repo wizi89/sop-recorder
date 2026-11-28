@@ -1,10 +1,12 @@
 //! #66: what a step's check leaves behind for the next step, and what a
-//! query completing after the step's input may not change.
+//! query completing after the step's trigger may not change.
 
 use super::*;
 
-/// Waits until `hwnd` has `n` completions after `since`, at most 5 s, and
-/// returns how many it has: the warm-ups run on threads of their own.
+/// Waits until `hwnd` has `n` completions within `LATE_WARM_UP` after
+/// `since`, at most 5 s, and returns how many it has: the warm-ups run on
+/// threads of their own. The bound keeps the late warm-up of a step from
+/// standing in for the warm-up right after it.
 fn completions_after(c: &Checker, hwnd: isize, since: Instant, n: usize) -> usize {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
@@ -14,7 +16,10 @@ fn completions_after(c: &Checker, hwnd: isize, since: Instant, n: usize) -> usiz
             .unwrap_or_else(|e| e.into_inner())
             .get(&hwnd)
             .map_or(0, |e| {
-                e.completions.iter().filter(|(at, _)| *at > since).count()
+                e.completions
+                    .iter()
+                    .filter(|(at, _)| *at > since && *at < since + LATE_WARM_UP)
+                    .count()
             });
         if count >= n || Instant::now() > deadline {
             return count;
@@ -68,16 +73,16 @@ fn a_check_leaves_its_own_and_two_warm_up_completions_for_each_window() {
 }
 
 /// A slow page load fires no event: each checked window is read once more,
-/// `LATE_WARM_UP` after the step's input.
+/// `LATE_WARM_UP` after the step's trigger.
 #[test]
-fn a_late_warm_up_reads_each_window_again_after_the_input() {
+fn a_late_warm_up_reads_each_window_again_after_the_trigger() {
     let c = checker(|_| QueryResult::Fields(vec![]));
     let windows: Vec<_> = (1..=2).map(|h| (h, vec![WHOLE])).collect();
-    let input_at = Instant::now();
-    c.check(&windows, input_at, input_at, false);
+    let trigger_at = Instant::now();
+    c.check(&windows, trigger_at, trigger_at, false);
     for (h, _) in &windows {
         assert_eq!(
-            completions_after(&c, *h, input_at + LATE_WARM_UP, 2),
+            completions_after(&c, *h, trigger_at + LATE_WARM_UP, 2),
             2,
             "window {h}"
         );
@@ -85,19 +90,19 @@ fn a_late_warm_up_reads_each_window_again_after_the_input() {
 }
 
 /// Enter in the password field: the page drops the field from its tree at
-/// once, and a query completes empty between the input and the pixel read
+/// once, and a query completes empty between the trigger and the pixel read
 /// while the old pixels are still on screen. The screenshot keeps the
 /// cached field masked, and the change is flagged.
 #[test]
-fn an_empty_query_between_the_input_and_the_read_does_not_unmask_the_field() {
+fn an_empty_query_between_the_trigger_and_the_read_does_not_unmask_the_field() {
     let c = checker(|_| QueryResult::Fields(vec![]));
     warmed(&c, W, vec![FIELD]);
     let now = Instant::now();
-    let input_at = now - Duration::from_millis(50);
+    let trigger_at = now - Duration::from_millis(50);
     completed(&c, W, now - Duration::from_millis(30), vec![]);
     let out = c.check(
         &one_window(),
-        input_at,
+        trigger_at,
         now - Duration::from_millis(10),
         false,
     );
@@ -109,4 +114,20 @@ fn an_empty_query_between_the_input_and_the_read_does_not_unmask_the_field() {
         "{:?}",
         out.flags
     );
+}
+
+/// Steps in quick succession fill the cache with the warm-ups of the page
+/// after a submitted login. They must not push out the completion from
+/// before the trigger that still holds the field the pixels show.
+#[test]
+fn warm_ups_after_the_trigger_do_not_push_the_field_out_of_the_cache() {
+    let c = checker(|_| QueryResult::Fields(vec![]));
+    warmed(&c, W, vec![FIELD]);
+    let trigger_at = Instant::now();
+    // Two steps' worth: each leaves its own query and two warm-ups of two.
+    for _ in 0..10 {
+        c.run_query(W, BUDGET);
+    }
+    let out = c.check(&one_window(), trigger_at, Instant::now(), false);
+    assert_eq!(out.masks, vec![FIELD]);
 }
