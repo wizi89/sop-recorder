@@ -149,7 +149,7 @@ describe("review screen limbo rows", () => {
     ];
     const onConfirm = renderReview();
     const row = await screen.findByText(
-      "Nicht aufgenommen: Windows-Sicherheitsabfrage, Setup Tool X",
+      "Nicht aufgenommen: Windows-Sicherheitsabfrage, Setup Tool X (und der Klick danach)",
     );
     const items = [
       ...document.querySelectorAll("[data-strip-item]"),
@@ -173,7 +173,9 @@ describe("review screen limbo rows", () => {
   it("shows a limbo before the first step", async () => {
     visits = [visit(app("Setup Tool X"), 2, 8)];
     renderReview();
-    await screen.findByText("Nicht aufgenommen: Setup Tool X");
+    await screen.findByText(
+      "Nicht aufgenommen: Setup Tool X (und der Klick danach)",
+    );
     const items = [
       ...document.querySelectorAll("[data-strip-item]"),
     ] as HTMLElement[];

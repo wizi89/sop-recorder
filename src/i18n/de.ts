@@ -101,7 +101,7 @@ const de = {
   "review.reset_failed":
     "Schwärzungen konnten nicht zurückgesetzt werden: {error}",
   "review.upload_refused": "Nicht hochgeladen: {error}",
-  "review.limbo": "Nicht aufgenommen: {apps}",
+  "review.limbo": "Nicht aufgenommen: {apps} (und der Klick danach)",
   "review.limbo_security_prompt": "Windows-Sicherheitsabfrage",
   "review.limbo_unknown_app": "unbekanntes Programm",
   "review.no_steps_unrecorded":
