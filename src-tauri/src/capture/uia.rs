@@ -191,6 +191,9 @@ impl UiaQuery {
     }
 }
 
+/// Smallest width and height, in pixels, of a window an event warms up.
+const MIN_WARM_UP_SIZE: i32 = 40;
+
 /// The checker the window-event callback warms up. A callback is a plain
 /// function, so it reaches the recording's checker through this.
 static TARGET: Mutex<Option<Arc<Checker>>> = Mutex::new(None);
@@ -211,10 +214,14 @@ unsafe extern "system" fn on_window_event(
     {
         return;
     }
-    // Tooltips and other small popups fire show events constantly and hold
-    // no password field.
+    // Tooltips and other tiny popups fire show events constantly and hold no
+    // password field. Tab hover cards and short menus pass (#66): a step on
+    // one is checked, so it must be warmed up too.
     let mut r = RECT::default();
-    if GetWindowRect(hwnd, &mut r).is_err() || r.right - r.left < 100 || r.bottom - r.top < 100 {
+    if GetWindowRect(hwnd, &mut r).is_err()
+        || r.right - r.left < MIN_WARM_UP_SIZE
+        || r.bottom - r.top < MIN_WARM_UP_SIZE
+    {
         return;
     }
     let target = TARGET.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -253,8 +260,8 @@ impl IUIAutomationFocusChangedEventHandler_Impl for FocusWatch_Impl {
 }
 
 /// The warm-up triggers of one recording (D5): every visible window at the
-/// start, foreground and show events, and focus on a password field. Dropping
-/// it stops them.
+/// start, foreground, show, restore and move/resize-end events, and focus on
+/// a password field. Dropping it stops them.
 pub struct Watch {
     hook_thread: u32,
     focus_stop: Option<mpsc::Sender<()>>,
@@ -307,6 +314,17 @@ impl Watch {
                 0,
                 WINEVENT_OUTOFCONTEXT,
             );
+            // A window moved or resized shows other parts of its page, and
+            // its fields move with it (#66).
+            let moved = SetWinEventHook(
+                EVENT_SYSTEM_MOVESIZEEND,
+                EVENT_SYSTEM_MOVESIZEEND,
+                None,
+                Some(on_window_event),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT,
+            );
             let mut msg = MSG::default();
             // Creates the queue before the thread id is handed out, so the
             // WM_QUIT `drop` posts cannot arrive before there is a queue.
@@ -318,6 +336,7 @@ impl Watch {
             let _ = UnhookWinEvent(foreground);
             let _ = UnhookWinEvent(show);
             let _ = UnhookWinEvent(restored);
+            let _ = UnhookWinEvent(moved);
         });
         let hook_thread = ready_rx.recv().unwrap_or(0);
 

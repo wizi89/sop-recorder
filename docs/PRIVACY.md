@@ -64,6 +64,8 @@ Bedienelementen, andere Maustasten und das Scrollen.
   gemacht wurde, ist kein Passwortfeld mehr und wird nicht geschwärzt.
 - **„Ganzer Bildschirm“:** Fenster anderer Programme werden nicht geschwärzt, nur Passwortfelder.
 - **macOS:** Dort wird nichts automatisch geschwärzt.
+- **Gelöschte Schritte:** Was ein gelöschter Schritt geöffnet hat, wird im Screenshot des
+  nächsten Schritts nicht geschwärzt.
 
 **Nicht aufgenommen:** Klicks und die Eingabetaste in Programmen, die mit Administratorrechten
 laufen, werden nicht aufgenommen, auch nicht in Installationsprogrammen und in der
@@ -87,6 +89,8 @@ mit dem Ton gesendet.
 - **„Schritt löschen“:** Entfernt den Screenshot und seine Angaben. Der Ton wird nicht
   geschnitten. Was Sie während dieses Schritts gesagt haben, wird mitgesendet und kann im Text
   eines benachbarten Schritts erscheinen.
+  Was dieser Schritt geöffnet hat (ein Menü, ein Dialog, eine Seite), kann im Screenshot des
+  nächsten Schritts noch zu sehen sein. Schwärzen Sie es dort.
 
 ## Was den Rechner verlässt
 
@@ -102,6 +106,13 @@ Beim Erstellen (und nur dann) werden an den CogniClone-Server gesendet:
 
 Während der Aufnahme wird nichts gesendet. Was sonst gesendet wird, etwa ein Fehlerbericht nur
 nach Ihrer Zustimmung, steht in [ARCHITECTURE.md](./ARCHITECTURE.md#what-leaves-the-machine).
+
+## Was auf dem Server bleibt
+
+- **Screenshots, Transkripte und Anleitungen** bleiben dort gespeichert,
+  bis Sie die Anleitung löschen.
+- **Inhalte der KI-Aufrufe** (was an die KI-Dienste geht und von dort zurückkommt) werden nicht
+  gespeichert, außer Ihr Unternehmen hat das eingeschaltet.
 
 ## Was auf Ihrem Rechner bleibt
 

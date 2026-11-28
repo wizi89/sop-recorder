@@ -31,6 +31,9 @@ pub const WARM_UP_DEADLINE: Duration = Duration::from_secs(5);
 /// A window counts as checked after two completed queries this far apart
 /// (A2): Chromium's first query on a new window is complete but empty.
 pub const WARM_UP_GAP: Duration = Duration::from_millis(100);
+/// When the extra warm-up after a step runs, counted from its trigger (#66): a
+/// slow page has loaded by then, and the next step is checked against it.
+pub const LATE_WARM_UP: Duration = Duration::from_millis(1500);
 
 /// What one query of one window found.
 #[derive(Debug, Clone, PartialEq)]
@@ -60,17 +63,18 @@ impl<F: Fn(isize) -> QueryResult + Send + Sync> FieldQuery for F {
     }
 }
 
-/// Completed queries kept per window. Each warm-up adds two, so this leaves
-/// room for a few to land between a step's pixel read and its check without
-/// pushing out the completions from before the read.
-const KEPT_COMPLETIONS: usize = 8;
+/// Completed queries kept per window. A step adds up to five (its own query,
+/// the warm-up after it and the late one), so this leaves room for two steps'
+/// worth and some event warm-ups to land between a step's trigger and its
+/// check without pushing out the completion from before the trigger (#66).
+const KEPT_COMPLETIONS: usize = 16;
 
 /// What the recorder knows about one window's password fields (D5).
 ///
 /// Every result is kept with its time, never overwritten: a step's check needs
-/// what was known when its pixels were read, and a query that finishes after
-/// the read (a submitted login, the field gone) must not erase the field the
-/// pixels still show.
+/// what was known at its trigger, and a query that finishes after the trigger
+/// (a submitted login, the field gone) must not erase the field the pixels
+/// still show.
 #[derive(Debug, Clone, Default)]
 struct Entry {
     /// The latest completed queries and what each found, oldest first.
@@ -103,10 +107,13 @@ impl Entry {
         }
     }
 
-    /// Every field that may be on pixels read at `t`: the last query before
-    /// `t`, every query after it (a field that showed up later is masked too;
-    /// masking too much is safe), and each focused field until two queries
-    /// after its focus, both before `t`, have found it gone.
+    /// Every field that may be on pixels taken after the trigger at `t`: the
+    /// last query before `t`, every query after it (a field that showed up
+    /// later is masked too; masking too much is safe), and each focused field
+    /// until two queries after its focus, both before `t`, have found it gone.
+    ///
+    /// Keyed on the trigger, not the pixel read (#66, ADR 0002): nothing
+    /// completed after the trigger removes a field.
     fn fields_at(&self, t: Instant) -> Vec<Rect> {
         let mut fields: Vec<Rect> = Vec::new();
         let mut add = |f: &Rect| {
@@ -252,16 +259,19 @@ impl Checker {
     }
 
     /// Check one step: `windows` are those visible in its saved area with
-    /// their visible parts (D4), `pixels_at` is when its pixels were read.
+    /// their visible parts (D4), `trigger_at` is when its click or Return key
+    /// arrived, `pixels_at` is when its pixels were read.
     ///
     /// Masks the union of cached and fresh fields (D5) and flags every case
     /// where a field may have been missed.
     pub fn check(
         self: &Arc<Self>,
         windows: &[(isize, Vec<Rect>)],
+        trigger_at: Instant,
         pixels_at: Instant,
         foreground_changed: bool,
     ) -> CheckOutcome {
+        let trigger_at = trigger_at.min(pixels_at);
         let mut flags = Vec::new();
         // Every real area holds at least one window (the desktop covers each
         // monitor), so an empty list means the window list could not be read,
@@ -274,8 +284,8 @@ impl Checker {
         }
 
         // Taken before the fresh queries write to the cache. What it knew at
-        // `pixels_at` comes from `fields_at`, not from the newest result:
-        // queries keep completing between the read and this check.
+        // the trigger comes from `fields_at`, not from the newest result:
+        // queries keep completing between the trigger and this check.
         let cached: HashMap<isize, Entry> = {
             let cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
             windows
@@ -347,7 +357,7 @@ impl Checker {
 
         let mut masks = Vec::new();
         for (hwnd, visible) in windows {
-            let mut fields = cached[hwnd].fields_at(pixels_at);
+            let mut fields = cached[hwnd].fields_at(trigger_at);
             if let Some(found) = fresh.get(hwnd) {
                 let same = found.len() == fields.len() && found.iter().all(|f| fields.contains(f));
                 if !same {
@@ -365,6 +375,22 @@ impl Checker {
             }
             masks.extend(visible_fields(&fields, visible));
         }
+        // Read every window again after the step (#66): a click navigates,
+        // switches a tab or opens a menu, and the next step's cache must
+        // describe that page, not the one this step saw. The step's own
+        // masks above are already settled.
+        // A slow page is read once more when it has loaded.
+        let hwnds: Vec<isize> = windows.iter().map(|(h, _)| *h).collect();
+        for hwnd in &hwnds {
+            self.warm_up(*hwnd);
+        }
+        let checker = self.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(LATE_WARM_UP.saturating_sub(trigger_at.elapsed()));
+            for hwnd in hwnds {
+                checker.warm_up(hwnd);
+            }
+        });
         CheckOutcome { masks, flags }
     }
 

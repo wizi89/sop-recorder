@@ -86,7 +86,7 @@ const de = {
   "review.close": "Fertig",
   "review.delete_step": "Schritt löschen",
   "review.delete_confirm":
-    "Schritt {n} löschen? Screenshot und Schritt-Daten werden entfernt. Die Sprachaufnahme bleibt erhalten und kann im Text eines benachbarten Schritts erscheinen.",
+    "Schritt {n} löschen? Screenshot und Schritt-Daten werden entfernt. Die Sprachaufnahme bleibt erhalten und kann im Text eines benachbarten Schritts erscheinen. Was dieser Schritt geöffnet hat, kann im Screenshot des nächsten Schritts noch zu sehen sein; schwärzen Sie es dort.",
   "review.delete_confirm_yes": "Löschen",
   "review.delete_confirm_no": "Abbrechen",
   "review.delete_failed": "Schritt {n} konnte nicht gelöscht werden: {error}",
@@ -101,7 +101,7 @@ const de = {
   "review.reset_failed":
     "Schwärzungen konnten nicht zurückgesetzt werden: {error}",
   "review.upload_refused": "Nicht hochgeladen: {error}",
-  "review.limbo": "Nicht aufgenommen: {apps}",
+  "review.limbo": "Nicht aufgenommen: {apps} (und der Klick danach)",
   "review.limbo_security_prompt": "Windows-Sicherheitsabfrage",
   "review.limbo_unknown_app": "unbekanntes Programm",
   "review.no_steps_unrecorded":
@@ -163,6 +163,8 @@ const de = {
   "settings.mask_passwords_off": "Passwortfelder werden mit aufgenommen.",
   "settings.privacy_summary":
     "Beim Erstellen gehen die Screenshots, so wie sie auf dem Prüfbildschirm zu sehen sind, und der ganze Ton an den Server. Was sonst sichtbar ist, schwärzen Sie dort selbst; die Dateien auf Ihrem PC bleiben unverändert.",
+  "settings.privacy_retention":
+    "Screenshots, Transkripte und Anleitungen bleiben auf dem Server gespeichert, bis Sie die Anleitung löschen. Inhalte der KI-Aufrufe werden nicht gespeichert, außer Ihr Unternehmen hat das eingeschaltet.",
   "settings.privacy_link": "Mehr zum Datenschutz bei der Aufnahme",
   "settings.capture_mac_note":
     "Auf macOS wird immer der ganze Bildschirm aufgenommen. Fensteraufnahme und das Schwärzen von Passwortfeldern folgen später.",

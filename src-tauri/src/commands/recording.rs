@@ -257,6 +257,9 @@ pub async fn start_recording(
         // the screenshot capture is spawned. This is the time we want
         // attached to the step, not the (variable) write-completion time.
         let timestamp_seconds = recording_start.elapsed().as_secs_f64();
+        // The password check keys its cache on this, not on the pixel read
+        // (#66): the page may react to the trigger before the pixels change.
+        let trigger_at = Instant::now();
         let step_num = counter_clone.fetch_add(1, Ordering::SeqCst) + 1;
 
         // Spawn capture work so the rdev thread isn't blocked
@@ -304,7 +307,7 @@ pub async fn start_recording(
                     // Masks are filled before the PNG is encoded: the only
                     // screenshot file ever written is the masked one.
                     let (masks, password_check, window_list_partial) =
-                        check_step(checker.as_ref(), &held, step_num);
+                        check_step(checker.as_ref(), &held, step_num, trigger_at);
                     screenshot::finish_and_save(held, &dir, step_num, click_pos, &masks).map(
                         |marker_box| SavedStep {
                             marker_box,

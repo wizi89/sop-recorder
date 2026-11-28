@@ -1,6 +1,8 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 
+mod after_step;
+
 const W: isize = 0x10;
 const FIELD: Rect = Rect::new(300, 300, 500, 330);
 const WHOLE: Rect = Rect::new(0, 0, 1920, 1080);
@@ -31,7 +33,7 @@ fn one_window() -> Vec<(isize, Vec<Rect>)> {
 fn a_checked_window_with_a_field_is_masked_and_not_flagged() {
     let c = checker(|_| QueryResult::Fields(vec![FIELD]));
     warmed(&c, W, vec![FIELD]);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(
         out,
         CheckOutcome {
@@ -46,7 +48,7 @@ fn a_checked_window_with_a_field_is_masked_and_not_flagged() {
 #[test]
 fn an_empty_window_list_is_flagged() {
     let c = checker(|_| QueryResult::Fields(vec![]));
-    let out = c.check(&[], Instant::now(), false);
+    let out = c.check(&[], Instant::now(), Instant::now(), false);
     assert_eq!(out.flags.len(), 1, "{:?}", out.flags);
     assert!(out.flags[0].contains("no window was found"));
 }
@@ -54,7 +56,7 @@ fn an_empty_window_list_is_flagged() {
 #[test]
 fn a_window_never_checked_is_flagged() {
     let c = checker(|_| QueryResult::Fields(vec![]));
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(out.flags.len(), 1, "{:?}", out.flags);
     assert!(out.flags[0].contains("not been checked twice"));
 }
@@ -66,7 +68,10 @@ fn a_window_checked_once_or_twice_too_close_is_flagged() {
     let c = checker(|_| QueryResult::Fields(vec![]));
     let now = Instant::now();
     c.seed(W, vec![], vec![now - Duration::from_millis(300)]);
-    assert!(!c.check(&one_window(), now, false).flags.is_empty(), "once");
+    assert!(
+        !c.check(&one_window(), now, now, false).flags.is_empty(),
+        "once"
+    );
 
     c.seed(
         W,
@@ -77,7 +82,7 @@ fn a_window_checked_once_or_twice_too_close_is_flagged() {
         ],
     );
     assert!(
-        !c.check(&one_window(), now, false).flags.is_empty(),
+        !c.check(&one_window(), now, now, false).flags.is_empty(),
         "50 ms apart"
     );
 }
@@ -95,7 +100,10 @@ fn checks_after_the_pixels_do_not_count() {
             pixels_at + Duration::from_millis(200),
         ],
     );
-    assert!(!c.check(&one_window(), pixels_at, false).flags.is_empty());
+    assert!(!c
+        .check(&one_window(), pixels_at, pixels_at, false)
+        .flags
+        .is_empty());
 }
 
 /// Enter in the password field: the field is gone before any query after
@@ -105,7 +113,7 @@ fn checks_after_the_pixels_do_not_count() {
 fn a_field_that_vanished_after_submit_is_masked_from_the_cache_and_flagged() {
     let c = checker(|_| QueryResult::Fields(vec![]));
     warmed(&c, W, vec![FIELD]);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(out.masks, vec![FIELD]);
     assert!(out
         .flags
@@ -120,7 +128,7 @@ fn a_focused_field_is_masked_even_when_the_query_no_longer_finds_it() {
     let c = checker(|_| QueryResult::Fields(vec![]));
     warmed(&c, W, vec![]);
     c.note_focused_field(W, FIELD);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(out.masks, vec![FIELD]);
     assert!(!out.flags.is_empty());
 }
@@ -147,7 +155,7 @@ fn a_query_finishing_after_the_read_does_not_unmask_the_field() {
     warmed(&c, W, vec![FIELD]);
     let pixels_at = Instant::now();
     completed(&c, W, pixels_at + Duration::from_millis(5), vec![]);
-    let out = c.check(&one_window(), pixels_at, false);
+    let out = c.check(&one_window(), pixels_at, pixels_at, false);
     assert_eq!(out.masks, vec![FIELD]);
     assert!(
         out.flags
@@ -167,7 +175,7 @@ fn a_focused_field_survives_one_query_that_misses_it() {
     c.note_focused_field(W, FIELD);
     completed(&c, W, Instant::now() + Duration::from_millis(1), vec![]);
     std::thread::sleep(Duration::from_millis(5));
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(out.masks, vec![FIELD]);
 }
 
@@ -182,7 +190,7 @@ fn a_focused_field_is_dropped_after_two_checks_that_miss_it() {
     completed(&c, W, after_focus, vec![]);
     completed(&c, W, after_focus + WARM_UP_GAP, vec![]);
     let pixels_at = after_focus + WARM_UP_GAP + Duration::from_millis(1);
-    let out = c.check(&one_window(), pixels_at, false);
+    let out = c.check(&one_window(), pixels_at, pixels_at, false);
     assert!(out.masks.is_empty(), "{:?}", out.masks);
 }
 
@@ -190,7 +198,7 @@ fn a_focused_field_is_dropped_after_two_checks_that_miss_it() {
 fn a_new_field_found_by_the_fresh_query_is_masked_and_flagged() {
     let c = checker(|_| QueryResult::Fields(vec![FIELD]));
     warmed(&c, W, vec![]);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(out.masks, vec![FIELD]);
     assert!(out.flags.iter().any(|f| f.contains("changed")));
 }
@@ -199,7 +207,7 @@ fn a_new_field_found_by_the_fresh_query_is_masked_and_flagged() {
 fn an_empty_field_rectangle_is_flagged() {
     let c = checker(|_| QueryResult::Fields(vec![Rect::new(0, 0, 0, 0)]));
     warmed(&c, W, vec![]);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert!(
         out.flags.iter().any(|f| f.contains("still being built")),
         "{:?}",
@@ -213,7 +221,7 @@ fn an_empty_field_rectangle_is_flagged() {
 fn a_window_that_cannot_be_checked_is_flagged() {
     let c = checker(|_| QueryResult::NotCheckable("process runs as administrator"));
     warmed(&c, W, vec![]);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert!(out.flags.iter().any(|f| f.contains("administrator")));
 }
 
@@ -221,7 +229,7 @@ fn a_window_that_cannot_be_checked_is_flagged() {
 fn a_window_closed_after_the_read_keeps_its_cached_fields_unflagged() {
     let c = checker(|_| QueryResult::Gone);
     warmed(&c, W, vec![FIELD]);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(out.flags, Vec::<String>::new());
     assert_eq!(out.masks, vec![FIELD]);
 }
@@ -229,7 +237,7 @@ fn a_window_closed_after_the_read_keeps_its_cached_fields_unflagged() {
 #[test]
 fn a_window_closed_before_it_was_ever_checked_is_flagged() {
     let c = checker(|_| QueryResult::Gone);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert!(
         out.flags.iter().any(|f| f.contains("not been checked")),
         "{:?}",
@@ -241,7 +249,7 @@ fn a_window_closed_before_it_was_ever_checked_is_flagged() {
 fn a_failed_query_is_flagged_and_cached_fields_are_still_masked() {
     let c = checker(|_| QueryResult::Failed("0x80040201".into()));
     warmed(&c, W, vec![FIELD]);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(out.masks, vec![FIELD]);
     assert!(out.flags.iter().any(|f| f.contains("0x80040201")));
 }
@@ -250,7 +258,7 @@ fn a_failed_query_is_flagged_and_cached_fields_are_still_masked() {
 fn a_foreground_change_during_the_read_is_flagged() {
     let c = checker(|_| QueryResult::Fields(vec![]));
     warmed(&c, W, vec![]);
-    let out = c.check(&one_window(), Instant::now(), true);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), true);
     assert_eq!(out.flags.len(), 1);
 }
 
@@ -260,7 +268,7 @@ fn a_field_is_masked_only_in_its_windows_visible_part() {
     let c = checker(|_| QueryResult::Fields(vec![FIELD]));
     warmed(&c, W, vec![FIELD]);
     let visible = vec![(W, vec![Rect::new(0, 0, 400, 1080)])];
-    let out = c.check(&visible, Instant::now(), false);
+    let out = c.check(&visible, Instant::now(), Instant::now(), false);
     assert_eq!(out.masks, vec![Rect::new(300, 300, 400, 330)]);
 }
 
@@ -282,7 +290,12 @@ fn after_two_abandoned_queries_the_next_step_skips_the_check() {
 
     for step in 1..=2 {
         let started = Instant::now();
-        let out = c.check(&[(step, vec![WHOLE])], Instant::now(), false);
+        let out = c.check(
+            &[(step, vec![WHOLE])],
+            Instant::now(),
+            Instant::now(),
+            false,
+        );
         assert!(
             started.elapsed() < BUDGET * 3,
             "step {step} waited past its budget"
@@ -298,7 +311,7 @@ fn after_two_abandoned_queries_the_next_step_skips_the_check() {
     std::thread::sleep(BUDGET);
     assert_eq!(c.abandoned(), 2);
 
-    let out = c.check(&[(3, vec![WHOLE])], Instant::now(), false);
+    let out = c.check(&[(3, vec![WHOLE])], Instant::now(), Instant::now(), false);
     assert_eq!(
         calls.load(Ordering::SeqCst),
         2,
@@ -324,7 +337,7 @@ fn slow_warm_ups_do_not_make_a_step_skip_its_check() {
     c.warm_up(2);
     std::thread::sleep(BUDGET * 2);
     assert_eq!(c.abandoned(), 0);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(out.flags, Vec::<String>::new());
 }
 
@@ -346,7 +359,7 @@ fn a_window_with_a_stuck_query_is_not_queried_again() {
     warmed(&c, HUNG, vec![FIELD]);
     let windows = vec![(W, vec![WHOLE]), (HUNG, vec![WHOLE])];
 
-    let first = c.check(&windows, Instant::now(), false);
+    let first = c.check(&windows, Instant::now(), Instant::now(), false);
     assert!(
         first.flags.iter().any(|f| f.contains("budget")),
         "{:?}",
@@ -354,7 +367,7 @@ fn a_window_with_a_stuck_query_is_not_queried_again() {
     );
     std::thread::sleep(BUDGET);
 
-    let second = c.check(&windows, Instant::now(), false);
+    let second = c.check(&windows, Instant::now(), Instant::now(), false);
     assert_eq!(
         calls.load(Ordering::SeqCst),
         1,
@@ -391,7 +404,7 @@ fn windows_are_checked_side_by_side_within_one_budget() {
     for (h, _) in &windows {
         warmed(&c, *h, vec![]);
     }
-    let out = c.check(&windows, Instant::now(), false);
+    let out = c.check(&windows, Instant::now(), Instant::now(), false);
     assert_eq!(out.flags, Vec::<String>::new());
 }
 
@@ -405,8 +418,8 @@ fn warm_ups_respect_the_abandoned_cap() {
         std::thread::sleep(Duration::from_secs(2));
         QueryResult::Fields(vec![])
     });
-    c.check(&[(1, vec![WHOLE])], Instant::now(), false);
-    c.check(&[(2, vec![WHOLE])], Instant::now(), false);
+    c.check(&[(1, vec![WHOLE])], Instant::now(), Instant::now(), false);
+    c.check(&[(2, vec![WHOLE])], Instant::now(), Instant::now(), false);
     std::thread::sleep(BUDGET);
     assert_eq!(c.abandoned(), 2);
     c.warm_up(3);
@@ -421,7 +434,7 @@ fn a_warm_up_makes_the_window_checked() {
     let c = checker(|_| QueryResult::Fields(vec![FIELD]));
     c.warm_up(W);
     std::thread::sleep(WARM_UP_GAP * 3);
-    let out = c.check(&one_window(), Instant::now(), false);
+    let out = c.check(&one_window(), Instant::now(), Instant::now(), false);
     assert_eq!(
         out,
         CheckOutcome {
