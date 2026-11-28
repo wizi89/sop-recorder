@@ -53,13 +53,22 @@ The full text, in German, is [docs/PRIVACY.md](docs/PRIVACY.md). In short:
 - **Blacked out before saving (Windows):** password fields, when "Passwortfelder schwärzen" is on (the default). In "Aktives Fenster", other apps' windows over the captured one are blacked out too, such as notifications and always-on-top windows.
 - **macOS:** the whole monitor, nothing blacked out automatically.
 - **Marked "Prüfen":** a step the password check could not confirm, or one that fell back to the whole monitor; every step of a recording made with an earlier version. Generating needs a tick that the marked steps were checked.
-- **Review screen:** you can black out areas with a frame, or delete a step. Frames are burned into the uploaded copy only, and the files on disk stay unchanged. Deleting a step does not cut the audio: its narration is still sent.
+- **Review screen:** you can black out areas with a frame, or delete a step. Frames are burned into the uploaded copy only, and the files on disk stay unchanged. Deleting a step does not cut the audio: its narration is still sent. Deleting a step does not black out what that step opened in the next step's screenshot; black it out there.
 - **Sent at Generate:**
   - the screenshots as described above,
   - the whole audio,
   - per-step metadata.
 - **Not sent:** typed text.
-- **Not checked on the client:** anything else visible in the window, and the audio. The server checks the transcript and the screen text for personal data; that check can be switched off.
+- **Kept on the server:** screenshots, transcripts and guides, "bis Sie die Anleitung löschen" (until you delete the guide). The content of AI calls is not stored unless your company switches that on.
+- **Not checked on the client:**
+  - anything else visible in the window, such as names, e-mail addresses and text in ordinary fields,
+  - a password made visible with "show password", since it is no longer a password field,
+  - other apps' windows with "Ganzer Bildschirm" (only password fields are blacked out there),
+  - anything on macOS,
+  - what a deleted step opened, as it shows in the next step's screenshot,
+  - the audio.
+
+  The server checks the transcript and the screen text for personal data; that check can be switched off.
 
 ## Features
 

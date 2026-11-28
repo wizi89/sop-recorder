@@ -256,6 +256,9 @@ describe("review redaction", () => {
     expect(
       screen.getByText(/Sprachaufnahme bleibt erhalten/),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/im Screenshot des nächsten Schritts noch zu sehen/),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Löschen" }));
     await waitFor(() => expect(screen.queryByText("Schritt 3")).toBeNull());
     expect(screen.getByText("Schritt 1")).toBeInTheDocument();
